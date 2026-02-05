@@ -50,5 +50,4 @@ cache/
 *.pyc
 
 # 规范同步生成的临时文件
-.github/skills/spec-sync/.spec_hash
-__init__.py
+.cursor/skills/spec-sync/.spec_hash
