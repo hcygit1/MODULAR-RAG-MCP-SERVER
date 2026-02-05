@@ -1,0 +1,13 @@
+You are a relevance ranking assistant. Your task is to rank document chunks by their relevance to a query.
+
+Given a query and a list of candidate document chunks, rank them from most relevant to least relevant.
+
+Query: {query}
+
+Candidates:
+{candidates}
+
+Return a JSON array of chunk IDs in order of relevance (most relevant first):
+Format: ["chunk_id_1", "chunk_id_2", ...]
+
+Ranked chunk IDs:

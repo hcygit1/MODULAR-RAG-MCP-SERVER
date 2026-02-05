@@ -1,0 +1,85 @@
+# Modular RAG MCP Server 配置文件
+# 主配置文件，定义 LLM、Embedding、VectorStore 等组件的配置
+
+# LLM 配置
+llm:
+  provider: azure  # azure | openai | ollama | deepseek
+  model: gpt-4o
+  # Azure 配置
+  azure_endpoint: ""  # 从环境变量读取: ${AZURE_OPENAI_ENDPOINT}
+  azure_api_key: ""   # 从环境变量读取: ${AZURE_OPENAI_API_KEY}
+  azure_api_version: "2024-02-15-preview"
+  deployment_name: ""  # Azure deployment name
+  # OpenAI 配置
+  openai_api_key: ""   # 从环境变量读取: ${OPENAI_API_KEY}
+  # Ollama 配置
+  ollama_base_url: "http://localhost:11434"
+  # DeepSeek 配置
+  deepseek_api_key: ""  # 从环境变量读取: ${DEEPSEEK_API_KEY}
+  deepseek_base_url: "https://api.deepseek.com"
+
+# Vision LLM 配置 (图片描述生成)
+vision_llm:
+  provider: azure  # azure | dashscope (Qwen-VL)
+  model: gpt-4o
+  azure_endpoint: ""
+  azure_api_key: ""
+  azure_api_version: "2024-02-15-preview"
+  deployment_name: ""
+  # DashScope (Qwen-VL) 配置
+  dashscope_api_key: ""  # 从环境变量读取: ${DASHSCOPE_API_KEY}
+
+# Embedding 配置
+embedding:
+  provider: openai  # openai | ollama | local
+  model: text-embedding-3-small
+  openai_api_key: ""
+  # 本地模型配置
+  local_model_path: ""
+  device: "cpu"  # cpu | cuda
+
+# 向量存储配置
+vector_store:
+  backend: chroma  # chroma | qdrant | pinecone
+  persist_path: "./data/db/chroma"
+  collection_name: "knowledge_base"
+
+# 检索配置
+retrieval:
+  sparse_backend: bm25  # bm25 | elasticsearch
+  fusion_algorithm: rrf  # rrf | weighted_sum
+  top_k_dense: 20
+  top_k_sparse: 20
+  top_k_final: 10
+
+# 重排配置
+rerank:
+  backend: cross_encoder  # none | cross_encoder | llm
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  top_m: 30
+  timeout_seconds: 5
+
+# 评估配置
+evaluation:
+  backends: [ragas, custom]
+  golden_test_set: "./tests/fixtures/golden_test_set.json"
+
+# 可观测性配置
+observability:
+  enabled: true
+  logging:
+    log_file: "./logs/traces.jsonl"
+    log_level: INFO  # DEBUG | INFO | WARNING
+  detail_level: standard  # minimal | standard | verbose
+  dashboard:
+    enabled: true
+    port: 8501
+
+# Ingestion Pipeline 配置
+ingestion:
+  chunk_size: 512
+  chunk_overlap: 50
+  enable_llm_refinement: false  # 是否启用 LLM 重写 Chunk
+  enable_metadata_enrichment: true
+  enable_image_captioning: true
+  batch_size: 32

@@ -1,0 +1,17 @@
+You are an expert at analyzing images and generating detailed, structured descriptions.
+
+Given an image from a document, generate a concise but comprehensive text description that captures:
+1. The main content and subject matter
+2. Key visual elements (charts, diagrams, screenshots, etc.)
+3. Important text or data visible in the image
+4. The context and purpose of the image within the document
+
+Your description should be:
+- Clear and specific
+- Suitable for semantic search (use natural language)
+- Concise (aim for 2-4 sentences)
+- Focused on information that would be useful for retrieval
+
+Image context: {context_text}
+
+Generate the image description:

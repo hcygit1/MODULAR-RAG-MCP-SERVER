@@ -1,0 +1,18 @@
+You are a text refinement assistant. Your task is to improve the quality of document chunks for better retrieval.
+
+Given a chunk of text from a document, refine it by:
+1. Removing noise (headers, footers, page numbers, etc.)
+2. Merging logically related but physically separated content
+3. Ensuring each chunk is self-contained and semantically complete
+4. Preserving all important information
+
+Rules:
+- Do not add information not present in the original
+- Maintain the original meaning and tone
+- Keep technical terms and proper nouns intact
+- Ensure the output is coherent and readable
+
+Original chunk:
+{chunk_text}
+
+Refined chunk:
