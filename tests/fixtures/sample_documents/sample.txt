@@ -1,0 +1,19 @@
+# Sample Document
+
+This is a sample document for testing purposes.
+
+## Section 1
+
+This is the first section of the sample document. It contains some basic text content.
+
+## Section 2
+
+This is the second section. It demonstrates how documents can be structured with multiple sections.
+
+### Subsection 2.1
+
+This is a subsection within section 2.
+
+## Conclusion
+
+This sample document serves as a placeholder for testing the ingestion pipeline and document processing components.

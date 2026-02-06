@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     # Core dependencies will be added in later stages
+    "pytest>=9.0.2",
 ]
 
 [project.optional-dependencies]
