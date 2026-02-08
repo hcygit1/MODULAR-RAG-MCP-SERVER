@@ -1659,7 +1659,7 @@ observability:
 | B7.3 | OpenAI Embedding 实现 | [x] | 2026-02-08 | |
 | B7.4 | Local Embedding 实现 | [x] | 2026-02-08 | |
 | B7.5 | Recursive Splitter 默认实现 | [x] | 2026-02-08 | |
-| B7.6 | ChromaStore 默认实现 | [ ] | - | |
+| B7.6 | ChromaStore 默认实现 | [x] | 2026-02-08 | |
 | B7.7 | LLM Reranker 实现 | [ ] | - | |
 | B7.8 | Cross-Encoder Reranker 实现 | [ ] | - | |
 
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 11 | 79% |
+| 阶段 B | 14 | 12 | 86% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **14** | **26%** |
+| **总计** | **54** | **15** | **28%** |
 
 
 ---
@@ -1928,7 +1928,7 @@ observability:
   - `split_text` 能正确处理 Markdown 结构（标题/代码块不被打断）。
 - **测试方法**：`pytest -q tests/unit/test_recursive_splitter_lib.py`。
 
-### B7.6：ChromaStore（VectorStore 默认后端）
+### B7.6：ChromaStore（VectorStore 默认后端） ✅
 - **目标**：补齐 `chroma_store.py`，支持最小 `upsert(records)` 与 `query(vector, top_k, filters)`，并支持本地持久化目录（例如 `data/db/chroma/`）。
 - **修改文件**：
   - `src/libs/vector_store/chroma_store.py`

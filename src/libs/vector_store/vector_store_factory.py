@@ -38,10 +38,8 @@ class VectorStoreFactory:
         
         if backend == "chroma":
             # B7.6 阶段实现
-            raise NotImplementedError(
-                "Chroma VectorStore 实现将在 B7.6 阶段完成。"
-                "请先使用其他 backend 或等待实现。"
-            )
+            from src.libs.vector_store.chroma_store import ChromaStore
+            return ChromaStore(config)
         elif backend == "qdrant":
             # 未来实现
             raise NotImplementedError(
