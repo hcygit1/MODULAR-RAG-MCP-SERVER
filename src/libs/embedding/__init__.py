@@ -7,4 +7,12 @@ from src.libs.embedding.base_embedding import BaseEmbedding
 from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.embedding.fake_embedding import FakeEmbedding
 
-__all__ = ["BaseEmbedding", "EmbeddingFactory", "FakeEmbedding"]
+# B7.3 阶段实现
+from src.libs.embedding.openai_embedding import OpenAIEmbedding
+
+__all__ = [
+    "BaseEmbedding",
+    "EmbeddingFactory",
+    "FakeEmbedding",
+    "OpenAIEmbedding"
+]

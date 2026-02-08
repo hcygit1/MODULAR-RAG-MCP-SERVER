@@ -38,10 +38,8 @@ class EmbeddingFactory:
         
         if provider == "openai":
             # B7.3 阶段实现
-            raise NotImplementedError(
-                "OpenAI Embedding 实现将在 B7.3 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.embedding.openai_embedding import OpenAIEmbedding
+            return OpenAIEmbedding(config)
         elif provider == "local":
             # B7.4 阶段实现
             raise NotImplementedError(

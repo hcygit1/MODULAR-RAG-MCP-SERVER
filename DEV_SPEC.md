@@ -1656,7 +1656,7 @@ observability:
 | B6 | Evaluator 抽象接口与工厂 | [x] | 2026-02-08 | |
 | B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-02-08 | |
 | B7.2 | Ollama LLM 实现 | [x] | 2026-02-08 | |
-| B7.3 | OpenAI Embedding 实现 | [ ] | - | |
+| B7.3 | OpenAI Embedding 实现 | [x] | 2026-02-08 | |
 | B7.4 | Local Embedding 实现 | [ ] | - | |
 | B7.5 | Recursive Splitter 默认实现 | [ ] | - | |
 | B7.6 | ChromaStore 默认实现 | [ ] | - | |
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 8 | 57% |
+| 阶段 B | 14 | 9 | 64% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **11** | **20%** |
+| **总计** | **54** | **12** | **22%** |
 
 
 ---
@@ -1898,7 +1898,7 @@ observability:
   - 在连接失败/超时等场景下，抛出可读错误且不泄露敏感配置。
 - **测试方法**：`pytest -q tests/unit/test_ollama_llm.py`。
 
-### B7.3：OpenAI Embedding 实现
+### B7.3：OpenAI Embedding 实现 ✅
 - **目标**：补齐 `openai_embedding.py`，支持批量 `embed(texts)`，并可被 mock 测试。
 - **修改文件**：
   - `src/libs/embedding/openai_embedding.py`
