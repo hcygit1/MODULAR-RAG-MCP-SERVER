@@ -10,10 +10,15 @@ from src.libs.splitter.base_splitter import BaseSplitter
 from src.core.settings import IngestionConfig
 
 try:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    # 新版本 LangChain 使用独立的 langchain-text-splitters 包
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
-    # 如果 LangChain 未安装，提供一个占位实现
-    RecursiveCharacterTextSplitter = None
+    try:
+        # 兼容旧版本 LangChain
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+    except ImportError:
+        # 如果 LangChain 未安装，提供一个占位实现
+        RecursiveCharacterTextSplitter = None
 
 
 class RecursiveSplitter(BaseSplitter):
@@ -33,7 +38,7 @@ class RecursiveSplitter(BaseSplitter):
         """
         if RecursiveCharacterTextSplitter is None:
             raise RuntimeError(
-                "LangChain 未安装。请安装 langchain: pip install langchain"
+                "LangChain Text Splitters 未安装。请安装: pip install langchain-text-splitters"
             )
         
         self._config = config

@@ -16,6 +16,8 @@ Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: pytest>=9.0.2
 Requires-Dist: pyyaml>=6.0
+Requires-Dist: langchain>=0.1.0
+Requires-Dist: langchain-text-splitters>=0.1.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0.0; extra == "dev"
 Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
