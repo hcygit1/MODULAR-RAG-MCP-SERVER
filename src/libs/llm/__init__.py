@@ -12,11 +12,15 @@ from src.libs.llm.openai_llm import OpenAILLM
 from src.libs.llm.azure_llm import AzureLLM
 from src.libs.llm.deepseek_llm import DeepSeekLLM
 
+# B7.2 阶段实现
+from src.libs.llm.ollama_llm import OllamaLLM
+
 __all__ = [
     "BaseLLM",
     "LLMFactory",
     "FakeLLM",
     "OpenAILLM",
     "AzureLLM",
-    "DeepSeekLLM"
+    "DeepSeekLLM",
+    "OllamaLLM"
 ]

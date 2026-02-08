@@ -46,10 +46,8 @@ class LLMFactory:
             return OpenAILLM(config)
         elif provider == "ollama":
             # B7.2 阶段实现
-            raise NotImplementedError(
-                "Ollama LLM 实现将在 B7.2 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.llm.ollama_llm import OllamaLLM
+            return OllamaLLM(config)
         elif provider == "deepseek":
             # B7.1 阶段实现
             from src.libs.llm.deepseek_llm import DeepSeekLLM
