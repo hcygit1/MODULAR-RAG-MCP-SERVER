@@ -41,6 +41,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+reranker = [
+    "sentence-transformers>=2.2.0",  # B7.8: Cross-Encoder Reranker
+]
 
 [tool.setuptools]
 packages = ["src"]

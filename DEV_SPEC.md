@@ -1661,7 +1661,7 @@ observability:
 | B7.5 | Recursive Splitter 默认实现 | [x] | 2026-02-08 | |
 | B7.6 | ChromaStore 默认实现 | [x] | 2026-02-08 | |
 | B7.7 | LLM Reranker 实现 | [x] | 2026-02-08 | |
-| B7.8 | Cross-Encoder Reranker 实现 | [ ] | - | |
+| B7.8 | Cross-Encoder Reranker 实现 | [x] | 2026-02-08 | |
 
 #### 阶段 C：Ingestion Pipeline MVP
 
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 13 | 93% |
+| 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **16** | **30%** |
+| **总计** | **54** | **17** | **31%** |
 
 
 ---
@@ -1948,7 +1948,7 @@ observability:
   - 输出严格结构化（例如 ranked ids），不满足 schema 时抛出可读错误。
 - **测试方法**：`pytest -q tests/unit/test_llm_reranker.py`。
 
-### B7.8：Cross-Encoder Reranker（本地/托管模型，占位可跑）
+### B7.8：Cross-Encoder Reranker（本地/托管模型，占位可跑） ✅
 - **目标**：补齐 `cross_encoder_reranker.py`，支持对 Top-M candidates 打分排序；测试中用 mock scorer 保证 deterministic。
 - **修改文件**：
   - `src/libs/reranker/cross_encoder_reranker.py`
