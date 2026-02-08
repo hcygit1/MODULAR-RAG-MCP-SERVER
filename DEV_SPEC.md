@@ -1651,7 +1651,7 @@ observability:
 | B1 | LLM 抽象接口与工厂 | [x] | 2026-02-06 | |
 | B2 | Embedding 抽象接口与工厂 | [x] | 2026-02-06 | |
 | B3 | Splitter 抽象接口与工厂 | [x] | 2026-02-06 | |
-| B4 | VectorStore 抽象接口与工厂 | [ ] | - | |
+| B4 | VectorStore 抽象接口与工厂 | [x] | 2026-02-08 | |
 | B5 | Reranker 抽象接口与工厂（含 None 回退） | [ ] | - | |
 | B6 | Evaluator 抽象接口与工厂 | [ ] | - | |
 | B7.1 | OpenAI-Compatible LLM 实现 | [ ] | - | |
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 3 | 21% |
+| 阶段 B | 14 | 4 | 29% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **6** | **11%** |
+| **总计** | **54** | **7** | **13%** |
 
 
 ---
@@ -1838,7 +1838,7 @@ observability:
 - **验收标准**：Factory 能根据配置返回不同类型的 Splitter 实例（测试中可用 Fake 实现）。
 - **测试方法**：`pytest -q tests/unit/test_splitter_factory.py`。
 
-### B4：VectorStore 抽象接口与工厂（先定义契约）
+### B4：VectorStore 抽象接口与工厂（先定义契约） ✅
 - **目标**：定义 `BaseVectorStore` 与 `VectorStoreFactory`，先不接真实 DB。
 - **修改文件**：
   - `src/libs/vector_store/base_vector_store.py`
