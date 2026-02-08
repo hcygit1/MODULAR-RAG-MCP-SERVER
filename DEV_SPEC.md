@@ -1653,7 +1653,7 @@ observability:
 | B3 | Splitter 抽象接口与工厂 | [x] | 2026-02-06 | |
 | B4 | VectorStore 抽象接口与工厂 | [x] | 2026-02-08 | |
 | B5 | Reranker 抽象接口与工厂（含 None 回退） | [x] | 2026-02-08 | |
-| B6 | Evaluator 抽象接口与工厂 | [ ] | - | |
+| B6 | Evaluator 抽象接口与工厂 | [x] | 2026-02-08 | |
 | B7.1 | OpenAI-Compatible LLM 实现 | [ ] | - | |
 | B7.2 | Ollama LLM 实现 | [ ] | - | |
 | B7.3 | OpenAI Embedding 实现 | [ ] | - | |
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 5 | 36% |
+| 阶段 B | 14 | 6 | 43% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **8** | **15%** |
+| **总计** | **54** | **9** | **17%** |
 
 
 ---
@@ -1862,7 +1862,7 @@ observability:
 - **验收标准**：backend=none 时不会改变排序；未知 backend 明确报错。
 - **测试方法**：`pytest -q tests/unit/test_reranker_factory.py`。
 
-### B6：Evaluator 抽象接口与工厂（先做自定义轻量指标）
+### B6：Evaluator 抽象接口与工厂（先做自定义轻量指标） ✅
 - **目标**：定义 `BaseEvaluator`、`EvaluatorFactory`，实现最小 `CustomEvaluator`（例如 hit_rate/mrr）。
 - **修改文件**：
   - `src/libs/evaluator/base_evaluator.py`
