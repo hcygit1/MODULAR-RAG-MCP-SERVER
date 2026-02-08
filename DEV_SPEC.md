@@ -1654,7 +1654,7 @@ observability:
 | B4 | VectorStore 抽象接口与工厂 | [x] | 2026-02-08 | |
 | B5 | Reranker 抽象接口与工厂（含 None 回退） | [x] | 2026-02-08 | |
 | B6 | Evaluator 抽象接口与工厂 | [x] | 2026-02-08 | |
-| B7.1 | OpenAI-Compatible LLM 实现 | [ ] | - | |
+| B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-02-08 | |
 | B7.2 | Ollama LLM 实现 | [ ] | - | |
 | B7.3 | OpenAI Embedding 实现 | [ ] | - | |
 | B7.4 | Local Embedding 实现 | [ ] | - | |
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 6 | 43% |
+| 阶段 B | 14 | 7 | 50% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **9** | **17%** |
+| **总计** | **54** | **10** | **19%** |
 
 
 ---
@@ -1876,7 +1876,7 @@ observability:
 
 > 说明：B7 只补齐与端到端主链路强相关的默认实现（LLM/Embedding/Splitter/VectorStore/Reranker）。其余可选扩展（例如额外 splitter 策略、更多 vector store 后端、更多 evaluator 后端等）保持原排期不提前。
 
-### B7.1：OpenAI-Compatible LLM（OpenAI/Azure/DeepSeek）
+### B7.1：OpenAI-Compatible LLM（OpenAI/Azure/DeepSeek） ✅
 - **目标**：补齐 OpenAI-compatible 的 LLM 实现，确保通过 `LLMFactory` 可创建并可被 mock 测试。
 - **修改文件**：
   - `src/libs/llm/openai_llm.py`

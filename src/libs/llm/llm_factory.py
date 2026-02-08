@@ -38,16 +38,12 @@ class LLMFactory:
         
         if provider == "azure":
             # B7.1 阶段实现
-            raise NotImplementedError(
-                "Azure LLM 实现将在 B7.1 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.llm.azure_llm import AzureLLM
+            return AzureLLM(config)
         elif provider == "openai":
             # B7.1 阶段实现
-            raise NotImplementedError(
-                "OpenAI LLM 实现将在 B7.1 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.llm.openai_llm import OpenAILLM
+            return OpenAILLM(config)
         elif provider == "ollama":
             # B7.2 阶段实现
             raise NotImplementedError(
@@ -56,10 +52,8 @@ class LLMFactory:
             )
         elif provider == "deepseek":
             # B7.1 阶段实现
-            raise NotImplementedError(
-                "DeepSeek LLM 实现将在 B7.1 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.llm.deepseek_llm import DeepSeekLLM
+            return DeepSeekLLM(config)
         else:
             raise ValueError(
                 f"不支持的 LLM provider: {provider}。"
