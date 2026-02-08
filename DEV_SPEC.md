@@ -1657,7 +1657,7 @@ observability:
 | B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-02-08 | |
 | B7.2 | Ollama LLM 实现 | [x] | 2026-02-08 | |
 | B7.3 | OpenAI Embedding 实现 | [x] | 2026-02-08 | |
-| B7.4 | Local Embedding 实现 | [ ] | - | |
+| B7.4 | Local Embedding 实现 | [x] | 2026-02-08 | |
 | B7.5 | Recursive Splitter 默认实现 | [ ] | - | |
 | B7.6 | ChromaStore 默认实现 | [ ] | - | |
 | B7.7 | LLM Reranker 实现 | [ ] | - | |
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 9 | 64% |
+| 阶段 B | 14 | 10 | 71% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **12** | **22%** |
+| **总计** | **54** | **13** | **24%** |
 
 
 ---
@@ -1908,7 +1908,7 @@ observability:
   - 空输入、超长输入有明确行为（报错或截断策略由配置决定）。
 - **测试方法**：`pytest -q tests/unit/test_embedding_providers_smoke.py`。
 
-### B7.4：Local Embedding 实现（BGE/Ollama 占位）
+### B7.4：Local Embedding 实现（BGE/Ollama 占位） ✅
 - **目标**：补齐 `local_embedding.py` 的默认实现路径（可先做占位/适配层），并在测试中用 Fake 向量保证链路可跑。
 - **修改文件**：
   - `src/libs/embedding/local_embedding.py`

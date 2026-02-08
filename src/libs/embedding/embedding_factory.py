@@ -42,10 +42,8 @@ class EmbeddingFactory:
             return OpenAIEmbedding(config)
         elif provider == "local":
             # B7.4 阶段实现
-            raise NotImplementedError(
-                "Local Embedding 实现将在 B7.4 阶段完成。"
-                "请先使用其他 provider 或等待实现。"
-            )
+            from src.libs.embedding.local_embedding import LocalEmbedding
+            return LocalEmbedding(config)
         elif provider == "ollama":
             # B7.4 阶段实现
             raise NotImplementedError(

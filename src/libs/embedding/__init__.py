@@ -10,9 +10,13 @@ from src.libs.embedding.fake_embedding import FakeEmbedding
 # B7.3 阶段实现
 from src.libs.embedding.openai_embedding import OpenAIEmbedding
 
+# B7.4 阶段实现
+from src.libs.embedding.local_embedding import LocalEmbedding
+
 __all__ = [
     "BaseEmbedding",
     "EmbeddingFactory",
     "FakeEmbedding",
-    "OpenAIEmbedding"
+    "OpenAIEmbedding",
+    "LocalEmbedding"
 ]
