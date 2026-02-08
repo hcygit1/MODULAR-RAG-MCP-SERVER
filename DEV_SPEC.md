@@ -1660,7 +1660,7 @@ observability:
 | B7.4 | Local Embedding 实现 | [x] | 2026-02-08 | |
 | B7.5 | Recursive Splitter 默认实现 | [x] | 2026-02-08 | |
 | B7.6 | ChromaStore 默认实现 | [x] | 2026-02-08 | |
-| B7.7 | LLM Reranker 实现 | [ ] | - | |
+| B7.7 | LLM Reranker 实现 | [x] | 2026-02-08 | |
 | B7.8 | Cross-Encoder Reranker 实现 | [ ] | - | |
 
 #### 阶段 C：Ingestion Pipeline MVP
@@ -1732,13 +1732,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 12 | 86% |
+| 阶段 B | 14 | 13 | 93% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **15** | **28%** |
+| **总计** | **54** | **16** | **30%** |
 
 
 ---
@@ -1938,7 +1938,7 @@ observability:
   - 在可用环境下完成一次最小 roundtrip：upsert→query 返回 deterministic 结果。
 - **测试方法**：`pytest -q tests/integration/test_chroma_store_roundtrip.py`（可选）。
 
-### B7.7：LLM Reranker（读取 rerank prompt）
+### B7.7：LLM Reranker（读取 rerank prompt） ✅
 - **目标**：补齐 `llm_reranker.py`，读取 `config/prompts/rerank.txt` 构造 prompt（测试中可注入替代文本），并可在失败时返回可回退信号。
 - **修改文件**：
   - `src/libs/reranker/llm_reranker.py`

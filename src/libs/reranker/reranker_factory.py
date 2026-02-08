@@ -48,10 +48,8 @@ class RerankerFactory:
             )
         elif backend == "llm":
             # B7.7 阶段实现
-            raise NotImplementedError(
-                "LLM Reranker 实现将在 B7.7 阶段完成。"
-                "请先使用其他 backend 或等待实现。"
-            )
+            from src.libs.reranker.llm_reranker import LLMReranker
+            return LLMReranker(settings)
         else:
             raise ValueError(
                 f"不支持的 Reranker backend: {backend}。"
