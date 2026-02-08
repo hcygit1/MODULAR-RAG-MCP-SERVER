@@ -7,4 +7,12 @@ from src.libs.splitter.base_splitter import BaseSplitter
 from src.libs.splitter.splitter_factory import SplitterFactory
 from src.libs.splitter.fake_splitter import FakeSplitter
 
-__all__ = ["BaseSplitter", "SplitterFactory", "FakeSplitter"]
+# B7.5 阶段实现
+from src.libs.splitter.recursive_splitter import RecursiveSplitter
+
+__all__ = [
+    "BaseSplitter",
+    "SplitterFactory",
+    "FakeSplitter",
+    "RecursiveSplitter"
+]

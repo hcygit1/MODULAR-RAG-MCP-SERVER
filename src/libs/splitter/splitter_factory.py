@@ -46,10 +46,8 @@ class SplitterFactory:
         
         if strategy == "recursive":
             # B7.5 阶段实现
-            raise NotImplementedError(
-                "Recursive Splitter 实现将在 B7.5 阶段完成。"
-                "请先使用其他策略或等待实现。"
-            )
+            from src.libs.splitter.recursive_splitter import RecursiveSplitter
+            return RecursiveSplitter(ingestion_config)
         elif strategy == "semantic":
             # 未来实现
             raise NotImplementedError(
