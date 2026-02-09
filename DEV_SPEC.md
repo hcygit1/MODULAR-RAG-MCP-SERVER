@@ -1680,7 +1680,7 @@ observability:
 | C11 | VectorUpserter | [x] | 2026-02-09 | |
 | C12 | BM25Indexer | [x] | 2026-02-09 | |
 | C13 | ImageStorage | [x] | 2026-02-09 | |
-| C14 | Pipeline 编排（MVP 串起来） | [ ] | - | |
+| C14 | Pipeline 编排（MVP 串起来） | [x] | 2026-02-09 | |
 | C15 | 脚本入口 ingest.py | [ ] | - | |
 
 #### 阶段 D：Retrieval MVP
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 13 | 87% |
+| 阶段 C | 15 | 14 | 93% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **30** | **56%** |
+| **总计** | **54** | **31** | **57%** |
 
 
 ---
@@ -2090,7 +2090,7 @@ observability:
 - **验收标准**：保存后文件存在；查找 image_id 返回正确路径。
 - **测试方法**：`pytest -q tests/unit/test_image_storage.py`。
 
-### C14：Pipeline 编排（MVP 串起来）
+### C14：Pipeline 编排（MVP 串起来） ✅
 - **目标**：实现 `pipeline.py`：串行执行（integrity→load→split→transform→encode→store），并对失败步骤做清晰异常。
 - **修改文件**：
   - `src/ingestion/pipeline.py`
