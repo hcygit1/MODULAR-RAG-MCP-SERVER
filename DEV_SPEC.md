@@ -1681,7 +1681,7 @@ observability:
 | C12 | BM25Indexer | [x] | 2026-02-09 | |
 | C13 | ImageStorage | [x] | 2026-02-09 | |
 | C14 | Pipeline 编排（MVP 串起来） | [x] | 2026-02-09 | |
-| C15 | 脚本入口 ingest.py | [ ] | - | |
+| C15 | 脚本入口 ingest.py | [x] | 2026-02-09 | |
 
 #### 阶段 D：Retrieval MVP
 
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 14 | 93% |
+| 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **31** | **57%** |
+| **总计** | **54** | **32** | **59%** |
 
 
 ---
@@ -2098,7 +2098,7 @@ observability:
 - **验收标准**：对 fixtures 样例文档跑完整 pipeline，输出向量与 bm25 索引文件。
 - **测试方法**：`pytest -q tests/integration/test_ingestion_pipeline.py`。
 
-### C15：脚本入口 ingest.py（离线可用）
+### C15：脚本入口 ingest.py（离线可用） ✅
 - **目标**：实现 `scripts/ingest.py`，支持 `--collection`、`--path`、`--force`，并调用 pipeline。
 - **修改文件**：
   - `scripts/ingest.py`
