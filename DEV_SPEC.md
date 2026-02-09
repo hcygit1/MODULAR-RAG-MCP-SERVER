@@ -1672,7 +1672,7 @@ observability:
 | C3 | Loader 抽象基类与 PDF Loader | [x] | 2026-02-08 | |
 | C4 | Splitter 集成（调用 Libs） | [x] | 2026-02-09 | |
 | C5 | Transform 基类 + ChunkRefiner | [x] | 2026-02-09 | |
-| C6 | MetadataEnricher | [ ] | - | |
+| C6 | MetadataEnricher | [x] | 2026-02-09 | |
 | C7 | ImageCaptioner | [ ] | - | |
 | C8 | DenseEncoder | [ ] | - | |
 | C9 | SparseEncoder | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 5 | 33% |
+| 阶段 C | 15 | 6 | 40% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **22** | **41%** |
+| **总计** | **54** | **23** | **43%** |
 
 
 ---
@@ -2020,7 +2020,7 @@ observability:
   - 降级行为：LLM 调用失败时回退到规则结果（可在 metadata 标记降级原因，但不抛出致命异常）。
 - **测试方法**：`pytest -q tests/unit/test_chunk_refiner.py`。
 
-### C6：MetadataEnricher（规则增强 + 可选 LLM 增强 + 降级）
+### C6：MetadataEnricher（规则增强 + 可选 LLM 增强 + 降级） ✅
 - **目标**：实现元数据增强模块：提供规则增强的默认实现（例如从 chunk 文本抽取/推断 title、生成简短 summary、打 tags），并支持可选 LLM 增强（可配置开关 + 失败降级，不阻塞 ingestion）。
 - **修改文件**：
   - `src/ingestion/transform/metadata_enricher.py`
