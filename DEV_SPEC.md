@@ -1678,7 +1678,7 @@ observability:
 | C9 | SparseEncoder | [x] | 2026-02-09 | |
 | C10 | BatchProcessor | [x] | 2026-02-09 | |
 | C11 | VectorUpserter | [x] | 2026-02-09 | |
-| C12 | BM25Indexer | [ ] | - | |
+| C12 | BM25Indexer | [x] | 2026-02-09 | |
 | C13 | ImageStorage | [ ] | - | |
 | C14 | Pipeline 编排（MVP 串起来） | [ ] | - | |
 | C15 | 脚本入口 ingest.py | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 11 | 73% |
+| 阶段 C | 15 | 12 | 80% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **28** | **52%** |
+| **总计** | **54** | **29** | **54%** |
 
 
 ---
@@ -2074,7 +2074,7 @@ observability:
 - **验收标准**：同一 chunk 两次 upsert 产生相同 id；内容变更 id 变更。
 - **测试方法**：`pytest -q tests/unit/test_vector_upserter_idempotency.py`。
 
-### C12：BM25Indexer（倒排索引落地）
+### C12：BM25Indexer（倒排索引落地） ✅
 - **目标**：实现 `bm25_indexer.py`：把 sparse encoder 输出落盘到 `data/db/bm25/`（文件结构自行定义但需可重建）。
 - **修改文件**：
   - `src/ingestion/storage/bm25_indexer.py`
