@@ -1677,7 +1677,7 @@ observability:
 | C8 | DenseEncoder | [x] | 2026-02-09 | |
 | C9 | SparseEncoder | [x] | 2026-02-09 | |
 | C10 | BatchProcessor | [x] | 2026-02-09 | |
-| C11 | VectorUpserter | [ ] | - | |
+| C11 | VectorUpserter | [x] | 2026-02-09 | |
 | C12 | BM25Indexer | [ ] | - | |
 | C13 | ImageStorage | [ ] | - | |
 | C14 | Pipeline 编排（MVP 串起来） | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 10 | 67% |
+| 阶段 C | 15 | 11 | 73% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **27** | **50%** |
+| **总计** | **54** | **28** | **52%** |
 
 
 ---
@@ -2066,7 +2066,7 @@ observability:
 - **验收标准**：batch_size=2 时对 5 chunks 分成 3 批，且顺序稳定。
 - **测试方法**：`pytest -q tests/unit/test_batch_processor.py`。
 
-### C11：VectorUpserter（幂等 upsert 契约）
+### C11：VectorUpserter（幂等 upsert 契约） ✅
 - **目标**：实现 `vector_upserter.py`，生成稳定 `chunk_id`（hash(source_path + section_path + content_hash)）。
 - **修改文件**：
   - `src/ingestion/storage/vector_upserter.py`
