@@ -1676,7 +1676,7 @@ observability:
 | C7 | ImageCaptioner | [x] | 2026-02-09 | |
 | C8 | DenseEncoder | [x] | 2026-02-09 | |
 | C9 | SparseEncoder | [x] | 2026-02-09 | |
-| C10 | BatchProcessor | [ ] | - | |
+| C10 | BatchProcessor | [x] | 2026-02-09 | |
 | C11 | VectorUpserter | [ ] | - | |
 | C12 | BM25Indexer | [ ] | - | |
 | C13 | ImageStorage | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 9 | 60% |
+| 阶段 C | 15 | 10 | 67% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **26** | **48%** |
+| **总计** | **54** | **27** | **50%** |
 
 
 ---
@@ -2058,7 +2058,7 @@ observability:
 - **验收标准**：输出结构可用于 bm25_indexer；对空文本有明确行为。
 - **测试方法**：`pytest -q tests/unit/test_sparse_encoder.py`。
 
-### C10：BatchProcessor（批处理编排）
+### C10：BatchProcessor（批处理编排） ✅
 - **目标**：实现 `batch_processor.py`：将 chunks 分 batch，驱动 dense/sparse 编码，记录批次耗时（为 trace 预留）。
 - **修改文件**：
   - `src/ingestion/embedding/batch_processor.py`
