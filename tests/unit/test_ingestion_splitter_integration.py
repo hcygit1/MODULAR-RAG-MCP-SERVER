@@ -270,14 +270,14 @@ def test_split_document_empty_text():
     settings = _create_test_settings()
     pipeline = IngestionPipeline(settings)
     
-    document = Document(
-        id="test_doc_6",
-        text="",
-        metadata={}
-    )
-    
+    # Document 模型在初始化时就会验证 text 不能为空
+    # 所以我们需要在创建 Document 时就捕获错误
     with pytest.raises(ValueError, match="不能为空"):
-        pipeline.split_document(document)
+        document = Document(
+            id="test_doc_6",
+            text="",
+            metadata={}
+        )
 
 
 def test_split_document_image_refs_extraction():
