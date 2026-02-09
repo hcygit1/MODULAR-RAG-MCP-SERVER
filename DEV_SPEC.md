@@ -1670,8 +1670,8 @@ observability:
 | C1 | 定义核心数据模型（Document/Chunk/Record） | [x] | 2026-02-08 | |
 | C2 | 文件完整性检查（SHA256） | [x] | 2026-02-08 | |
 | C3 | Loader 抽象基类与 PDF Loader | [x] | 2026-02-08 | |
-| C4 | Splitter 集成（调用 Libs） | [x] | 2026-02-08 | |
-| C5 | Transform 基类 + ChunkRefiner | [ ] | - | |
+| C4 | Splitter 集成（调用 Libs） | [x] | 2026-02-09 | |
+| C5 | Transform 基类 + ChunkRefiner | [x] | 2026-02-09 | |
 | C6 | MetadataEnricher | [ ] | - | |
 | C7 | ImageCaptioner | [ ] | - | |
 | C8 | DenseEncoder | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 4 | 27% |
+| 阶段 C | 15 | 5 | 33% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **21** | **39%** |
+| **总计** | **54** | **22** | **41%** |
 
 
 ---
@@ -2007,7 +2007,7 @@ observability:
 - **验收标准**：通过配置切换（例如改变 chunk_size），Ingestion Pipeline 产出的 chunk 长度发生相应变化。
 - **测试方法**：`pytest -q tests/unit/test_ingestion_splitter_integration.py`。
 
-### C5：Transform 抽象基类 + ChunkRefiner（规则去噪 + 可选 LLM 重写）
+### C5：Transform 抽象基类 + ChunkRefiner（规则去噪 + 可选 LLM 重写） ✅
 - **目标**：定义 `BaseTransform`；实现 `ChunkRefiner`：先做规则去噪，再支持（可选）LLM 重写/规范化，并提供可配置开关与失败降级（LLM 不可用/异常时不阻塞 ingestion）。
 - **修改文件**：
   - `src/ingestion/transform/base_transform.py`
