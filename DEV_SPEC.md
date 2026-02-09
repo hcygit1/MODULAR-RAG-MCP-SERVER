@@ -1674,7 +1674,7 @@ observability:
 | C5 | Transform 基类 + ChunkRefiner | [x] | 2026-02-09 | |
 | C6 | MetadataEnricher | [x] | 2026-02-09 | |
 | C7 | ImageCaptioner | [x] | 2026-02-09 | |
-| C8 | DenseEncoder | [ ] | - | |
+| C8 | DenseEncoder | [x] | 2026-02-09 | |
 | C9 | SparseEncoder | [ ] | - | |
 | C10 | BatchProcessor | [ ] | - | |
 | C11 | VectorUpserter | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 7 | 47% |
+| 阶段 C | 15 | 8 | 53% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **24** | **44%** |
+| **总计** | **54** | **25** | **46%** |
 
 
 ---
@@ -2042,7 +2042,7 @@ observability:
   - 降级模式：当配置禁用或异常时，chunk 保留 image_refs，但不生成 caption 且标记 `has_unprocessed_images`。
 - **测试方法**：`pytest -q tests/unit/test_image_captioner_fallback.py`。
 
-### C8：DenseEncoder（依赖 libs.embedding）
+### C8：DenseEncoder（依赖 libs.embedding） ✅
 - **目标**：实现 `dense_encoder.py`，把 chunks.text 批量送入 `BaseEmbedding`。
 - **修改文件**：
   - `src/ingestion/embedding/dense_encoder.py`
