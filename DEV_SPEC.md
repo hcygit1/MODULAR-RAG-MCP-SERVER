@@ -1675,7 +1675,7 @@ observability:
 | C6 | MetadataEnricher | [x] | 2026-02-09 | |
 | C7 | ImageCaptioner | [x] | 2026-02-09 | |
 | C8 | DenseEncoder | [x] | 2026-02-09 | |
-| C9 | SparseEncoder | [ ] | - | |
+| C9 | SparseEncoder | [x] | 2026-02-09 | |
 | C10 | BatchProcessor | [ ] | - | |
 | C11 | VectorUpserter | [ ] | - | |
 | C12 | BM25Indexer | [ ] | - | |
@@ -1733,12 +1733,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 8 | 53% |
+| 阶段 C | 15 | 9 | 60% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **25** | **46%** |
+| **总计** | **54** | **26** | **48%** |
 
 
 ---
@@ -2050,7 +2050,7 @@ observability:
 - **验收标准**：encoder 输出向量数量与 chunks 数量一致，维度一致。
 - **测试方法**：`pytest -q tests/unit/test_dense_encoder.py`。
 
-### C9：SparseEncoder（BM25 统计与输出契约）
+### C9：SparseEncoder（BM25 统计与输出契约） ✅
 - **目标**：实现 `sparse_encoder.py`：对 chunks 建立 BM25 所需统计（可先仅输出 term weights 结构，索引落地下一步做）。
 - **修改文件**：
   - `src/ingestion/embedding/sparse_encoder.py`
