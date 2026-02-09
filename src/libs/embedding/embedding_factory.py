@@ -50,10 +50,14 @@ class EmbeddingFactory:
                 "Ollama Embedding 实现将在 B7.4 阶段完成。"
                 "请先使用其他 provider 或等待实现。"
             )
+        elif provider == "dashscope" or provider == "qwen":
+            # DashScope/Qwen Embedding 实现
+            from src.libs.embedding.dashscope_embedding import DashScopeEmbedding
+            return DashScopeEmbedding(config)
         else:
             raise ValueError(
                 f"不支持的 Embedding provider: {provider}。"
-                f"支持的 provider: openai, local, ollama"
+                f"支持的 provider: openai, local, ollama, dashscope, qwen"
             )
     
     @staticmethod

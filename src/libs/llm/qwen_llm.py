@@ -1,7 +1,7 @@
 """
-DeepSeek LLM 实现
+Qwen LLM 实现
 
-使用 DeepSeek API 的 LLM 实现。
+使用阿里云 DashScope API 的 Qwen LLM 实现。
 """
 import json
 from typing import List, Dict
@@ -12,32 +12,32 @@ from src.libs.llm.base_llm import BaseLLM
 from src.core.settings import LLMConfig
 
 
-class DeepSeekLLM(BaseLLM):
+class QwenLLM(BaseLLM):
     """
-    DeepSeek LLM 实现
+    Qwen LLM 实现
     
-    使用 DeepSeek API 进行对话。
+    使用阿里云 DashScope API 进行对话。
     """
     
     def __init__(self, config: LLMConfig):
         """
-        初始化 DeepSeek LLM
+        初始化 Qwen LLM
         
         Args:
             config: LLM 配置对象
         """
-        if not config.deepseek_api_key:
-            raise ValueError("DeepSeek API key 不能为空")
+        if not config.dashscope_api_key:
+            raise ValueError("DashScope API key 不能为空")
         
         self._config = config
         self._provider = config.provider.lower()  # 从配置中获取 provider
         self._model = config.model
-        self._api_key = config.deepseek_api_key
-        self._base_url = config.deepseek_base_url.rstrip("/")
+        self._api_key = config.dashscope_api_key
+        self._base_url = config.dashscope_base_url.rstrip("/")
     
     def chat(self, messages: List[Dict[str, str]]) -> str:
         """
-        发送消息并获取 DeepSeek 回复
+        发送消息并获取 Qwen 回复
         
         Args:
             messages: 消息列表，格式如：
@@ -60,15 +60,15 @@ class DeepSeekLLM(BaseLLM):
         except urllib.error.HTTPError as e:
             error_msg = self._parse_error_response(e)
             raise RuntimeError(
-                f"DeepSeek API 调用失败 (provider={self._provider}, model={self._model}): {error_msg}"
+                f"Qwen API 调用失败 (provider={self._provider}, model={self._model}): {error_msg}"
             ) from e
         except urllib.error.URLError as e:
             raise RuntimeError(
-                f"DeepSeek API 网络错误 (provider={self._provider}, model={self._model}): {str(e)}"
+                f"Qwen API 网络错误 (provider={self._provider}, model={self._model}): {str(e)}"
             ) from e
         except Exception as e:
             raise RuntimeError(
-                f"DeepSeek LLM 调用失败 (provider={self._provider}, model={self._model}): {str(e)}"
+                f"Qwen LLM 调用失败 (provider={self._provider}, model={self._model}): {str(e)}"
             ) from e
     
     def _validate_messages(self, messages: List[Dict[str, str]]) -> None:
@@ -94,7 +94,19 @@ class DeepSeekLLM(BaseLLM):
     
     def _call_api(self, messages: List[Dict[str, str]]) -> str:
         """
-        调用 DeepSeek API
+        调用 DashScope API
+        
+        DashScope API 格式：
+        POST https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
+        {
+            "model": "qwen-turbo",
+            "input": {
+                "messages": [...]
+            },
+            "parameters": {
+                "temperature": 0.7
+            }
+        }
         
         Args:
             messages: 消息列表
@@ -102,12 +114,16 @@ class DeepSeekLLM(BaseLLM):
         Returns:
             str: API 返回的回复文本
         """
-        url = f"{self._base_url}/v1/chat/completions"
+        url = f"{self._base_url}/api/v1/services/aigc/text-generation/generation"
         
         payload = {
             "model": self._model,
-            "messages": messages,
-            "temperature": 0.7
+            "input": {
+                "messages": messages
+            },
+            "parameters": {
+                "temperature": 0.7
+            }
         }
         
         headers = {
@@ -125,11 +141,29 @@ class DeepSeekLLM(BaseLLM):
         with urllib.request.urlopen(req) as response:
             response_data = json.loads(response.read().decode("utf-8"))
             
-            # 提取回复文本
-            if "choices" not in response_data or not response_data["choices"]:
+            # DashScope API 响应格式：
+            # {
+            #     "output": {
+            #         "choices": [
+            #             {
+            #                 "message": {
+            #                     "role": "assistant",
+            #                     "content": "..."
+            #                 }
+            #             }
+            #         ]
+            #     },
+            #     "usage": {...},
+            #     "request_id": "..."
+            # }
+            if "output" not in response_data:
+                raise RuntimeError("API 响应格式错误：缺少 output 字段")
+            
+            output = response_data["output"]
+            if "choices" not in output or not output["choices"]:
                 raise RuntimeError("API 响应格式错误：缺少 choices 字段")
             
-            choice = response_data["choices"][0]
+            choice = output["choices"][0]
             if "message" not in choice or "content" not in choice["message"]:
                 raise RuntimeError("API 响应格式错误：缺少 message.content 字段")
             
@@ -141,6 +175,8 @@ class DeepSeekLLM(BaseLLM):
             error_body = error.read().decode("utf-8")
             error_data = json.loads(error_body)
             
+            if "message" in error_data:
+                return error_data["message"]
             if "error" in error_data:
                 error_info = error_data["error"]
                 if isinstance(error_info, dict) and "message" in error_info:

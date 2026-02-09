@@ -236,8 +236,6 @@ class ImageCaptioner(BaseTransform):
         image_path = self._get_image_path(image_id)
         
         # 构建消息
-        # 注意：Vision LLM 的接口可能与普通 LLM 不同
-        # 这里使用通用的 chat 接口，实际可能需要调整
         messages = [
             {
                 "role": "user",
@@ -245,11 +243,20 @@ class ImageCaptioner(BaseTransform):
             }
         ]
         
-        # 如果 Vision LLM 支持图片输入，可能需要添加图片数据
-        # 这里先使用文本接口，后续可以根据实际 Vision LLM 实现调整
-        
+        # 如果 Vision LLM 支持图片输入（如 DashScopeVisionLLM），传递图片路径
         try:
-            response = self._vision_llm.chat(messages)
+            # 检查 Vision LLM 是否支持 image_path 参数
+            if hasattr(self._vision_llm, 'chat') and image_path:
+                # DashScopeVisionLLM 的 chat 方法支持 image_path 参数
+                if hasattr(self._vision_llm, '_add_image_to_messages'):
+                    # 使用支持图片的 chat 方法
+                    response = self._vision_llm.chat(messages, image_path=image_path)
+                else:
+                    # 普通 LLM，只传递消息
+                    response = self._vision_llm.chat(messages)
+            else:
+                # 普通 LLM 接口
+                response = self._vision_llm.chat(messages)
             return response
         except Exception as e:
             raise RuntimeError(f"Vision LLM 调用失败: {str(e)}") from e

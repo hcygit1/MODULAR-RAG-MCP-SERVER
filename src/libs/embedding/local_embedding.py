@@ -47,7 +47,7 @@ class LocalEmbedding(BaseEmbedding):
             raise ValueError("Local Embedding model 名称不能为空")
         
         self._config = config
-        self._provider = "local"
+        self._provider = config.provider.lower()  # 从配置中获取 provider
         self._model = config.model
         
         # 获取模型维度（从映射表或使用默认值）

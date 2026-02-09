@@ -32,7 +32,7 @@ class OllamaLLM(BaseLLM):
             raise ValueError("Ollama model 名称不能为空")
         
         self._config = config
-        self._provider = "ollama"
+        self._provider = config.provider.lower()  # 从配置中获取 provider
         self._model = config.model
         self._base_url = config.ollama_base_url.rstrip("/")
     

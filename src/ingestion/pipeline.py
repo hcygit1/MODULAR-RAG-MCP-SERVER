@@ -72,6 +72,12 @@ class IngestionPipeline:
             config=self._ingestion_config,
             llm=llm
         )
+        
+        # 如果没有传入 vision_llm，根据配置创建
+        if vision_llm is None:
+            from src.libs.llm.llm_factory import LLMFactory
+            vision_llm = LLMFactory.create_vision_llm(settings)
+        
         self._image_captioner = ImageCaptioner(
             config=self._ingestion_config,
             vision_llm_config=settings.vision_llm,

@@ -24,6 +24,8 @@ class LLMConfig:
     ollama_base_url: str = "http://localhost:11434"
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
+    dashscope_api_key: str = ""
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
 
 
 @dataclass
@@ -36,6 +38,7 @@ class VisionLLMConfig:
     azure_api_version: str = "2024-02-15-preview"
     deployment_name: str = ""
     dashscope_api_key: str = ""
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
 
 
 @dataclass
@@ -44,6 +47,8 @@ class EmbeddingConfig:
     provider: str
     model: str
     openai_api_key: str = ""
+    dashscope_api_key: str = ""
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
     local_model_path: str = ""
     device: str = "cpu"
 
@@ -168,6 +173,8 @@ def _parse_config(data: dict) -> Settings:
         ollama_base_url=llm_data.get("ollama_base_url", "http://localhost:11434"),
         deepseek_api_key=_resolve_env_vars(llm_data.get("deepseek_api_key", "")),
         deepseek_base_url=llm_data.get("deepseek_base_url", "https://api.deepseek.com"),
+        dashscope_api_key=_resolve_env_vars(llm_data.get("dashscope_api_key", "")),
+        dashscope_base_url=llm_data.get("dashscope_base_url", "https://dashscope.aliyuncs.com"),
     )
     
     vision_llm_data = data.get("vision_llm", {})
@@ -179,6 +186,7 @@ def _parse_config(data: dict) -> Settings:
         azure_api_version=vision_llm_data.get("azure_api_version", "2024-02-15-preview"),
         deployment_name=vision_llm_data.get("deployment_name", ""),
         dashscope_api_key=_resolve_env_vars(vision_llm_data.get("dashscope_api_key", "")),
+        dashscope_base_url=vision_llm_data.get("dashscope_base_url", "https://dashscope.aliyuncs.com"),
     )
     
     embedding_data = data.get("embedding", {})
@@ -186,6 +194,8 @@ def _parse_config(data: dict) -> Settings:
         provider=embedding_data.get("provider", ""),
         model=embedding_data.get("model", ""),
         openai_api_key=_resolve_env_vars(embedding_data.get("openai_api_key", "")),
+        dashscope_api_key=_resolve_env_vars(embedding_data.get("dashscope_api_key", "")),
+        dashscope_base_url=embedding_data.get("dashscope_base_url", "https://dashscope.aliyuncs.com"),
         local_model_path=embedding_data.get("local_model_path", ""),
         device=embedding_data.get("device", "cpu"),
     )

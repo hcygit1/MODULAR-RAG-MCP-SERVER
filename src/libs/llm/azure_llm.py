@@ -36,7 +36,7 @@ class AzureLLM(BaseLLM):
             raise ValueError("Azure deployment name 不能为空")
         
         self._config = config
-        self._provider = "azure"
+        self._provider = config.provider.lower()  # 从配置中获取 provider
         self._model = config.model
         self._endpoint = config.azure_endpoint.rstrip("/")
         self._api_key = config.azure_api_key
