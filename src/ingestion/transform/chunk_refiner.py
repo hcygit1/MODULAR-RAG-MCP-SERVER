@@ -57,38 +57,26 @@ class ChunkRefiner(BaseTransform):
         
         Returns:
             str: Prompt 模板内容
+        
+        Raises:
+            FileNotFoundError: 当模板文件不存在时
+            IOError: 当模板文件读取失败时
         """
         prompt_path = Path("config/prompts/chunk_refinement.txt")
-        if prompt_path.exists():
-            try:
-                with open(prompt_path, "r", encoding="utf-8") as f:
-                    return f.read()
-            except Exception:
-                # 如果读取失败，返回默认模板
-                return self._get_default_prompt_template()
-        else:
-            return self._get_default_prompt_template()
-    
-    def _get_default_prompt_template(self) -> str:
-        """获取默认 Prompt 模板"""
-        return """You are a text refinement assistant. Your task is to improve the quality of document chunks for better retrieval.
-
-Given a chunk of text from a document, refine it by:
-1. Removing noise (headers, footers, page numbers, etc.)
-2. Merging logically related but physically separated content
-3. Ensuring each chunk is self-contained and semantically complete
-4. Preserving all important information
-
-Rules:
-- Do not add information not present in the original
-- Maintain the original meaning and tone
-- Keep technical terms and proper nouns intact
-- Ensure the output is coherent and readable
-
-Original chunk:
-{chunk_text}
-
-Refined chunk:"""
+        if not prompt_path.exists():
+            raise FileNotFoundError(
+                f"Prompt 模板文件不存在: {prompt_path}. "
+                "请确保 config/prompts/chunk_refinement.txt 文件存在。"
+            )
+        
+        try:
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                template = f.read()
+                if not template.strip():
+                    raise ValueError(f"Prompt 模板文件为空: {prompt_path}")
+                return template
+        except Exception as e:
+            raise IOError(f"读取 Prompt 模板文件失败: {prompt_path}. 错误: {str(e)}") from e
     
     def transform(
         self,

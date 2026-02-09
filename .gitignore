@@ -49,5 +49,12 @@ data/db/
 cache/
 *.pyc
 
+# 测试样例文件（不提交到仓库）
+tests/fixtures/sample_documents/*.pdf
+tests/fixtures/sample_documents/*.txt
+tests/fixtures/sample_documents/*.docx
+tests/fixtures/sample_documents/*.doc
+# 保留 README.md
+
 # 规范同步生成的临时文件
 .cursor/skills/spec-sync/.spec_hash

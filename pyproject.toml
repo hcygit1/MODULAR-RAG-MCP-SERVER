@@ -30,7 +30,7 @@ dependencies = [
     "langchain>=0.1.0",  # B7.5: Recursive Splitter
     "langchain-text-splitters>=0.1.0",  # B7.5: RecursiveCharacterTextSplitter
     "chromadb>=0.4.0",  # B7.6: Chroma VectorStore
-    "markitdown>=0.0.1a26",  # C3: PDF Loader
+    "markitdown[pdf]>=0.0.1a26",  # C3: PDF Loader (需要 PDF 支持)
 ]
 
 [project.optional-dependencies]
