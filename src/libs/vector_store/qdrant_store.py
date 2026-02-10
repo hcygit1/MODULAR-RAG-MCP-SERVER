@@ -4,6 +4,7 @@ Qdrant VectorStore 实现
 使用 Qdrant 作为向量存储后端。
 支持 list、dict 等复杂 metadata 类型，无需序列化。
 """
+import hashlib
 import uuid
 from typing import List, Dict, Any, Optional
 
@@ -32,12 +33,22 @@ except ImportError:
 
 def _to_qdrant_id(record_id: str) -> str:
     """
-    将 record_id（如 SHA256 hex）转为 Qdrant 可接受的 UUID 格式。
-    Qdrant 要求 id 为 int 或 UUID 字符串，此处取前 32 位 hex 构造 UUID。
+    将 record_id 转为 Qdrant 可接受的 UUID 格式（确定性映射）。
+    Qdrant 要求 id 为 int 或 UUID 字符串。
+    - 64 位 hex（如 SHA256）：直接取前 32 位构造 UUID，兼容旧格式
+    - 其他格式（如 doc_xxx_chunk_0）：对 record_id 做 SHA256，取前 32 位 hex 构造 UUID
+    同一 record_id 始终映射到同一 Qdrant point id，保证 upsert 幂等。
     """
-    if not record_id or len(record_id) < 32:
+    if not record_id:
         return str(uuid.uuid4())
-    return str(uuid.UUID(hex=record_id[:32]))
+    # 64 位 hex 时沿用原逻辑（兼容 hash id）
+    if len(record_id) >= 32 and all(
+        c in "0123456789abcdefABCDEF" for c in record_id[:32]
+    ):
+        return str(uuid.UUID(hex=record_id[:32]))
+    # 其他格式：SHA256 确定性映射
+    hex32 = hashlib.sha256(record_id.encode("utf-8")).hexdigest()[:32]
+    return str(uuid.UUID(hex=hex32))
 
 
 def _prepare_payload(metadata: Dict[str, Any]) -> Dict[str, Any]:

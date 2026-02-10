@@ -2,7 +2,8 @@
 Vector Upserter 实现
 
 负责将编码后的 chunks 写入向量数据库，并确保幂等性。
-生成稳定的 chunk_id（hash(source_path + section_path + content_hash)）。
+使用 Pipeline 生成的 chunk.id 作为 record id，与 BM25 对齐，支持 Hybrid Search Fusion。
+将 content_hash 存入 metadata，用于后续修改检测与增量优化。
 """
 import hashlib
 from typing import List, Dict, Optional, Any
@@ -16,7 +17,8 @@ class VectorUpserter:
     Vector Upserter 实现
     
     负责将 Chunks 及其向量编码结果批量写入向量数据库。
-    确保幂等性：同一 chunk 两次 upsert 产生相同 id；内容变更 id 变更。
+    使用 chunk.id 作为 record id（与 BM25 一致），同一 chunk 多次 upsert 会覆盖更新。
+    content_hash 写入 metadata，可用于判断 chunk 是否修改。
     """
     
     def __init__(self, vector_store: BaseVectorStore):
@@ -64,18 +66,24 @@ class VectorUpserter:
                 f"chunks 数量 ({len(chunks)}) 与 sparse_vectors 数量 ({len(sparse_vectors)}) 不一致"
             )
         
-        # 为每个 chunk 生成稳定的 chunk_id 并组装 VectorRecord
+        # 使用 chunk.id 作为 record id（与 BM25 对齐），组装 VectorRecord
         records = []
         for i, chunk in enumerate(chunks):
-            chunk_id = self._generate_chunk_id(chunk)
+            if not chunk.id or not str(chunk.id).strip():
+                raise ValueError(
+                    f"Chunk 缺少有效 id，无法与 BM25 对齐。index={i}"
+                )
+            chunk_id = chunk.id
             dense_vector = dense_vectors[i]
             sparse_vector = sparse_vectors[i]
             
-            # 组装完整的 metadata（包含稀疏向量信息）
+            # 计算 content_hash 并存入 metadata（用于修改检测）
+            content_hash = self._compute_content_hash(chunk.text)
+            
             enriched_metadata = chunk.metadata.copy()
             enriched_metadata["sparse_vector"] = sparse_vector  # 将稀疏向量存入 metadata
+            enriched_metadata["content_hash"] = content_hash  # 用于后续修改检测与增量优化
             
-            # 创建 VectorRecord
             record = VectorRecord(
                 id=chunk_id,
                 vector=dense_vector,
@@ -86,52 +94,6 @@ class VectorUpserter:
         
         # 批量写入向量数据库
         self._vector_store.upsert(records, trace=trace)
-    
-    def _generate_chunk_id(self, chunk: Chunk) -> str:
-        """
-        为 Chunk 生成稳定的 chunk_id
-        
-        算法：hash(source_path + section_path + content_hash)
-        
-        Args:
-            chunk: Chunk 对象
-        
-        Returns:
-            str: 稳定的 chunk_id（十六进制字符串）
-        
-        Raises:
-            ValueError: 当 chunk.metadata 中缺少必需的字段时
-        """
-        # 从 metadata 中提取 source_path
-        source_path = chunk.metadata.get("source_path", "")
-        if not source_path:
-            # 如果 metadata 中没有 source_path，尝试从其他字段获取或使用默认值
-            source_path = chunk.metadata.get("source", "")
-            if not source_path:
-                raise ValueError(
-                    f"Chunk metadata 中缺少 'source_path' 或 'source' 字段，"
-                    f"无法生成稳定的 chunk_id。Chunk id: {chunk.id}"
-                )
-        
-        # 从 metadata 中提取 section_path（可选）
-        section_path = chunk.metadata.get("section_path", "")
-        if not section_path:
-            # 如果没有 section_path，使用 chunk_index 作为替代
-            chunk_index = chunk.metadata.get("chunk_index")
-            if chunk_index is not None:
-                section_path = f"chunk_{chunk_index}"
-            else:
-                section_path = ""
-        
-        # 计算 content_hash（chunk.text 的 SHA256 哈希）
-        content_hash = self._compute_content_hash(chunk.text)
-        
-        # 组合并计算最终哈希
-        # 使用分隔符确保不同字段不会混淆
-        combined = f"{source_path}|{section_path}|{content_hash}"
-        chunk_id = hashlib.sha256(combined.encode("utf-8")).hexdigest()
-        
-        return chunk_id
     
     def _compute_content_hash(self, text: str) -> str:
         """

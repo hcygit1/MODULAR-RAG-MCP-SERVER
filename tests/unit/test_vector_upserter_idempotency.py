@@ -1,9 +1,11 @@
 """
 VectorUpserter 幂等性测试
 
-验证 chunk_id 生成的稳定性和幂等性：
-- 同一 chunk 两次 upsert 产生相同 id
-- 内容变更 id 变更
+验证 chunk_id 与 BM25 对齐的稳定性：
+- 使用 chunk.id 作为 record id
+- 同一 chunk 两次 upsert 产生相同 id（覆盖）
+- 同一 chunk.id 内容变更时覆盖更新
+- content_hash 存入 metadata
 """
 import pytest
 from unittest.mock import MagicMock
@@ -81,137 +83,92 @@ class TestVectorUpserterIdempotency:
         assert first_chunk_id == second_chunk_id, \
             f"同一 chunk 两次 upsert 应该产生相同的 id，但得到 {first_chunk_id} 和 {second_chunk_id}"
     
-    def test_content_change_produces_different_id(self):
-        """测试内容变更时 id 变更"""
+    def test_content_change_overwrites_same_id(self):
+        """测试同一 chunk（相同 id）内容变更时，upsert 覆盖而非产生新 id"""
         mock_store = MockVectorStore()
         upserter = VectorUpserter(mock_store)
         
-        # 创建第一个 chunk
+        # 模拟 Pipeline 格式：同一逻辑 chunk，内容被 LLM 修改
         chunk1 = Chunk(
-            id="temp_id_1",
+            id="doc_abc123_chunk_0",
             text="Original text",
-            metadata={
-                "source_path": "/path/to/doc.pdf",
-                "section_path": "ch1/s1",
-                "chunk_index": 0
-            }
+            metadata={"source_path": "/path/to/doc.pdf", "chunk_index": 0}
         )
-        
-        # 创建第二个 chunk（相同 metadata，但文本不同）
         chunk2 = Chunk(
-            id="temp_id_2",
+            id="doc_abc123_chunk_0",
             text="Modified text",
-            metadata={
-                "source_path": "/path/to/doc.pdf",
-                "section_path": "ch1/s1",
-                "chunk_index": 0
-            }
+            metadata={"source_path": "/path/to/doc.pdf", "chunk_index": 0}
         )
         
         dense_vector = [0.1] * 128
         sparse_vector = {"test": 1.5}
         
-        # Upsert 第一个 chunk
         upserter.upsert_chunks([chunk1], [dense_vector], [sparse_vector])
-        first_call = mock_store.get_upsert_calls()[0]
-        first_chunk_id = first_call[0].id
+        first_id = mock_store.get_upsert_calls()[0][0].id
         
-        # Upsert 第二个 chunk（内容已变更）
         upserter.upsert_chunks([chunk2], [dense_vector], [sparse_vector])
-        second_call = mock_store.get_upsert_calls()[1]
-        second_chunk_id = second_call[0].id
+        second_id = mock_store.get_upsert_calls()[1][0].id
         
-        # 验证两个 chunk_id 不同
-        assert first_chunk_id != second_chunk_id, \
-            f"内容变更后应该产生不同的 id，但都得到 {first_chunk_id}"
+        # 同一 chunk.id → 相同 record id（覆盖）
+        assert first_id == second_id == "doc_abc123_chunk_0"
+        # 最终存储的是新内容
+        record = mock_store.get_record(second_id)
+        assert record.text == "Modified text"
+        assert record.metadata.get("content_hash")
     
-    def test_metadata_change_produces_different_id(self):
-        """测试 metadata 变更（source_path 或 section_path）时 id 变更"""
+    def test_different_chunks_produce_different_id(self):
+        """测试不同 chunk（不同 id）产生不同 record id"""
         mock_store = MockVectorStore()
         upserter = VectorUpserter(mock_store)
         
-        # 创建第一个 chunk
         chunk1 = Chunk(
-            id="temp_id_1",
+            id="doc_aaa_chunk_0",
             text="Same text",
-            metadata={
-                "source_path": "/path/to/doc1.pdf",
-                "section_path": "ch1/s1",
-                "chunk_index": 0
-            }
+            metadata={"source_path": "/path/to/doc1.pdf", "chunk_index": 0}
         )
-        
-        # 创建第二个 chunk（相同文本，但 source_path 不同）
         chunk2 = Chunk(
-            id="temp_id_2",
+            id="doc_bbb_chunk_0",
             text="Same text",
-            metadata={
-                "source_path": "/path/to/doc2.pdf",
-                "section_path": "ch1/s1",
-                "chunk_index": 0
-            }
+            metadata={"source_path": "/path/to/doc2.pdf", "chunk_index": 0}
         )
         
         dense_vector = [0.1] * 128
         sparse_vector = {"test": 1.5}
         
-        # Upsert 第一个 chunk
         upserter.upsert_chunks([chunk1], [dense_vector], [sparse_vector])
-        first_call = mock_store.get_upsert_calls()[0]
-        first_chunk_id = first_call[0].id
+        first_chunk_id = mock_store.get_upsert_calls()[0][0].id
         
-        # Upsert 第二个 chunk（source_path 已变更）
         upserter.upsert_chunks([chunk2], [dense_vector], [sparse_vector])
-        second_call = mock_store.get_upsert_calls()[1]
-        second_chunk_id = second_call[0].id
+        second_chunk_id = mock_store.get_upsert_calls()[1][0].id
         
-        # 验证两个 chunk_id 不同
-        assert first_chunk_id != second_chunk_id, \
-            f"source_path 变更后应该产生不同的 id，但都得到 {first_chunk_id}"
+        assert first_chunk_id != second_chunk_id
     
-    def test_section_path_change_produces_different_id(self):
-        """测试 section_path 变更时 id 变更"""
+    def test_different_chunk_indices_produce_different_id(self):
+        """测试同一文档不同 chunk 产生不同 record id"""
         mock_store = MockVectorStore()
         upserter = VectorUpserter(mock_store)
         
-        # 创建第一个 chunk
         chunk1 = Chunk(
-            id="temp_id_1",
+            id="doc_abc_chunk_0",
             text="Same text",
-            metadata={
-                "source_path": "/path/to/doc.pdf",
-                "section_path": "ch1/s1",
-                "chunk_index": 0
-            }
+            metadata={"source_path": "/path/to/doc.pdf", "chunk_index": 0}
         )
-        
-        # 创建第二个 chunk（相同文本和 source_path，但 section_path 不同）
         chunk2 = Chunk(
-            id="temp_id_2",
+            id="doc_abc_chunk_1",
             text="Same text",
-            metadata={
-                "source_path": "/path/to/doc.pdf",
-                "section_path": "ch1/s2",
-                "chunk_index": 1
-            }
+            metadata={"source_path": "/path/to/doc.pdf", "chunk_index": 1}
         )
         
         dense_vector = [0.1] * 128
         sparse_vector = {"test": 1.5}
         
-        # Upsert 第一个 chunk
         upserter.upsert_chunks([chunk1], [dense_vector], [sparse_vector])
-        first_call = mock_store.get_upsert_calls()[0]
-        first_chunk_id = first_call[0].id
+        first_chunk_id = mock_store.get_upsert_calls()[0][0].id
         
-        # Upsert 第二个 chunk（section_path 已变更）
         upserter.upsert_chunks([chunk2], [dense_vector], [sparse_vector])
-        second_call = mock_store.get_upsert_calls()[1]
-        second_chunk_id = second_call[0].id
+        second_chunk_id = mock_store.get_upsert_calls()[1][0].id
         
-        # 验证两个 chunk_id 不同
-        assert first_chunk_id != second_chunk_id, \
-            f"section_path 变更后应该产生不同的 id，但都得到 {first_chunk_id}"
+        assert first_chunk_id != second_chunk_id
 
 
 class TestVectorUpserterBasic:
@@ -260,6 +217,24 @@ class TestVectorUpserterBasic:
         assert record.vector == dense_vector
         assert record.metadata["sparse_vector"] == sparse_vector
         assert "source_path" in record.metadata
+        assert "content_hash" in record.metadata
+    
+    def test_content_hash_stored_in_metadata(self):
+        """测试 content_hash 写入 metadata"""
+        mock_store = MockVectorStore()
+        upserter = VectorUpserter(mock_store)
+        
+        chunk = Chunk(
+            id="doc_xyz_chunk_0",
+            text="Unique content here",
+            metadata={"source_path": "/path/doc.pdf"}
+        )
+        
+        upserter.upsert_chunks([chunk], [[0.1] * 128], [{}])
+        record = mock_store.get_upsert_calls()[0][0]
+        
+        assert "content_hash" in record.metadata
+        assert len(record.metadata["content_hash"]) == 64  # SHA256 hex
     
     def test_upsert_chunks_empty_list(self):
         """测试空 chunks 列表"""
@@ -288,47 +263,42 @@ class TestVectorUpserterBasic:
         with pytest.raises(ValueError, match="chunks 数量.*与 sparse_vectors 数量.*不一致"):
             upserter.upsert_chunks([chunk], [[0.1] * 128], [])
     
-    def test_generate_chunk_id_without_source_path(self):
-        """测试缺少 source_path 时抛出错误"""
+    def test_chunk_without_id_raises(self):
+        """测试 chunk.id 仅含空白时抛出错误"""
         mock_store = MockVectorStore()
         upserter = VectorUpserter(mock_store)
         
-        chunk = Chunk(
-            id="temp_id",
-            text="Test",
-            metadata={}  # 缺少 source_path
-        )
-        
+        # Chunk 模型允许 id 为空格，但 VectorUpserter 应拒绝
+        chunk = Chunk(id="   ", text="Test", metadata={"source_path": "/path/doc.pdf"})
         dense_vector = [0.1] * 128
         sparse_vector = {}
         
-        with pytest.raises(ValueError, match="缺少 'source_path' 或 'source' 字段"):
+        with pytest.raises(ValueError, match="缺少有效 id"):
             upserter.upsert_chunks([chunk], [dense_vector], [sparse_vector])
     
-    def test_generate_chunk_id_with_chunk_index_fallback(self):
-        """测试使用 chunk_index 作为 section_path 的回退"""
+    def test_upsert_chunk_with_minimal_metadata(self):
+        """测试 metadata 仅有 chunk_index 时可成功 upsert"""
         mock_store = MockVectorStore()
         upserter = VectorUpserter(mock_store)
         
         chunk = Chunk(
-            id="temp_id",
+            id="doc_xyz_chunk_5",
             text="Test",
             metadata={
                 "source_path": "/path/to/doc.pdf",
-                "chunk_index": 5  # 没有 section_path，使用 chunk_index
+                "chunk_index": 5
             }
         )
         
         dense_vector = [0.1] * 128
         sparse_vector = {}
         
-        # 应该成功，使用 chunk_index 作为 section_path
         upserter.upsert_chunks([chunk], [dense_vector], [sparse_vector])
         
         assert len(mock_store.get_upsert_calls()) == 1
         records = mock_store.get_upsert_calls()[0]
         assert len(records) == 1
-        assert records[0].id  # chunk_id 应该已生成
+        assert records[0].id == "doc_xyz_chunk_5"
     
     def test_upsert_multiple_chunks(self):
         """测试批量 upsert 多个 chunks"""
