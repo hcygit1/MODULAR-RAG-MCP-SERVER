@@ -59,6 +59,9 @@ class VectorStoreConfig:
     backend: str
     persist_path: str
     collection_name: str
+    # Qdrant 专用配置
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
 
 
 @dataclass
@@ -119,6 +122,8 @@ class IngestionConfig:
     enable_metadata_enrichment: bool
     enable_image_captioning: bool
     batch_size: int
+    bm25_base_path: str = "./data/db/bm25"
+    images_base_path: str = "./data/images"
 
 
 @dataclass
@@ -205,6 +210,8 @@ def _parse_config(data: dict) -> Settings:
         backend=vector_store_data.get("backend", ""),
         persist_path=vector_store_data.get("persist_path", ""),
         collection_name=vector_store_data.get("collection_name", ""),
+        qdrant_url=_resolve_env_vars(vector_store_data.get("qdrant_url", "http://localhost:6333")),
+        qdrant_api_key=_resolve_env_vars(vector_store_data.get("qdrant_api_key", "")),
     )
     
     retrieval_data = data.get("retrieval", {})
@@ -256,6 +263,8 @@ def _parse_config(data: dict) -> Settings:
         enable_metadata_enrichment=ingestion_data.get("enable_metadata_enrichment", True),
         enable_image_captioning=ingestion_data.get("enable_image_captioning", True),
         batch_size=ingestion_data.get("batch_size", 32),
+        bm25_base_path=ingestion_data.get("bm25_base_path", "./data/db/bm25"),
+        images_base_path=ingestion_data.get("images_base_path", "./data/images"),
     )
     
     return Settings(

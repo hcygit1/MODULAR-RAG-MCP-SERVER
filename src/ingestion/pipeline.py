@@ -73,6 +73,11 @@ class IngestionPipeline:
             llm=llm
         )
         
+        # ImageStorage 需在 ImageCaptioner 之前创建，以便传入
+        self._image_storage = ImageStorage(
+            base_path=self._ingestion_config.images_base_path
+        )
+        
         # 如果没有传入 vision_llm，根据配置创建
         if vision_llm is None:
             from src.libs.llm.llm_factory import LLMFactory
@@ -81,7 +86,8 @@ class IngestionPipeline:
         self._image_captioner = ImageCaptioner(
             config=self._ingestion_config,
             vision_llm_config=settings.vision_llm,
-            vision_llm=vision_llm
+            vision_llm=vision_llm,
+            image_storage=self._image_storage
         )
         
         # Embedding 组件
@@ -102,9 +108,16 @@ class IngestionPipeline:
         if vector_store is None:
             vector_store = VectorStoreFactory.create(settings)
         self._vector_upserter = VectorUpserter(vector_store=vector_store)
-        self._bm25_indexer = BM25Indexer()
-        self._image_storage = ImageStorage()
-    
+        self._bm25_indexer = BM25Indexer(
+            base_path=self._ingestion_config.bm25_base_path
+        )
+
+    def close(self) -> None:
+        """关闭资源（如 VectorStore 连接），避免进程退出时析构报错"""
+        store = self._vector_upserter.get_vector_store()
+        if store is not None:
+            store.close()
+
     def process(
         self,
         file_path: str,
@@ -157,6 +170,13 @@ class IngestionPipeline:
                 raise RuntimeError("文档切分后未产生任何 chunks")
         except Exception as e:
             raise RuntimeError(f"文档切分失败: {str(e)}") from e
+        
+        # 步骤 3.5: 保存图片（在 Transform 之前，以便 ImageCaptioner 能获取路径）
+        try:
+            self._save_images(chunks, collection_name, trace=trace)
+            self._image_storage.save_index(collection_name)
+        except Exception as e:
+            raise RuntimeError(f"图片保存失败: {str(e)}") from e
         
         # 步骤 4: Transform（转换和增强）
         try:
@@ -259,13 +279,6 @@ class IngestionPipeline:
             trace=trace
         )
         self._bm25_indexer.save()
-        
-        # 3. 保存图片（如果有）
-        # 从 chunks 中提取所有图片引用并保存
-        self._save_images(chunks, collection_name, trace=trace)
-        
-        # 保存图片索引
-        self._image_storage.save_index(collection_name)
     
     def _save_images(
         self,
@@ -276,28 +289,53 @@ class IngestionPipeline:
         """
         保存 chunks 中引用的图片
         
+        从各 chunk 的 metadata 中收集 image_refs、image_data、image_metadata，
+        对每个 image_id 去重后调用 ImageStorage.save_image 保存。
+        单张图片保存失败不影响其他图片。
+        
         Args:
             chunks: Chunk 列表
             collection_name: 集合名称
             trace: 追踪上下文（可选）
-        
-        注意：当前实现假设图片数据已经在 Document.metadata 中。
-        实际实现中，图片数据应该从 Loader 阶段获取。
         """
-        # 收集所有图片引用
-        all_image_refs = set()
+        # 收集所有图片引用（去重）
+        all_image_ids: set[str] = set()
+        # 构建 image_id -> (image_data, image_metadata) 映射
+        image_data_map: Dict[str, bytes] = {}
+        image_metadata_map: Dict[str, Dict[str, Any]] = {}
+        
         for chunk in chunks:
             image_refs = chunk.metadata.get("image_refs", [])
-            all_image_refs.update(image_refs)
+            for img_id in image_refs:
+                all_image_ids.add(img_id)
+                # 从 chunk 的 image_data 获取二进制
+                chunk_image_data = chunk.metadata.get("image_data", {})
+                if img_id in chunk_image_data and img_id not in image_data_map:
+                    image_data_map[img_id] = chunk_image_data[img_id]
+                # 从 chunk 的 image_metadata 获取元数据
+                chunk_image_metadata = chunk.metadata.get("image_metadata", [])
+                for meta in chunk_image_metadata:
+                    if meta.get("image_id") == img_id and img_id not in image_metadata_map:
+                        image_metadata_map[img_id] = meta
+                        break
         
-        # 如果有图片引用，尝试从 metadata 中获取图片数据并保存
-        # 注意：当前实现简化处理，实际应该从 Loader 阶段获取图片二进制数据
-        # 这里只是占位实现，确保流程完整
-        for image_id in all_image_refs:
-            # TODO: 从 Document.metadata 或图片缓存中获取图片数据
-            # 当前简化：如果图片数据不存在，跳过
-            # 实际实现应该在 Loader 阶段提取图片并暂存
-            pass
+        # 逐个保存，单张失败不影响其他
+        for image_id in all_image_ids:
+            image_bytes = image_data_map.get(image_id)
+            if not image_bytes:
+                continue
+            metadata = image_metadata_map.get(image_id)
+            try:
+                self._image_storage.save_image(
+                    image_id=image_id,
+                    image_data=image_bytes,
+                    collection_name=collection_name,
+                    metadata=metadata,
+                    trace=trace
+                )
+            except Exception:
+                # 单张图片保存失败不影响其他图片，静默跳过
+                pass
     
     def split_document(
         self,
@@ -329,6 +367,15 @@ class IngestionPipeline:
         # 使用 Splitter 切分文本
         text_chunks = self._splitter.split_text(document.text, trace=trace)
         
+        # 准备阶段：建立图片元数据索引（用于高效查找）
+        image_data_dict = document.metadata.get("image_data") or {}
+        images_list = document.metadata.get("images") or []
+        image_metadata_index: Dict[str, Dict[str, Any]] = {}
+        for img_meta in images_list:
+            img_id = img_meta.get("image_id")
+            if img_id:
+                image_metadata_index[img_id] = img_meta
+        
         # 将文本片段转换为 Chunk 对象
         chunks: List[Chunk] = []
         current_offset = 0
@@ -341,21 +388,34 @@ class IngestionPipeline:
             start_offset = current_offset
             end_offset = current_offset + len(chunk_text)
             
-            # 构建 Chunk 元数据（继承 Document 的元数据，并添加 chunk 特定信息）
-            chunk_metadata = document.metadata.copy()
+            # 构建 Chunk 元数据（继承 Document 的元数据，排除图片数据，只传递 chunk 相关的）
+            chunk_metadata = {
+                k: v for k, v in document.metadata.items()
+                if k not in ("image_data", "images")
+            }
             chunk_metadata.update({
                 "chunk_index": idx,
                 "source_doc_id": document.id,
                 "total_chunks": len(text_chunks),
             })
             
-            # 如果 Document 有图片引用，尝试保持关联
-            if "images" in document.metadata:
-                # 检查 chunk 文本中是否包含图片占位符
-                # 如果包含，提取对应的 image_id
-                image_refs = self._extract_image_refs(chunk_text)
-                if image_refs:
-                    chunk_metadata["image_refs"] = image_refs
+            # 提取该 chunk 的图片引用
+            image_refs = self._extract_image_refs(chunk_text)
+            
+            # 只传递该 chunk 相关的图片数据和元数据
+            if image_refs:
+                chunk_metadata["image_refs"] = image_refs
+                chunk_image_data: Dict[str, bytes] = {}
+                chunk_image_metadata: List[Dict[str, Any]] = []
+                for img_id in image_refs:
+                    if img_id in image_data_dict:
+                        chunk_image_data[img_id] = image_data_dict[img_id]
+                    if img_id in image_metadata_index:
+                        chunk_image_metadata.append(image_metadata_index[img_id])
+                if chunk_image_data:
+                    chunk_metadata["image_data"] = chunk_image_data
+                if chunk_image_metadata:
+                    chunk_metadata["image_metadata"] = chunk_image_metadata
             
             # 创建 Chunk 对象
             chunk = Chunk(

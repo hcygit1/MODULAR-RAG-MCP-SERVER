@@ -30,7 +30,9 @@ dependencies = [
     "langchain>=0.1.0",  # B7.5: Recursive Splitter
     "langchain-text-splitters>=0.1.0",  # B7.5: RecursiveCharacterTextSplitter
     "chromadb>=0.4.0",  # B7.6: Chroma VectorStore
+    "qdrant-client>=1.7.0",  # Qdrant VectorStore（支持 list 等复杂 metadata）
     "markitdown[pdf]>=0.0.1a26",  # C3: PDF Loader (需要 PDF 支持)
+    "pymupdf>=1.23.0",  # 图片提取：从 PDF 中提取图片数据和位置信息
 ]
 
 [project.optional-dependencies]

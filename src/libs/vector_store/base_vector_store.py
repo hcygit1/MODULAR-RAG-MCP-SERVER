@@ -160,3 +160,10 @@ class BaseVectorStore(ABC):
             str: 集合名称
         """
         pass
+
+    def close(self) -> None:
+        """
+        关闭连接，释放资源。
+        默认无操作，需要清理的实例（如 QdrantStore）可重写此方法。
+        """
+        pass

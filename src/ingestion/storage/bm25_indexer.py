@@ -76,10 +76,15 @@ class BM25Indexer:
         for chunk, sparse_vector in zip(chunks, sparse_vectors):
             chunk_id = chunk.id
             
-            # 保存 chunk metadata
+            # 保存 chunk metadata（排除不可 JSON 序列化的字段如 image_data）
+            metadata_safe = {
+                k: v for k, v in chunk.metadata.items()
+                if k not in ("image_data",) and not isinstance(v, bytes)
+            }
+            
             self._chunk_metadata[chunk_id] = {
                 "text": chunk.text,
-                "metadata": chunk.metadata,
+                "metadata": metadata_safe,
                 "start_offset": chunk.start_offset,
                 "end_offset": chunk.end_offset
             }

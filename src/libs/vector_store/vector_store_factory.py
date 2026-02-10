@@ -37,15 +37,11 @@ class VectorStoreFactory:
         backend = config.backend.lower()
         
         if backend == "chroma":
-            # B7.6 阶段实现
             from src.libs.vector_store.chroma_store import ChromaStore
             return ChromaStore(config)
         elif backend == "qdrant":
-            # 未来实现
-            raise NotImplementedError(
-                "Qdrant VectorStore 实现尚未完成。"
-                "请先使用其他 backend 或等待实现。"
-            )
+            from src.libs.vector_store.qdrant_store import QdrantStore
+            return QdrantStore(config)
         elif backend == "pinecone":
             # 未来实现
             raise NotImplementedError(

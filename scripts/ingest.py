@@ -171,11 +171,11 @@ def main():
     logger.info(f"  总计: {len(files_to_process)}")
     logger.info("=" * 60)
     
-    # 检查输出目录
+    # 检查输出目录（根据配置动态生成）
     output_dirs = [
-        Path("data/db/chroma"),
-        Path("data/db/bm25"),
-        Path("data/images"),
+        Path(settings.vector_store.persist_path),
+        Path(settings.ingestion.bm25_base_path),
+        Path(settings.ingestion.images_base_path),
     ]
     
     logger.info("输出目录:")
@@ -184,7 +184,13 @@ def main():
             logger.info(f"  ✅ {output_dir}")
         else:
             logger.info(f"  ⚠️  {output_dir} (不存在)")
-    
+
+    # 显式关闭资源，避免 QdrantClient 等析构时报错
+    try:
+        pipeline.close()
+    except Exception:
+        pass
+
     # 根据结果决定退出码
     if error_count > 0:
         sys.exit(1)

@@ -320,30 +320,8 @@ def test_factory_unsupported_backend():
 
 
 def test_factory_not_implemented_backends():
-    """测试尚未实现的 backend 抛出 NotImplementedError"""
-    # 测试 chroma
-    vector_store_config_chroma = VectorStoreConfig(
-        backend="chroma",
-        persist_path="./data/db/chroma",
-        collection_name="test"
-    )
-    settings_chroma = _create_test_settings(vector_store_config_chroma)
-    
-    with pytest.raises(NotImplementedError, match="Chroma VectorStore 实现将在 B7.6"):
-        VectorStoreFactory.create(settings_chroma)
-    
-    # 测试 qdrant
-    vector_store_config_qdrant = VectorStoreConfig(
-        backend="qdrant",
-        persist_path="./data/db/qdrant",
-        collection_name="test"
-    )
-    settings_qdrant = _create_test_settings(vector_store_config_qdrant)
-    
-    with pytest.raises(NotImplementedError, match="Qdrant VectorStore 实现尚未完成"):
-        VectorStoreFactory.create(settings_qdrant)
-    
-    # 测试 pinecone
+    """测试尚未实现的 backend 抛出 ValueError 或 NotImplementedError"""
+    # 测试 pinecone（未实现）
     vector_store_config_pinecone = VectorStoreConfig(
         backend="pinecone",
         persist_path="",
@@ -364,9 +342,9 @@ def test_factory_backend_case_insensitive():
     )
     settings_upper = _create_test_settings(vector_store_config_upper)
     
-    # 应该能识别（虽然会抛出 NotImplementedError，但错误信息应该正确）
-    with pytest.raises(NotImplementedError, match="Chroma VectorStore"):
-        VectorStoreFactory.create(settings_upper)
+    store = VectorStoreFactory.create(settings_upper)
+    assert store is not None
+    assert store.get_backend() == "chroma"
 
 
 def _create_test_settings(vector_store_config: VectorStoreConfig) -> Settings:

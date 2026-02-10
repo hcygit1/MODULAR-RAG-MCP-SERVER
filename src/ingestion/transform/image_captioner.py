@@ -7,10 +7,14 @@ Image Captioner 实现
 3. 失败降级：Vision LLM 不可用时保留 image_refs，标记 has_unprocessed_images
 """
 import os
+import tempfile
 from pathlib import Path
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, TYPE_CHECKING
 
 from src.ingestion.models import Chunk
+
+if TYPE_CHECKING:
+    from src.ingestion.storage.image_storage import ImageStorage
 from src.ingestion.transform.base_transform import BaseTransform
 from src.core.settings import IngestionConfig, VisionLLMConfig
 
@@ -36,7 +40,8 @@ class ImageCaptioner(BaseTransform):
         config: IngestionConfig,
         vision_llm_config: Optional[VisionLLMConfig] = None,
         vision_llm: Optional[Any] = None,
-        prompt_template: Optional[str] = None
+        prompt_template: Optional[str] = None,
+        image_storage: Optional["ImageStorage"] = None
     ):
         """
         初始化 ImageCaptioner
@@ -46,12 +51,14 @@ class ImageCaptioner(BaseTransform):
             vision_llm_config: Vision LLM 配置对象（可选）
             vision_llm: Vision LLM 实例（可选），用于生成图片描述
             prompt_template: Prompt 模板（可选），用于自定义图片描述生成
+            image_storage: ImageStorage 实例（可选），用于根据 image_id 获取图片路径
         """
         self._config = config
         self._enable_captioning = config.enable_image_captioning
         self._vision_llm_config = vision_llm_config
         self._vision_llm = vision_llm
         self._prompt_template = prompt_template
+        self._image_storage = image_storage
     
     def transform(
         self,
@@ -192,7 +199,7 @@ class ImageCaptioner(BaseTransform):
                 # 调用 Vision LLM 生成描述
                 # 注意：这里假设 Vision LLM 有一个方法可以处理图片
                 # 实际实现可能需要根据 Vision LLM 的具体接口调整
-                caption = self._call_vision_llm(image_id, prompt)
+                caption = self._call_vision_llm(image_id, prompt, chunk)
                 
                 if caption and caption.strip():
                     captions[image_id] = caption.strip()
@@ -212,7 +219,8 @@ class ImageCaptioner(BaseTransform):
     def _call_vision_llm(
         self,
         image_id: str,
-        prompt: str
+        prompt: str,
+        chunk: Optional[Chunk] = None
     ) -> str:
         """
         调用 Vision LLM 生成图片描述
@@ -220,6 +228,7 @@ class ImageCaptioner(BaseTransform):
         Args:
             image_id: 图片 ID
             prompt: 提示文本
+            chunk: Chunk 对象（可选），用于从 metadata 获取临时路径回退
         
         Returns:
             str: 图片描述
@@ -230,10 +239,8 @@ class ImageCaptioner(BaseTransform):
         if self._vision_llm is None:
             raise RuntimeError("Vision LLM 不可用")
         
-        # 尝试获取图片路径
-        # 注意：这里假设图片路径可以从 image_id 推导或从 metadata 获取
-        # 实际实现可能需要根据项目的图片存储策略调整
-        image_path = self._get_image_path(image_id)
+        # 尝试获取图片路径（优先 ImageStorage，回退到 chunk metadata 中的 image_data 写入临时文件）
+        image_path = self._get_image_path(image_id, chunk)
         
         # 构建消息
         messages = [
@@ -261,24 +268,63 @@ class ImageCaptioner(BaseTransform):
         except Exception as e:
             raise RuntimeError(f"Vision LLM 调用失败: {str(e)}") from e
     
-    def _get_image_path(self, image_id: str) -> Optional[str]:
+    def _get_image_path(
+        self,
+        image_id: str,
+        chunk: Optional[Chunk] = None
+    ) -> Optional[str]:
         """
         根据 image_id 获取图片路径
         
+        优先从 ImageStorage 获取保存后的路径；
+        若返回 None，则尝试从 chunk metadata 的 image_data 写入临时文件并返回路径。
+        
         Args:
             image_id: 图片 ID
+            chunk: Chunk 对象（可选），用于回退从 metadata 的 image_data 创建临时文件
         
         Returns:
             Optional[str]: 图片路径，如果找不到则返回 None
         """
-        # 这里需要根据项目的图片存储策略实现
-        # 可能的策略：
-        # 1. 从 metadata.images 列表中查找
-        # 2. 根据 image_id 推导路径（如 data/images/{image_id}.png）
-        # 3. 从文档的 images 元数据中查找
+        # 1. 优先从 ImageStorage 获取
+        if self._image_storage is not None:
+            path = self._image_storage.get_image_path(image_id)
+            if path is not None:
+                return path
         
-        # 暂时返回 None，实际实现时需要根据项目结构调整
+        # 2. 回退：从 chunk metadata 的 image_data 写入临时文件
+        if chunk is not None:
+            image_data = chunk.metadata.get("image_data", {}).get(image_id)
+            if image_data is not None and len(image_data) > 0:
+                try:
+                    # 根据 image_metadata 推测扩展名，默认为 .png
+                    ext = ".png"
+                    for meta in chunk.metadata.get("image_metadata", []):
+                        if meta.get("image_id") == image_id:
+                            mime = meta.get("mime_type", "image/png")
+                            ext = self._extension_from_mime(mime)
+                            break
+                    suffix = ext
+                    with tempfile.NamedTemporaryFile(
+                        suffix=suffix, delete=False
+                    ) as tmp:
+                        tmp.write(image_data)
+                        return tmp.name
+                except Exception:
+                    pass
+        
         return None
+    
+    def _extension_from_mime(self, mime_type: str) -> str:
+        """根据 MIME 类型返回文件扩展名"""
+        mime_to_ext = {
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/gif": ".gif",
+            "image/webp": ".webp",
+        }
+        return mime_to_ext.get(mime_type.lower(), ".png")
     
     def _extract_context_text(
         self,

@@ -107,68 +107,47 @@ class DashScopeVisionLLM(BaseLLM):
     ) -> List[Dict[str, str]]:
         """
         将图片编码并添加到消息中
-        
-        DashScope Qwen-VL 支持图片输入，格式：
-        {
-            "role": "user",
-            "content": [
-                {
-                    "image": "base64_encoded_image"
-                },
-                {
-                    "text": "描述这张图片"
-                }
-            ]
-        }
-        
-        Args:
-            messages: 原始消息列表
-            image_path: 图片路径
-        
-        Returns:
-            List[Dict]: 添加图片后的消息列表
+
+        DashScope Qwen-VL 要求 image 为 data URI 格式：
+        data:image/{mime};base64,{base64}，否则会报 InvalidParameter。
         """
         if not Path(image_path).exists():
             raise FileNotFoundError(f"图片文件不存在: {image_path}")
-        
+
         # 读取图片并编码为 base64
         with open(image_path, "rb") as f:
             image_data = f.read()
             image_base64 = base64.b64encode(image_data).decode("utf-8")
-        
+
+        # 根据扩展名确定 MIME 类型
+        ext = Path(image_path).suffix.lower()
+        mime_map = {".jpg": "jpeg", ".jpeg": "jpeg", ".png": "png", ".gif": "gif", ".webp": "webp"}
+        mime_type = mime_map.get(ext, "jpeg")
+        # DashScope 要求 data URI 格式
+        image_value = f"data:image/{mime_type};base64,{image_base64}"
+
         # 复制消息列表
         new_messages = messages.copy()
-        
+
         # 找到最后一个 user 消息，添加图片
         if new_messages and new_messages[-1]["role"] == "user":
-            # 如果 content 是字符串，转换为列表格式
             if isinstance(new_messages[-1]["content"], str):
                 text_content = new_messages[-1]["content"]
                 new_messages[-1]["content"] = [
-                    {
-                        "image": image_base64
-                    },
-                    {
-                        "text": text_content
-                    }
+                    {"image": image_value},
+                    {"text": text_content}
                 ]
             elif isinstance(new_messages[-1]["content"], list):
-                # 如果已经是列表，在开头添加图片
-                new_messages[-1]["content"].insert(0, {"image": image_base64})
+                new_messages[-1]["content"].insert(0, {"image": image_value})
         else:
-            # 如果没有 user 消息，创建一个新的
             new_messages.append({
                 "role": "user",
                 "content": [
-                    {
-                        "image": image_base64
-                    },
-                    {
-                        "text": "请描述这张图片"
-                    }
+                    {"image": image_value},
+                    {"text": "请描述这张图片"}
                 ]
             })
-        
+
         return new_messages
     
     def _call_api(self, messages: List[Dict[str, str]]) -> str:
