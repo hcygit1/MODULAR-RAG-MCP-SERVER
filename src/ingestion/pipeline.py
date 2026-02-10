@@ -63,6 +63,17 @@ class IngestionPipeline:
         self._integrity_checker = FileIntegrityChecker()
         self._splitter = SplitterFactory.create(settings, strategy=splitter_strategy)
         
+        # Text LLM：仅在未传入且 (enable_llm_refinement 或 enable_metadata_enrichment) 时创建
+        if llm is None and (
+            self._ingestion_config.enable_llm_refinement
+            or self._ingestion_config.enable_metadata_enrichment
+        ):
+            try:
+                from src.libs.llm.llm_factory import LLMFactory
+                llm = LLMFactory.create(config=settings.llm)
+            except (ValueError, NotImplementedError):
+                llm = None
+        
         # Transform 组件
         self._chunk_refiner = ChunkRefiner(
             config=self._ingestion_config,
@@ -78,8 +89,8 @@ class IngestionPipeline:
             base_path=self._ingestion_config.images_base_path
         )
         
-        # 如果没有传入 vision_llm，根据配置创建
-        if vision_llm is None:
+        # Vision LLM：仅在未传入且 enable_image_captioning 时创建
+        if vision_llm is None and self._ingestion_config.enable_image_captioning:
             from src.libs.llm.llm_factory import LLMFactory
             vision_llm = LLMFactory.create_vision_llm(settings)
         
