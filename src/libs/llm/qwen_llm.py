@@ -122,7 +122,8 @@ class QwenLLM(BaseLLM):
                 "messages": messages
             },
             "parameters": {
-                "temperature": 0.7
+                "temperature": 0.7,
+                "result_format": "message"
             }
         }
         

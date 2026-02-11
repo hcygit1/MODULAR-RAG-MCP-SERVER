@@ -6,6 +6,7 @@ PDF Loader 实现
 """
 import os
 import hashlib
+import re
 from pathlib import Path
 from typing import Optional, Any, Dict, List, Tuple
 
@@ -323,22 +324,37 @@ class PdfLoader(BaseLoader):
         
         return image_data_dict, image_metadata_list, page_images
     
+    def _normalize_for_fingerprint_search(self, text: str) -> str:
+        """
+        标准化文本用于指纹匹配：换行转空格、合并连续空白、转小写。
+        
+        Args:
+            text: 原始文本
+        
+        Returns:
+            str: 标准化后的文本
+        """
+        if not text:
+            return ""
+        normalized = re.sub(r"\s+", " ", text.replace("\n", " ")).strip()
+        return normalized.lower()
+
     def _map_pages_to_markdown(
         self,
         pdf_path: str,
         markdown_text: str,
-        fingerprint_length: int = 200
+        fingerprint_length: int = 60
     ) -> Dict[int, Tuple[int, int]]:
         """
-        建立 PDF 页面到 Markdown 行的映射
+        建立 PDF 页面到 Markdown 行的映射（方案 A：全文匹配 + 缩短指纹）
         
-        通过提取每页文本的"指纹"（前N个字符），在 Markdown 中查找匹配位置，
-        建立页面到 Markdown 行的映射关系。
+        通过提取每页文本的"指纹"（缩短、标准化），在 Markdown 的滑动窗口中
+        全文查找匹配位置，建立页面到 Markdown 行的映射关系。
         
         Args:
             pdf_path: PDF 文件路径
             markdown_text: Markdown 文本
-            fingerprint_length: 文本指纹长度（默认200个字符）
+            fingerprint_length: 文本指纹长度（默认 60 字符，原 200 易跨行导致单行匹配失败）
         
         Returns:
             Dict[int, Tuple[int, int]]: {page_num: (start_line, end_line)}
@@ -353,72 +369,74 @@ class PdfLoader(BaseLoader):
             return {}
         
         page_to_markdown = {}  # {page_num: (start_line, end_line)}
-        markdown_lines = markdown_text.split('\n')
-        
-        # 打开 PDF 文件
+        markdown_lines = markdown_text.split("\n")
+        window_lines = 40  # 滑动窗口行数，指纹可能跨多行
+
         doc = fitz.open(pdf_path)
-        
         try:
-            # 提取每页的文本指纹
-            page_fingerprints = {}  # {page_num: fingerprint}
-            
+            # 1. 提取每页的文本指纹（缩短 + 标准化）
+            page_fingerprints = {}
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 page_text = page.get_text()
-                
-                # 提取文本指纹（前N个字符）
-                fingerprint = page_text[:fingerprint_length].strip() if page_text else ""
-                if fingerprint:
-                    page_fingerprints[page_num] = fingerprint
-            
-            # 在 Markdown 中查找每页的位置
+                raw_fp = page_text[:fingerprint_length].strip() if page_text else ""
+                if raw_fp:
+                    normalized_fp = self._normalize_for_fingerprint_search(raw_fp)
+                    if normalized_fp and len(normalized_fp) >= 10:
+                        page_fingerprints[page_num] = normalized_fp
+
+            # 2. 在 Markdown 的滑动窗口中全文查找
             for page_num in sorted(page_fingerprints.keys()):
-                fingerprint = page_fingerprints[page_num]
-                fingerprint_lower = fingerprint.lower()
-                
-                # 在 Markdown 中查找匹配位置
-                page_start_line = None
-                
-                # 从上一页的结束位置开始查找（如果存在），避免重复匹配
+                normalized_fp = page_fingerprints[page_num]
                 search_start = 0
                 if page_num > 0 and (page_num - 1) in page_to_markdown:
                     search_start = page_to_markdown[page_num - 1][1]
-                
+
+                page_start_line = None
                 for line_idx in range(search_start, len(markdown_lines)):
-                    line = markdown_lines[line_idx]
-                    # 检查指纹是否出现在这一行（不区分大小写）
-                    if fingerprint_lower and fingerprint_lower in line.lower():
+                    window_end = min(line_idx + window_lines, len(markdown_lines))
+                    chunk = "\n".join(markdown_lines[line_idx:window_end])
+                    normalized_chunk = self._normalize_for_fingerprint_search(chunk)
+                    if normalized_fp in normalized_chunk:
+                        # 在窗口内找到指纹的精确起始行（而非窗口起点）
                         page_start_line = line_idx
-                        break
-                
-                if page_start_line is None:
-                    # 如果找不到匹配，跳过该页
-                    continue
-                
-                # 查找该页的结束位置（下一页的起始位置）
-                page_end_line = len(markdown_lines)  # 默认到文档末尾
-                
-                # 查找下一页的起始位置
-                for next_page_num in range(page_num + 1, len(doc)):
-                    if next_page_num in page_fingerprints:
-                        next_fingerprint = page_fingerprints[next_page_num]
-                        next_fingerprint_lower = next_fingerprint.lower()
-                        
-                        # 从当前页之后开始查找
-                        for next_line_idx in range(page_start_line + 1, len(markdown_lines)):
-                            if next_fingerprint_lower in markdown_lines[next_line_idx].lower():
-                                page_end_line = next_line_idx
+                        for inner in range(line_idx, window_end):
+                            inner_chunk = "\n".join(markdown_lines[inner:window_end])
+                            if normalized_fp in self._normalize_for_fingerprint_search(inner_chunk):
+                                page_start_line = inner
+                            else:
                                 break
-                        
-                        if page_end_line < len(markdown_lines):
+                        break
+
+                if page_start_line is None:
+                    continue
+
+                # 3. 查找该页结束位置（下一页起始行，精确到指纹所在行）
+                page_end_line = len(markdown_lines)
+                for next_page_num in range(page_num + 1, len(doc)):
+                    if next_page_num not in page_fingerprints:
+                        continue
+                    next_fp = page_fingerprints[next_page_num]
+                    for next_line_idx in range(page_start_line + 1, len(markdown_lines)):
+                        window_end = min(next_line_idx + window_lines, len(markdown_lines))
+                        chunk = "\n".join(markdown_lines[next_line_idx:window_end])
+                        if next_fp in self._normalize_for_fingerprint_search(chunk):
+                            # 在窗口内找到下一页指纹的精确起始行
+                            page_end_line = next_line_idx
+                            for inner in range(next_line_idx, window_end):
+                                inner_chunk = "\n".join(markdown_lines[inner:window_end])
+                                if next_fp in self._normalize_for_fingerprint_search(inner_chunk):
+                                    page_end_line = inner
+                                else:
+                                    break
                             break
-                
-                # 记录映射
+                    if page_end_line < len(markdown_lines):
+                        break
+
                 page_to_markdown[page_num] = (page_start_line, page_end_line)
-        
         finally:
             doc.close()
-        
+
         return page_to_markdown
     
     def _insert_image_placeholders_simple(
