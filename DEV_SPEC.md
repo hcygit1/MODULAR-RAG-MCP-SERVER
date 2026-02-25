@@ -1704,7 +1704,7 @@ observability:
 | E2 | query_knowledge_hub Tool | [x] | - | |
 | E3 | list_collections Tool | [x] | - | |
 | E4 | get_document_summary Tool | [x] | - | |
-| E5 | 多模态返回（ImageContent） | [ ] | - | |
+| E5 | 多模态返回（ImageContent） | [x] | 2026-02-25 | |
 | E6 | 错误处理与协议合规 | [ ] | - | |
 
 #### 阶段 F：Observability + Evaluation
@@ -1736,10 +1736,10 @@ observability:
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 7 | 5 | 71% |
+| 阶段 E | 7 | 6 | 86% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **44** | **80%** |
+| **总计** | **55** | **45** | **82%** |
 
 
 ---
@@ -2217,7 +2217,7 @@ observability:
 - **验收标准**：对不存在 doc_id 返回规范错误；存在时返回结构化信息。
 - **测试方法**：`pytest -q tests/unit/test_get_document_summary.py`。
 
-### E5：多模态返回组装（Text + Image）
+### E5：多模态返回组装（Text + Image） ✅
 - **目标**：实现 `multimodal_assembler.py`：命中 chunk 含 image_refs 时读取图片并 base64 返回 ImageContent。
 - **修改文件**：
   - `src/core/response/multimodal_assembler.py`

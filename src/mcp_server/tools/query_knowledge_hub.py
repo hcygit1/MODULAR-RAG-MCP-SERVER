@@ -14,13 +14,24 @@ logger = logging.getLogger(__name__)
 
 
 def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
-    """将 dict 格式转为 CallToolResult。"""
-    content = [
-        TextContent(type=c.get("type", "text"), text=c.get("text", ""))
-        for c in d.get("content", [])
-    ]
+    """将 dict 格式转为 CallToolResult。支持 TextContent 与 ImageContent。"""
+    from mcp.types import ImageContent
+
+    content_blocks = []
+    for c in d.get("content", []):
+        ctype = c.get("type", "text")
+        if ctype == "image":
+            content_blocks.append(
+                ImageContent(
+                    type="image",
+                    data=c.get("data", ""),
+                    mimeType=c.get("mimeType", "image/png"),
+                )
+            )
+        else:
+            content_blocks.append(TextContent(type="text", text=c.get("text", "")))
     return CallToolResult(
-        content=content,
+        content=content_blocks,
         structuredContent=d.get("structuredContent") or {},
         isError=d.get("isError", False),
     )
@@ -114,6 +125,15 @@ def set_config_path(path: str) -> None:
     _pipeline = None
 
 
+_images_base_path_override: Optional[str] = None
+
+
+def set_images_base_path(path: Optional[str]) -> None:
+    """测试注入：覆盖 images_base_path，None 表示使用配置。"""
+    global _images_base_path_override
+    _images_base_path_override = path
+
+
 def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     执行 query_knowledge_hub 工具。
@@ -146,7 +166,20 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
             top_k=top_k,
             collection_name=collection_name,
         )
-        return build_mcp_content(results)
+        if _images_base_path_override is not None:
+            images_base = _images_base_path_override
+        else:
+            from src.core.settings import load_settings
+
+            settings = load_settings(_config_path)
+            images_base = getattr(
+                getattr(settings, "ingestion", None), "images_base_path", "data/images"
+            )
+        return build_mcp_content(
+            results,
+            images_base_path=images_base,
+            collection_name=collection_name,
+        )
     except FileNotFoundError as e:
         return {
             "content": [{"type": "text", "text": f"BM25 索引不存在，请先运行 ingest: {e}"}],

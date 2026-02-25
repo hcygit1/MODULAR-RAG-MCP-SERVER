@@ -5,7 +5,7 @@
 - content[0]: 可读 Markdown 文本
 - structuredContent.citations: 结构化引用
 """
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from src.libs.vector_store.base_vector_store import QueryResult
@@ -47,26 +47,36 @@ def _results_to_markdown(results: List["QueryResult"], max_chars_per_chunk: int 
 def build_mcp_content(
     results: List["QueryResult"],
     max_chars_per_chunk: int = 500,
+    images_base_path: str = "data/images",
+    collection_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     构建 MCP tools/call 返回的 content 结构。
 
+    当 chunk metadata 含 image_refs 时，追加 ImageContent（base64）。
+
     Args:
-        results: 检索结果列表
+        results: 检索结果
         max_chars_per_chunk: 每个 chunk 在 Markdown 中最多显示的字符数
+        images_base_path: 图片存储根路径，用于解析 image_refs
+        collection_name: 集合名称，用于定位 index.json（可选，可推断）
 
     Returns:
         MCP content 格式：{ content: [...], structuredContent: { citations: [...] }, isError: False }
     """
+    from src.core.response.multimodal_assembler import assemble_content
+
     markdown = _results_to_markdown(results, max_chars_per_chunk)
     citations = generate_citations(results)
+    content = assemble_content(
+        results,
+        markdown,
+        images_base_path=images_base_path,
+        collection_name=collection_name,
+    )
     return {
-        "content": [
-            {"type": "text", "text": markdown},
-        ],
-        "structuredContent": {
-            "citations": citations,
-        },
+        "content": content,
+        "structuredContent": {"citations": citations},
         "isError": False,
     }
 
