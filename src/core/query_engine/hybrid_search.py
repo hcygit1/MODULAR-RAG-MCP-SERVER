@@ -41,6 +41,9 @@ class HybridSearch:
         self,
         query: Union[str, List[str]],
         top_k: int,
+        top_k_dense: Optional[int] = None,
+        top_k_sparse: Optional[int] = None,
+        top_k_final: Optional[int] = None,
         collection_name: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
         trace: Optional[Any] = None,
@@ -50,7 +53,10 @@ class HybridSearch:
 
         Args:
             query: 查询字符串或关键词列表
-            top_k: 返回的 Top-K 数量
+            top_k: 返回的 Top-K 数量（当 top_k_dense/sparse/final 未指定时，三者均使用此值）
+            top_k_dense: 向量检索候选数，为 None 时使用 top_k
+            top_k_sparse: BM25 检索候选数，为 None 时使用 top_k
+            top_k_final: 融合后最终返回数，为 None 时使用 top_k
             collection_name: 集合名称，传给 SparseRetriever（Dense 的 collection 由 VectorStore 绑定）
             filters: 元数据过滤条件（可选），传给 Dense 与 Sparse
             trace: 追踪上下文（可选）
@@ -65,13 +71,17 @@ class HybridSearch:
         if not query_text or not query_text.strip():
             raise ValueError("query 不能为空")
 
-        if top_k <= 0:
-            raise ValueError(f"top_k 必须大于 0，得到: {top_k}")
+        k_dense = top_k_dense if top_k_dense is not None else top_k
+        k_sparse = top_k_sparse if top_k_sparse is not None else top_k
+        k_final = top_k_final if top_k_final is not None else top_k
+
+        if top_k <= 0 or k_dense <= 0 or k_sparse <= 0 or k_final <= 0:
+            raise ValueError(f"top_k 必须大于 0，得到: top_k={top_k}, dense={k_dense}, sparse={k_sparse}, final={k_final}")
 
         # 1. Dense 检索
         dense_results = self._dense.retrieve(
             query=query,
-            top_k=top_k,
+            top_k=k_dense,
             filters=filters,
             trace=trace,
         )
@@ -82,7 +92,7 @@ class HybridSearch:
         if coll:
             sparse_results = self._sparse.retrieve(
                 query=query,
-                top_k=top_k,
+                top_k=k_sparse,
                 collection_name=coll,
                 filters=filters,
                 trace=trace,
@@ -95,4 +105,4 @@ class HybridSearch:
             k=self._rrf_k,
         )
 
-        return fused[:top_k]
+        return fused[:k_final]

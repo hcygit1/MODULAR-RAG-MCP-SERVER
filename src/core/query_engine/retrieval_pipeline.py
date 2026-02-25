@@ -3,12 +3,15 @@ RetrievalPipeline 编排
 
 串联 QueryProcessor → HybridSearch → Reranker，实现端到端检索流水线。
 """
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.core.query_engine.hybrid_search import HybridSearch
 from src.core.query_engine.query_processor import ProcessedQuery, QueryProcessor
 from src.core.query_engine.reranker import RerankerOrchestrator
 from src.libs.vector_store.base_vector_store import QueryResult
+
+if TYPE_CHECKING:
+    from src.core.settings import RetrievalConfig
 
 
 class RetrievalPipeline:
@@ -24,6 +27,7 @@ class RetrievalPipeline:
         query_processor: QueryProcessor,
         hybrid_search: HybridSearch,
         reranker: RerankerOrchestrator,
+        retrieval_config: Optional["RetrievalConfig"] = None,
     ) -> None:
         """
         初始化 RetrievalPipeline
@@ -32,10 +36,12 @@ class RetrievalPipeline:
             query_processor: 查询预处理器
             hybrid_search: 混合检索引擎
             reranker: Reranker 编排器（含 fallback）
+            retrieval_config: 检索配置（含 top_k_dense/sparse/final），为 None 时使用 retrieve 传入的 top_k
         """
         self._query_processor = query_processor
         self._hybrid_search = hybrid_search
         self._reranker = reranker
+        self._retrieval_config = retrieval_config
 
     def retrieve(
         self,
@@ -69,13 +75,18 @@ class RetrievalPipeline:
 
         # 2. 混合检索（用 original_query，filters 取传入或解析结果）
         effective_filters = filters if filters is not None else processed.filters
-        hybrid_results = self._hybrid_search.search(
-            query=processed.original_query,
-            top_k=top_k,
-            collection_name=collection_name,
-            filters=effective_filters,
-            trace=trace,
-        )
+        search_kwargs: Dict[str, Any] = {
+            "query": processed.original_query,
+            "top_k": top_k,
+            "collection_name": collection_name,
+            "filters": effective_filters,
+            "trace": trace,
+        }
+        if self._retrieval_config is not None:
+            search_kwargs["top_k_dense"] = self._retrieval_config.top_k_dense
+            search_kwargs["top_k_sparse"] = self._retrieval_config.top_k_sparse
+            search_kwargs["top_k_final"] = top_k
+        hybrid_results = self._hybrid_search.search(**search_kwargs)
 
         if not hybrid_results:
             return []

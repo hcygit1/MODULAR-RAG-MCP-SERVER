@@ -178,6 +178,59 @@ class TestHybridSearchBasic:
         assert len(results) <= 3
         assert all(r.text for r in results)
 
+    def test_search_uses_config_top_k_params(
+        self,
+        indexed_fixtures,
+    ) -> None:
+        """top_k_dense/sparse/final 分别控制各阶段数量"""
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+
+        results = hybrid.search(
+            query="python RAG",
+            top_k=10,
+            top_k_dense=5,
+            top_k_sparse=5,
+            top_k_final=2,
+            collection_name=fixtures["collection_name"],
+        )
+
+        assert len(results) <= 2
+
+    def test_search_fallback_to_single_top_k(
+        self,
+        indexed_fixtures,
+    ) -> None:
+        """未指定 top_k_dense/sparse/final 时，使用 top_k 作为三者默认值"""
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+
+        results = hybrid.search(
+            query="python",
+            top_k=3,
+            collection_name=fixtures["collection_name"],
+        )
+
+        assert len(results) <= 3
+
 
 class TestHybridSearchEdgeCases:
     """边界情况测试"""

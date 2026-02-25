@@ -11,6 +11,13 @@ ENV/
 pip-log.txt
 pip-delete-this-directory.txt
 
+# 包构建产物
+*.egg-info/
+*.egg
+build/
+dist/
+*.manifest
+
 # IDE
 .vscode/
 .idea/

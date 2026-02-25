@@ -17,6 +17,7 @@ from src.core.query_engine.sparse_retriever import SparseRetriever
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
 from src.ingestion.models import Chunk
 from src.ingestion.storage.bm25_indexer import BM25Indexer
+from src.core.settings import RetrievalConfig
 from src.libs.embedding.fake_embedding import FakeEmbedding
 from src.libs.reranker.none_reranker import NoneReranker
 from src.libs.vector_store.base_vector_store import QueryResult, VectorRecord
@@ -164,3 +165,41 @@ class TestRetrievalPipelineBasic:
                 top_k=0,
                 collection_name=indexed_fixtures["collection_name"],
             )
+
+    def test_retrieve_with_retrieval_config(
+        self,
+        indexed_fixtures,
+    ) -> None:
+        """传入 retrieval_config 时，使用配置中的 top_k_dense/sparse"""
+        fixtures = indexed_fixtures
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+        reranker = RerankerOrchestrator(backend=NoneReranker())
+        retrieval_config = RetrievalConfig(
+            sparse_backend="bm25",
+            fusion_algorithm="rrf",
+            top_k_dense=10,
+            top_k_sparse=10,
+            top_k_final=10,
+        )
+        pipeline = RetrievalPipeline(
+            query_processor=QueryProcessor(),
+            hybrid_search=hybrid,
+            reranker=reranker,
+            retrieval_config=retrieval_config,
+        )
+
+        results = pipeline.retrieve(
+            query="python RAG",
+            top_k=3,
+            collection_name=fixtures["collection_name"],
+        )
+
+        assert len(results) <= 3
