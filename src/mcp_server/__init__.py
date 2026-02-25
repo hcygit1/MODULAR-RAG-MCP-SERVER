@@ -5,6 +5,7 @@ MCP Server 模块
 支持 Stdio Transport：stdin 读取请求，stdout 输出响应，stderr 输出日志。
 """
 
-from src.mcp_server.server import run_server
+from src.mcp_server.protocol_handler import ProtocolError, ProtocolHandler
+from src.mcp_server.server import run_server, set_handler
 
-__all__ = ["run_server"]
+__all__ = ["ProtocolError", "ProtocolHandler", "run_server", "set_handler"]

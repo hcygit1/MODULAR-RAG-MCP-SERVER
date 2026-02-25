@@ -91,3 +91,60 @@ class TestMCPServerE1:
         assert "MCP" in stderr_data or "INFO" in stderr_data or "Server" in stderr_data, (
             f"stderr 应有 server 日志，实际: {stderr_data[:200]}"
         )
+
+
+def _send_request(proc: subprocess.Popen, request: dict) -> tuple[str, str]:
+    """发送单条 JSON-RPC 请求，返回 (stdout, stderr)。"""
+    req_line = json.dumps(request) + "\n"
+    stdout_data, stderr_data = proc.communicate(input=req_line, timeout=5)
+    return stdout_data, stderr_data
+
+
+class TestMCPServerE15:
+    """E1.5 验收：tools/list、tools/call 协议层"""
+
+    def test_tools_list_returns_schema(self) -> None:
+        """发送 tools/list 能返回 tools 数组（可为空）"""
+        proc = _start_server_subprocess()
+        request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
+        stdout_data, _ = _send_request(proc, request)
+        assert proc.returncode == 0
+        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
+        assert len(lines) >= 1
+        resp = json.loads(lines[0])
+        assert resp.get("jsonrpc") == "2.0"
+        assert resp.get("id") == 2
+        assert "result" in resp
+        assert "tools" in resp["result"]
+        assert isinstance(resp["result"]["tools"], list)
+
+    def test_tools_call_unknown_tool_returns_error_content(self) -> None:
+        """tools/call 未知工具时返回 isError=True 的 result"""
+        proc = _start_server_subprocess()
+        request = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "nonexistent_tool", "arguments": {}},
+        }
+        stdout_data, _ = _send_request(proc, request)
+        assert proc.returncode == 0
+        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
+        resp = json.loads(lines[0])
+        assert "result" in resp
+        result = resp["result"]
+        assert result.get("isError") is True
+        assert "content" in result
+        assert len(result["content"]) >= 1
+        assert "Unknown tool" in result["content"][0].get("text", "")
+
+    def test_tools_call_missing_name_returns_invalid_params(self) -> None:
+        """tools/call 缺 name 时返回 JSON-RPC -32602"""
+        proc = _start_server_subprocess()
+        request = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {}}
+        stdout_data, _ = _send_request(proc, request)
+        assert proc.returncode == 0
+        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
+        resp = json.loads(lines[0])
+        assert "error" in resp
+        assert resp["error"]["code"] == -32602

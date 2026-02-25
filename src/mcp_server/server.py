@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional
 # 使用 stderr 输出日志，避免污染 stdout 的 MCP 消息
 import logging
 
+from src.mcp_server.protocol_handler import ProtocolError, ProtocolHandler
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -17,47 +19,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SERVER_NAME = "modular-rag-mcp-server"
-SERVER_VERSION = "0.1.0"
+# 模块级 Handler，run_server 使用
+_handler: Optional[ProtocolHandler] = None
 
 
-def _handle_initialize(_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    处理 initialize 请求，返回 serverInfo 和 capabilities。
-
-    Args:
-        _params: 客户端传入的初始化参数（可选）
-
-    Returns:
-        result 对象，含 protocolVersion、serverInfo、capabilities
-    """
-    return {
-        "protocolVersion": "2024-11-05",
-        "serverInfo": {
-            "name": SERVER_NAME,
-            "version": SERVER_VERSION,
-        },
-        "capabilities": {
-            "tools": {},
-        },
-    }
+def _get_handler() -> ProtocolHandler:
+    """获取或创建 ProtocolHandler 实例。"""
+    global _handler
+    if _handler is None:
+        _handler = ProtocolHandler()
+    return _handler
 
 
-def _dispatch(method: str, params: Optional[Dict[str, Any]], request_id: Any) -> Optional[Dict[str, Any]]:
-    """
-    根据 method 分发到具体处理逻辑。
-
-    Args:
-        method: JSON-RPC method 名称
-        params: 请求参数
-        request_id: 请求 id，用于响应
-
-    Returns:
-        成功时返回 result 字典；失败时返回 None（将由调用方构造 error 响应）
-    """
-    if method == "initialize":
-        return _handle_initialize(params)
-    return None
+def set_handler(handler: ProtocolHandler) -> None:
+    """测试注入用：替换默认 handler。"""
+    global _handler
+    _handler = handler
 
 
 def _write_response(response: Dict[str, Any]) -> None:
@@ -111,15 +88,16 @@ def _process_message(line: str) -> None:
         logger.debug("Notification ignored: method=%s", method)
         return
 
-    result = _dispatch(method, params, req_id)
-    if result is not None:
+    handler = _get_handler()
+    try:
+        result = handler.dispatch(method, params)
         _write_response({
             "jsonrpc": "2.0",
             "id": req_id,
             "result": result,
         })
-    else:
-        _write_error(req_id, -32601, f"Method not found: {method}")
+    except ProtocolError as e:
+        _write_error(req_id, e.code, e.message)
 
 
 def run_server() -> None:
