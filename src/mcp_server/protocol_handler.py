@@ -182,7 +182,10 @@ def _normalize_tool_result(raw: Any) -> Dict[str, Any]:
             "isError": False,
         }
     if isinstance(raw, dict) and "content" in raw:
-        return {"content": raw["content"], "isError": raw.get("isError", False)}
+        out: Dict[str, Any] = {"content": raw["content"], "isError": raw.get("isError", False)}
+        if "structuredContent" in raw:
+            out["structuredContent"] = raw["structuredContent"]
+        return out
     return {
         "content": [{"type": "text", "text": str(raw)}],
         "isError": False,
