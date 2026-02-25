@@ -114,7 +114,7 @@ class QueryProcessor:
         解析 filters 结构
 
         当前为占位实现，返回空 dict。
-        后续 D5 MetadataFilter 可实现 collection、doc_type 等解析。
+        后续 D7 RetrievalPipeline 集成 MetadataFilter 时，可实现 collection、doc_type 等解析。
 
         Args:
             query: 原始查询（可用于解析结构化约束）

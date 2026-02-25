@@ -1691,9 +1691,9 @@ observability:
 | D2 | DenseRetriever | [x] | 2026-02-11 | |
 | D3 | SparseRetriever（BM25） | [x] | 2026-02-11 | |
 | D4 | RRF Fusion | [x] | 2026-02-25 | |
-| D5 | MetadataFilter | [ ] | - | |
+| D5 | HybridSearch 编排 | [ ] | - | |
 | D6 | Rerank 集成与 Fallback | [ ] | - | |
-| D7 | RetrievalPipeline 编排 | [ ] | - | |
+| D7 | RetrievalPipeline 编排（含 MetadataFilter） | [ ] | - | |
 
 #### 阶段 E：MCP Server 层与 Tools
 
@@ -2158,6 +2158,15 @@ observability:
   - `tests/unit/test_reranker_fallback.py`
 - **验收标准**：模拟后端异常时不影响最终返回，且标记 fallback=true。
 - **测试方法**：`pytest -q tests/unit/test_reranker_fallback.py`。
+
+### D7：RetrievalPipeline 编排
+- **目标**：实现完整检索流水线，串联 QueryProcessor → HybridSearch → Reranker；并集成 MetadataFilter（filters 解析与 Pre/Post-filter）。
+- **修改文件**：
+  - `src/core/query_engine/retrieval_pipeline.py`（或同类编排模块）
+  - `src/core/query_engine/metadata_filter.py`（可选，可并入 query_processor）
+  - `tests/integration/test_retrieval_pipeline.py`
+- **验收标准**：端到端 query 能返回 Top-K；filters 在 Pre/Post 阶段生效。
+- **测试方法**：`pytest -q tests/integration/test_retrieval_pipeline.py`。
 
 ---
 
