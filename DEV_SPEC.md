@@ -1699,7 +1699,7 @@ observability:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| E1 | MCP Server 骨架（Stdio Transport） | [ ] | - | |
+| E1 | MCP Server 骨架（Stdio Transport） | [x] | - | |
 | E2 | query_knowledge_hub Tool | [ ] | - | |
 | E3 | list_collections Tool | [ ] | - | |
 | E4 | get_document_summary Tool | [ ] | - | |
@@ -2172,7 +2172,7 @@ observability:
 
 ## 阶段 E：MCP Server 层与 Tools（目标：对外可用的 MCP tools）
 
-### E1：MCP Server 入口与 Stdio 约束
+### E1：MCP Server 入口与 Stdio 约束 ✅
 - **目标**：实现 `mcp_server/server.py`：遵循"stdout 只输出 MCP 消息，日志到 stderr"。
 - **修改文件**：
   - `src/mcp_server/server.py`
