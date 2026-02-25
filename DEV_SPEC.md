@@ -1691,7 +1691,7 @@ observability:
 | D2 | DenseRetriever | [x] | 2026-02-11 | |
 | D3 | SparseRetriever（BM25） | [x] | 2026-02-11 | |
 | D4 | RRF Fusion | [x] | 2026-02-25 | |
-| D5 | HybridSearch 编排 | [ ] | - | |
+| D5 | HybridSearch 编排 | [x] | 2026-02-25 | |
 | D6 | Rerank 集成与 Fallback | [ ] | - | |
 | D7 | RetrievalPipeline 编排（含 MetadataFilter） | [ ] | - | |
 
@@ -1734,11 +1734,11 @@ observability:
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
-| 阶段 D | 7 | 3 | 43% |
+| 阶段 D | 7 | 4 | 57% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **35** | **65%** |
+| **总计** | **54** | **36** | **67%** |
 
 
 ---
