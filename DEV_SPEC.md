@@ -1703,7 +1703,7 @@ observability:
 | E1.5 | Protocol Handler 协议解析与能力协商 | [x] | - | |
 | E2 | query_knowledge_hub Tool | [x] | - | |
 | E3 | list_collections Tool | [x] | - | |
-| E4 | get_document_summary Tool | [ ] | - | |
+| E4 | get_document_summary Tool | [x] | - | |
 | E5 | 多模态返回（ImageContent） | [ ] | - | |
 | E6 | 错误处理与协议合规 | [ ] | - | |
 
@@ -1736,10 +1736,10 @@ observability:
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 7 | 4 | 57% |
+| 阶段 E | 7 | 5 | 71% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **43** | **78%** |
+| **总计** | **55** | **44** | **80%** |
 
 
 ---
@@ -2217,7 +2217,7 @@ observability:
 - **验收标准**：对 fixtures 中的目录结构能返回集合名列表。
 - **测试方法**：`pytest -q tests/unit/test_list_collections.py`。
 
-### E4：实现 tool：get_document_summary
+### E4：实现 tool：get_document_summary ✅
 - **目标**：实现 `tools/get_document_summary.py`：按 doc_id 返回 title/summary/tags（可先从 metadata/缓存取）。
 - **修改文件**：
   - `src/mcp_server/tools/get_document_summary.py`
