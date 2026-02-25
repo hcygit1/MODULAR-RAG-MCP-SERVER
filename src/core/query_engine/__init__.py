@@ -10,6 +10,7 @@ from src.core.query_engine.query_processor import (
     ProcessedQuery,
     QueryProcessor,
 )
+from src.core.query_engine.reranker import RerankerOrchestrator
 from src.core.query_engine.sparse_retriever import SparseRetriever
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "QueryProcessor",
     "SparseRetriever",
     "HybridSearch",
+    "RerankerOrchestrator",
     "fuse_rrf",
 ]
