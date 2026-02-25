@@ -11,6 +11,7 @@ from src.core.query_engine.query_processor import (
     QueryProcessor,
 )
 from src.core.query_engine.reranker import RerankerOrchestrator
+from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
 from src.core.query_engine.sparse_retriever import SparseRetriever
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "SparseRetriever",
     "HybridSearch",
     "RerankerOrchestrator",
+    "RetrievalPipeline",
     "fuse_rrf",
 ]

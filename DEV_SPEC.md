@@ -1693,7 +1693,7 @@ observability:
 | D4 | RRF Fusion | [x] | 2026-02-25 | |
 | D5 | HybridSearch 编排 | [x] | 2026-02-25 | |
 | D6 | Rerank 集成与 Fallback | [x] | 2026-02-25 | |
-| D7 | RetrievalPipeline 编排（含 MetadataFilter） | [ ] | - | |
+| D7 | RetrievalPipeline 编排（含 MetadataFilter） | [x] | 2026-02-25 | 流程编排已完成，MetadataFilter 延后 |
 
 #### 阶段 E：MCP Server 层与 Tools
 
@@ -1734,11 +1734,11 @@ observability:
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
-| 阶段 D | 7 | 5 | 71% |
+| 阶段 D | 7 | 6 | 86% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **37** | **69%** |
+| **总计** | **54** | **38** | **70%** |
 
 
 ---
