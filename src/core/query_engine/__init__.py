@@ -4,6 +4,7 @@
 """
 
 from src.core.query_engine.dense_retriever import DenseRetriever
+from src.core.query_engine.fusion import fuse_rrf
 from src.core.query_engine.query_processor import (
     ProcessedQuery,
     QueryProcessor,
@@ -15,4 +16,5 @@ __all__ = [
     "ProcessedQuery",
     "QueryProcessor",
     "SparseRetriever",
+    "fuse_rrf",
 ]
