@@ -140,8 +140,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env 文件，填入您的 API Keys
 
-# 运行服务
-python src/main.py
+# 运行 MCP Server（Stdio，供 Copilot/Claude 对接）
+python main.py
+# 或：python -m src.mcp_server.server
 ```
 
 详细的环境配置、部署指南与使用示例请参考 [DEV_SPEC.md](DEV_SPEC.md)。

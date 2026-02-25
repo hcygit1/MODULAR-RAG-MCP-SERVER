@@ -8,9 +8,25 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
+from mcp.types import CallToolResult, TextContent
+
 logger = logging.getLogger(__name__)
 
-# 工具 schema，供 tools/list 返回
+
+def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
+    """将 dict 格式转为 CallToolResult。"""
+    content = [
+        TextContent(type=c.get("type", "text"), text=c.get("text", ""))
+        for c in d.get("content", [])
+    ]
+    return CallToolResult(
+        content=content,
+        structuredContent=d.get("structuredContent") or {},
+        isError=d.get("isError", False),
+    )
+
+
+# 工具 schema，供 tools/list 返回（自实现 ProtocolHandler 用，FastMCP 可忽略）
 QUERY_KNOWLEDGE_HUB_DEFINITION: Dict[str, Any] = {
     "name": "query_knowledge_hub",
     "description": "在知识库中检索与查询相关的文档片段，返回 Markdown 格式的检索结果和结构化引用（source, page, chunk_id, score）。",
@@ -150,3 +166,27 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
             "structuredContent": {"citations": []},
             "isError": True,
         }
+
+
+def query_knowledge_hub(
+    query: str,
+    collection_name: str | None = None,
+    top_k: int = 10,
+) -> CallToolResult:
+    """
+    在知识库中检索与查询相关的文档片段，返回 Markdown 格式的检索结果和结构化引用（source, page, chunk_id, score）。
+
+    Args:
+        query: 检索查询字符串
+        collection_name: 集合名称，需与 ingest 时一致（可选）
+        top_k: 返回 Top-K 数量，默认 10
+
+    Returns:
+        CallToolResult 含 content（Markdown）、structuredContent.citations
+    """
+    d = execute_query_knowledge_hub({
+        "query": query,
+        "collection_name": collection_name,
+        "top_k": top_k,
+    })
+    return _dict_to_call_tool_result(d)

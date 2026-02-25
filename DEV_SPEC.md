@@ -297,7 +297,7 @@
 
 #### 3.2.3 SDK 与实现库选型
 
-- **首选：Python 官方 MCP SDK (`mcp`)**
+- **已采用：Python 官方 MCP SDK (`mcp` / FastMCP)**
 	- **优势**：
 		- 官方维护，与协议规范同步更新，保证最新特性支持（如 `outputSchema`、`annotations` 等）。
 		- 提供 `@server.tool()` 等装饰器，声明式定义 Tools/Resources/Prompts，代码简洁。
@@ -1221,7 +1221,7 @@ smart-knowledge-hub/
 │   ├── mcp_server/                      # MCP Server 层 (接口层)
 │   │   ├── __init__.py
 │   │   ├── server.py                    # MCP Server 入口 (Stdio Transport)
-│   │   ├── protocol_handler.py          # JSON-RPC 协议处理
+│   │   # 使用官方 MCP SDK (FastMCP)，无 protocol_handler.py
 │   │   └── tools/                       # MCP Tools 定义
 │   │       ├── __init__.py
 │   │       ├── query_knowledge_hub.py   # 主检索工具
@@ -1394,7 +1394,7 @@ smart-knowledge-hub/
 | 模块 | 职责 | 关键技术点 |
 |-----|-----|----------|
 | `server.py` | MCP Server 主入口，处理 Stdio Transport 通信 | Python MCP SDK，JSON-RPC 2.0 |
-| `protocol_handler.py` | 协议解析与能力协商 | `initialize`、`tools/list`、`tools/call` |
+| （FastMCP SDK 内置） | 协议解析与能力协商 | `initialize`、`tools/list`、`tools/call` |
 | `tools/*` | 对外暴露的工具函数实现 | 装饰器定义，参数校验，响应格式化 |
 
 #### 5.3.2 Core 层
@@ -2182,22 +2182,14 @@ observability:
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py`（子进程方式）。
 
 ### E1.5：Protocol Handler 协议解析与能力协商 ✅
-- **目标**：实现 `mcp_server/protocol_handler.py`：封装 JSON-RPC 2.0 协议解析，处理 `initialize`、`tools/list`、`tools/call` 三类核心方法。
-- **修改文件**：
-  - `src/mcp_server/protocol_handler.py`
-  - `tests/unit/test_protocol_handler.py`
-- **实现要点**：
-  - **ProtocolHandler 类**：
-    - `handle_initialize(params)` → 返回 server capabilities（支持的 tools 列表、版本信息）
-    - `handle_tools_list()` → 返回已注册的 tool schema（name, description, inputSchema）
-    - `handle_tools_call(name, arguments)` → 路由到具体 tool 执行，捕获异常并转换为 JSON-RPC error
-  - **错误码规范**：遵循 JSON-RPC 2.0（-32600 Invalid Request, -32601 Method not found, -32602 Invalid params）
-  - **能力协商**：在 `initialize` 响应中声明 `capabilities.tools`
+- **目标**：协议解析与能力协商（已由官方 MCP SDK / FastMCP 实现）。
+- **现状**：使用 `mcp` 包 + FastMCP，`server.py` 注册 tools 并 `mcp.run(transport="stdio")`。
+- **实现要点**：FastMCP SDK 自动处理 initialize、tools/list、tools/call 及 JSON-RPC 2.0 错误码。
 - **验收标准**：
   - 发送 `initialize` 请求能返回正确的 `serverInfo` 和 `capabilities`
   - 发送 `tools/list` 能返回已注册 tools 的 schema
   - 发送 `tools/call` 能正确路由并返回结果或规范错误
-- **测试方法**：`pytest -q tests/unit/test_protocol_handler.py`。
+- **测试方法**：`pytest -q tests/integration/test_mcp_server.py`。
 
 ### E2：实现 tool：query_knowledge_hub ✅
 - **目标**：实现 `tools/query_knowledge_hub.py`：调用 query engine，返回 Markdown + structured citations。

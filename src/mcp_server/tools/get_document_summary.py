@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from mcp.types import CallToolResult, TextContent
+
 # 默认 BM25 索引路径
 _DEFAULT_BM25_BASE_PATH = "data/db/bm25"
 
@@ -39,6 +41,19 @@ def set_bm25_base_path(path: str) -> None:
     """测试注入用：设置 BM25 索引根路径。"""
     global _bm25_base_path
     _bm25_base_path = path
+
+
+def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
+    """将 dict 格式转为 CallToolResult。"""
+    content = [
+        TextContent(type=c.get("type", "text"), text=c.get("text", ""))
+        for c in d.get("content", [])
+    ]
+    return CallToolResult(
+        content=content,
+        structuredContent=d.get("structuredContent") or {},
+        isError=d.get("isError", False),
+    )
 
 
 def _load_chunk_metadata_for_collection(collection_name: str) -> Dict[str, Dict[str, Any]]:
@@ -154,3 +169,24 @@ def execute_get_document_summary(arguments: Dict[str, Any]) -> Dict[str, Any]:
             "structuredContent": {},
             "isError": True,
         }
+
+
+def get_document_summary(
+    doc_id: str,
+    collection_name: str | None = None,
+) -> CallToolResult:
+    """
+    根据文档 ID 获取文档摘要信息（title、summary、tags）。从已索引的 chunk 元数据中聚合。
+
+    Args:
+        doc_id: 文档唯一标识符
+        collection_name: 集合名称，指定时仅在对应集合中查找（可选）
+
+    Returns:
+        CallToolResult 含 content、structuredContent（doc_id/title/summary/tags）
+    """
+    d = execute_get_document_summary({
+        "doc_id": doc_id,
+        "collection_name": collection_name,
+    })
+    return _dict_to_call_tool_result(d)

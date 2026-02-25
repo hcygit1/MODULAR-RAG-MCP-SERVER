@@ -68,7 +68,7 @@ class TestMCPServerE1:
         result = resp["result"]
         assert "serverInfo" in result
         assert result["serverInfo"]["name"] == "modular-rag-mcp-server"
-        assert result["serverInfo"]["version"] == "0.1.0"
+        assert "version" in result["serverInfo"]  # FastMCP 返回 SDK 版本
         assert "capabilities" in result
         assert "tools" in result["capabilities"]
 
@@ -87,17 +87,37 @@ class TestMCPServerE1:
             obj = json.loads(line)
             assert "jsonrpc" in obj, f"stdout 应为 JSON-RPC: {line[:80]}"
 
-        # stderr 应有日志（如 "MCP Server" 或 "INFO"）
-        assert len(stderr_data) > 0, "stderr 应有日志输出"
-        assert "MCP" in stderr_data or "INFO" in stderr_data or "Server" in stderr_data, (
-            f"stderr 应有 server 日志，实际: {stderr_data[:200]}"
-        )
+        # stderr 有输出（FastMCP 可能输出较少，仅需非空）
+        assert len(stderr_data) > 0, "stderr 应有输出"
+
+
+def _mcp_handshake() -> str:
+    """MCP 握手：initialize + notifications/initialized。FastMCP 要求先初始化才能调用 tools/list 等。"""
+    init_req = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "test-client", "version": "0.1.0"},
+        },
+    }
+    notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    return json.dumps(init_req) + "\n" + json.dumps(notif) + "\n"
 
 
 def _send_request(proc: subprocess.Popen, request: dict) -> tuple[str, str]:
     """发送单条 JSON-RPC 请求，返回 (stdout, stderr)。"""
     req_line = json.dumps(request) + "\n"
     stdout_data, stderr_data = proc.communicate(input=req_line, timeout=5)
+    return stdout_data, stderr_data
+
+
+def _send_with_handshake(proc: subprocess.Popen, request: dict) -> tuple[str, str]:
+    """发送 MCP 握手 + 请求，返回 (stdout, stderr)。响应最后一行为 request 的 result。"""
+    payload = _mcp_handshake() + json.dumps(request) + "\n"
+    stdout_data, stderr_data = proc.communicate(input=payload, timeout=5)
     return stdout_data, stderr_data
 
 
@@ -108,11 +128,11 @@ class TestMCPServerE15:
         """发送 tools/list 能返回 tools 数组（可为空）"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        assert len(lines) >= 1
-        resp = json.loads(lines[0])
+        assert len(lines) >= 2, "应至少有 initialize 与 tools/list 两条响应"
+        resp = json.loads(lines[-1])
         assert resp.get("jsonrpc") == "2.0"
         assert resp.get("id") == 2
         assert "result" in resp
@@ -128,25 +148,26 @@ class TestMCPServerE15:
             "method": "tools/call",
             "params": {"name": "nonexistent_tool", "arguments": {}},
         }
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[0])
+        resp = json.loads(lines[-1])
         assert "result" in resp
         result = resp["result"]
         assert result.get("isError") is True
         assert "content" in result
         assert len(result["content"]) >= 1
-        assert "Unknown tool" in result["content"][0].get("text", "")
+        err_text = result["content"][0].get("text", "")
+        assert "unknown" in err_text.lower() or "not found" in err_text.lower() or "nonexistent" in err_text.lower()
 
     def test_tools_call_missing_name_returns_invalid_params(self) -> None:
         """tools/call 缺 name 时返回 JSON-RPC -32602"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {}}
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[0])
+        resp = json.loads(lines[-1])
         assert "error" in resp
         assert resp["error"]["code"] == -32602
 
@@ -158,10 +179,10 @@ class TestMCPServerE2:
         """tools/list 包含 query_knowledge_hub schema"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 10, "method": "tools/list"}
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[0])
+        resp = json.loads(lines[-1])
         tools = resp["result"]["tools"]
         names = [t["name"] for t in tools]
         assert "query_knowledge_hub" in names
@@ -173,10 +194,10 @@ class TestMCPServerE2:
         """tools/list 包含 list_collections schema"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 11, "method": "tools/list"}
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[0])
+        resp = json.loads(lines[-1])
         names = [t["name"] for t in resp["result"]["tools"]]
         assert "list_collections" in names
 
@@ -184,49 +205,38 @@ class TestMCPServerE2:
         """tools/list 包含 get_document_summary schema"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 12, "method": "tools/list"}
-        stdout_data, _ = _send_request(proc, request)
+        stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[0])
+        resp = json.loads(lines[-1])
         names = [t["name"] for t in resp["result"]["tools"]]
         assert "get_document_summary" in names
 
     def test_query_knowledge_hub_returns_markdown_and_citations(
         self, retrieval_pipeline, indexed_fixtures
     ) -> None:
-        """tools/call query_knowledge_hub 返回 content[0] 为 Markdown，structuredContent.citations 含 source/page/chunk_id/score"""
-        from src.mcp_server.protocol_handler import ProtocolHandler
-        from src.mcp_server.tools.query_knowledge_hub import (
-            QUERY_KNOWLEDGE_HUB_DEFINITION,
-            execute_query_knowledge_hub,
-            set_pipeline,
-        )
+        """query_knowledge_hub 返回 content[0] 为 Markdown，structuredContent.citations 含 source/page/chunk_id/score"""
+        from src.mcp_server.tools.query_knowledge_hub import query_knowledge_hub, set_pipeline
 
         set_pipeline(retrieval_pipeline)
 
-        handler = ProtocolHandler()
-        handler.register_tool(QUERY_KNOWLEDGE_HUB_DEFINITION, execute_query_knowledge_hub)
-
-        result = handler.handle_tools_call(
-            "query_knowledge_hub",
-            {
-                "query": "python data science",
-                "collection_name": indexed_fixtures["collection_name"],
-                "top_k": 5,
-            },
+        result = query_knowledge_hub(
+            query="python data science",
+            collection_name=indexed_fixtures["collection_name"],
+            top_k=5,
         )
 
-        assert result["isError"] is False
-        assert "content" in result and len(result["content"]) >= 1
-        assert result["content"][0]["type"] == "text"
-        assert len(result["content"][0]["text"]) > 0
+        assert result.isError is False
+        assert len(result.content) >= 1
+        assert result.content[0].type == "text"
+        assert len(result.content[0].text) > 0
         # Markdown 应包含片段标题或来源
-        text = result["content"][0]["text"]
+        text = result.content[0].text
         assert "片段" in text or "来源" in text or "Python" in text
 
-        assert "structuredContent" in result
-        assert "citations" in result["structuredContent"]
-        citations = result["structuredContent"]["citations"]
+        assert result.structuredContent is not None
+        assert "citations" in result.structuredContent
+        citations = result.structuredContent["citations"]
         assert len(citations) >= 1
         for c in citations:
             assert "source" in c

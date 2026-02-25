@@ -23,19 +23,17 @@ def main():
     logger.info("Starting Modular RAG MCP Server...")
     
     try:
-        # A3: 配置加载
+        # A3: 配置加载（可选，用于验证配置）
         from src.core.settings import load_settings
-        
+
         settings = load_settings("config/settings.yaml")
         logger.info(f"配置加载成功: LLM provider={settings.llm.provider}, Embedding provider={settings.embedding.provider}")
-        
-        # TODO: 在 E1 阶段实现 MCP Server
-        # from src.mcp_server.server import create_server
-        # server = create_server(settings)
-        # server.run()
-        
-        logger.info("Server startup placeholder - MCP Server implementation pending")
-        print('{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not implemented"}}', file=sys.stderr)
+
+        # 启动 MCP Server（Stdio Transport，与 Copilot/Claude 对接）
+        from src.mcp_server.server import run_server
+
+        logger.info("MCP Server 启动中 (stdio transport)...")
+        run_server()
         
     except FileNotFoundError as e:
         logger.error(f"配置文件未找到: {e}")
