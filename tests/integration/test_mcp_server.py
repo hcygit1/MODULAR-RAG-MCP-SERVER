@@ -169,6 +169,17 @@ class TestMCPServerE2:
         assert "query" in (qkh.get("inputSchema", {}).get("required") or [])
         assert "query" in (qkh.get("inputSchema", {}).get("properties") or {})
 
+    def test_tools_list_includes_list_collections(self) -> None:
+        """tools/list 包含 list_collections schema"""
+        proc = _start_server_subprocess()
+        request = {"jsonrpc": "2.0", "id": 11, "method": "tools/list"}
+        stdout_data, _ = _send_request(proc, request)
+        assert proc.returncode == 0
+        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
+        resp = json.loads(lines[0])
+        names = [t["name"] for t in resp["result"]["tools"]]
+        assert "list_collections" in names
+
     def test_query_knowledge_hub_returns_markdown_and_citations(
         self, retrieval_pipeline, indexed_fixtures
     ) -> None:

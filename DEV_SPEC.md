@@ -1702,7 +1702,7 @@ observability:
 | E1 | MCP Server 骨架（Stdio Transport） | [x] | - | |
 | E1.5 | Protocol Handler 协议解析与能力协商 | [x] | - | |
 | E2 | query_knowledge_hub Tool | [x] | - | |
-| E3 | list_collections Tool | [ ] | - | |
+| E3 | list_collections Tool | [x] | - | |
 | E4 | get_document_summary Tool | [ ] | - | |
 | E5 | 多模态返回（ImageContent） | [ ] | - | |
 | E6 | 错误处理与协议合规 | [ ] | - | |
@@ -1736,10 +1736,10 @@ observability:
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 7 | 3 | 43% |
+| 阶段 E | 7 | 4 | 57% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **42** | **76%** |
+| **总计** | **55** | **43** | **78%** |
 
 
 ---
@@ -2209,7 +2209,7 @@ observability:
 - **验收标准**：tool 返回 content[0] 为可读 Markdown；structuredContent.citations 含 source/page/chunk_id/score。
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py -k query_knowledge_hub`。
 
-### E3：实现 tool：list_collections
+### E3：实现 tool：list_collections ✅
 - **目标**：实现 `tools/list_collections.py`：列出 `data/documents/` 下集合并附带统计（可延后到下一步）。
 - **修改文件**：
   - `src/mcp_server/tools/list_collections.py`

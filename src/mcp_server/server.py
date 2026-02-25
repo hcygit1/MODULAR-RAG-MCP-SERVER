@@ -27,6 +27,10 @@ def _get_handler() -> ProtocolHandler:
     """获取或创建 ProtocolHandler 实例，并注册 query_knowledge_hub 工具。"""
     global _handler
     if _handler is None:
+        from src.mcp_server.tools.list_collections import (
+            LIST_COLLECTIONS_DEFINITION,
+            execute_list_collections,
+        )
         from src.mcp_server.tools.query_knowledge_hub import (
             QUERY_KNOWLEDGE_HUB_DEFINITION,
             execute_query_knowledge_hub,
@@ -34,6 +38,7 @@ def _get_handler() -> ProtocolHandler:
 
         _handler = ProtocolHandler()
         _handler.register_tool(QUERY_KNOWLEDGE_HUB_DEFINITION, execute_query_knowledge_hub)
+        _handler.register_tool(LIST_COLLECTIONS_DEFINITION, execute_list_collections)
     return _handler
 
 
