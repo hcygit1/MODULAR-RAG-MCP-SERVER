@@ -14,6 +14,7 @@ from src.libs.loader.pdf_loader import PdfLoader
 from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.vector_store.vector_store_factory import VectorStoreFactory
 from src.core.settings import Settings
+from src.core.trace.trace_context import TraceContext
 
 from src.ingestion.transform.chunk_refiner import ChunkRefiner
 from src.ingestion.transform.metadata_enricher import MetadataEnricher
@@ -158,71 +159,115 @@ class IngestionPipeline:
         if not file_path_obj.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
         
+        if trace is None:
+            trace = TraceContext(operation="ingestion")
+        _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
+
+        if _trace:
+            _trace.set_metric("file_path", file_path)
+            _trace.set_metric("collection_name", collection_name)
+
         # 步骤 1: Integrity Check（文件完整性检查）
         try:
-            file_hash = self._integrity_checker.compute_sha256(file_path)
-            if self._integrity_checker.should_skip(file_hash):
-                # 文件未变更，跳过处理
+            if _trace:
+                with _trace.stage("integrity_check"):
+                    file_hash = self._integrity_checker.compute_sha256(file_path)
+                    should_skip = self._integrity_checker.should_skip(file_hash)
+            else:
+                file_hash = self._integrity_checker.compute_sha256(file_path)
+                should_skip = self._integrity_checker.should_skip(file_hash)
+            if should_skip:
+                if _trace:
+                    _trace.set_metric("skipped", True)
                 return
         except Exception as e:
             raise RuntimeError(f"文件完整性检查失败: {str(e)}") from e
         
         # 步骤 2: Load（加载文档）
         try:
-            loader = PdfLoader()  # 当前只支持 PDF
-            document = loader.load(file_path, trace=trace)
+            if _trace:
+                with _trace.stage("load"):
+                    loader = PdfLoader()
+                    document = loader.load(file_path, trace=trace)
+            else:
+                loader = PdfLoader()
+                document = loader.load(file_path, trace=trace)
         except Exception as e:
             raise RuntimeError(f"文档加载失败: {str(e)}") from e
         
         # 步骤 3: Split（切分文档）
         try:
-            chunks = self.split_document(document, trace=trace)
+            if _trace:
+                with _trace.stage("split"):
+                    chunks = self.split_document(document, trace=trace)
+                _trace.set_metric("chunk_count", len(chunks))
+            else:
+                chunks = self.split_document(document, trace=trace)
             if not chunks:
                 raise RuntimeError("文档切分后未产生任何 chunks")
         except Exception as e:
             raise RuntimeError(f"文档切分失败: {str(e)}") from e
         
-        # 步骤 3.5: 保存图片（在 Transform 之前，以便 ImageCaptioner 能获取路径）
+        # 步骤 3.5: 保存图片
         try:
-            self._save_images(chunks, collection_name, trace=trace)
-            self._image_storage.save_index(collection_name)
+            if _trace:
+                with _trace.stage("image_save"):
+                    self._save_images(chunks, collection_name, trace=trace)
+                    self._image_storage.save_index(collection_name)
+            else:
+                self._save_images(chunks, collection_name, trace=trace)
+                self._image_storage.save_index(collection_name)
         except Exception as e:
             raise RuntimeError(f"图片保存失败: {str(e)}") from e
         
         # 步骤 4: Transform（转换和增强）
         try:
-            transformed_chunks = self._apply_transforms(chunks, trace=trace)
+            if _trace:
+                with _trace.stage("transform"):
+                    transformed_chunks = self._apply_transforms(chunks, trace=trace)
+            else:
+                transformed_chunks = self._apply_transforms(chunks, trace=trace)
         except Exception as e:
             raise RuntimeError(f"Chunk 转换失败: {str(e)}") from e
         
         # 步骤 5: Encode（编码）
         try:
-            dense_vectors, sparse_vectors = self._batch_processor.process(
-                transformed_chunks,
-                trace=trace
-            )
+            if _trace:
+                with _trace.stage("encode"):
+                    dense_vectors, sparse_vectors = self._batch_processor.process(
+                        transformed_chunks, trace=trace
+                    )
+            else:
+                dense_vectors, sparse_vectors = self._batch_processor.process(
+                    transformed_chunks, trace=trace
+                )
         except Exception as e:
             raise RuntimeError(f"向量编码失败: {str(e)}") from e
         
         # 步骤 6: Store（存储）
         try:
-            self._store_results(
-                transformed_chunks,
-                dense_vectors,
-                sparse_vectors,
-                collection_name,
-                trace=trace
-            )
+            if _trace:
+                with _trace.stage("store"):
+                    self._store_results(
+                        transformed_chunks, dense_vectors, sparse_vectors,
+                        collection_name, trace=trace,
+                    )
+            else:
+                self._store_results(
+                    transformed_chunks, dense_vectors, sparse_vectors,
+                    collection_name, trace=trace,
+                )
         except Exception as e:
             raise RuntimeError(f"存储失败: {str(e)}") from e
         
         # 标记处理成功
         try:
             self._integrity_checker.mark_success(file_hash)
-        except Exception as e:
-            # 标记失败不影响主流程，但记录警告
-            # TODO: 记录到日志
+        except Exception:
             pass
+        
+        if _trace:
+            _trace.set_metric("skipped", False)
     
     def _apply_transforms(
         self,

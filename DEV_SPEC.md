@@ -1711,11 +1711,11 @@ observability:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| F1 | TraceContext 与结构化日志 | [x] | 2026-02-26 | |
-| F2 | 各阶段 Trace 集成 | [x] | 2026-02-26 | |
-| F3 | Streamlit Dashboard | [ ] | - | |
-| F4 | Golden Test Set 与回归测试 | [ ] | - | |
-| F5 | Ragas/Custom Evaluator 集成 | [ ] | - | |
+| F1 | TraceContext 数据结构与 record_stage/finish | [x] | 2026-02-26 | |
+| F2 | 结构化日志 logger（JSON Lines） | [x] | 2026-02-26 | |
+| F3 | 在关键路径打点（Query 与 Ingestion） | [x] | 2026-02-26 | |
+| F4 | Dashboard MVP（Streamlit） | [ ] | - | |
+| F5 | Evaluation Runner + Golden Test Set 回归 | [ ] | - | |
 
 #### 阶段 G：端到端验收与文档收口
 
@@ -1737,9 +1737,9 @@ observability:
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
 | 阶段 E | 7 | 7 | 100% |
-| 阶段 F | 5 | 2 | 40% |
+| 阶段 F | 5 | 3 | 60% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **48** | **87%** |
+| **总计** | **55** | **49** | **89%** |
 
 
 ---

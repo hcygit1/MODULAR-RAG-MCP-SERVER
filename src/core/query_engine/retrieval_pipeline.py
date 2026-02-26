@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from src.core.query_engine.hybrid_search import HybridSearch
 from src.core.query_engine.query_processor import ProcessedQuery, QueryProcessor
 from src.core.query_engine.reranker import RerankerOrchestrator
+from src.core.trace.trace_context import TraceContext
 from src.libs.vector_store.base_vector_store import QueryResult
 
 if TYPE_CHECKING:
@@ -29,15 +30,6 @@ class RetrievalPipeline:
         reranker: RerankerOrchestrator,
         retrieval_config: Optional["RetrievalConfig"] = None,
     ) -> None:
-        """
-        初始化 RetrievalPipeline
-
-        Args:
-            query_processor: 查询预处理器
-            hybrid_search: 混合检索引擎
-            reranker: Reranker 编排器（含 fallback）
-            retrieval_config: 检索配置（含 top_k_dense/sparse/final），为 None 时使用 retrieve 传入的 top_k
-        """
         self._query_processor = query_processor
         self._hybrid_search = hybrid_search
         self._reranker = reranker
@@ -59,7 +51,7 @@ class RetrievalPipeline:
             top_k: 返回的 Top-K 数量
             collection_name: 集合名称，传给 HybridSearch
             filters: 可选覆盖 ProcessedQuery 的 filters（默认使用 QueryProcessor 解析结果）
-            trace: 追踪上下文（可选）
+            trace: 追踪上下文（可选），为 None 时自动创建
 
         Returns:
             List[QueryResult]: Top-K 检索结果，含 chunk 文本与 metadata
@@ -70,10 +62,15 @@ class RetrievalPipeline:
         if top_k <= 0:
             raise ValueError(f"top_k 必须大于 0，得到: {top_k}")
 
-        # 1. 查询预处理
-        processed = self._query_processor.process(query)
+        if trace is None:
+            trace = TraceContext(operation="retrieval")
 
-        # 2. 混合检索（用 original_query，filters 取传入或解析结果）
+        trace.set_metric("query", query)
+        trace.set_metric("top_k", top_k)
+
+        with trace.stage("query_processing"):
+            processed = self._query_processor.process(query)
+
         effective_filters = filters if filters is not None else processed.filters
         search_kwargs: Dict[str, Any] = {
             "query": processed.original_query,
@@ -86,16 +83,21 @@ class RetrievalPipeline:
             search_kwargs["top_k_dense"] = self._retrieval_config.top_k_dense
             search_kwargs["top_k_sparse"] = self._retrieval_config.top_k_sparse
             search_kwargs["top_k_final"] = top_k
+
         hybrid_results = self._hybrid_search.search(**search_kwargs)
 
         if not hybrid_results:
+            trace.set_metric("result_count", 0)
             return []
 
-        # 3. 精排（含 fallback）
-        results, _ = self._reranker.rerank_with_fallback(
+        results, fallback = self._reranker.rerank_with_fallback(
             query=processed.original_query,
             candidates=hybrid_results,
             trace=trace,
         )
 
-        return results[:top_k]
+        final = results[:top_k]
+        trace.set_metric("result_count", len(final))
+        trace.set_metric("rerank_fallback", fallback)
+
+        return final

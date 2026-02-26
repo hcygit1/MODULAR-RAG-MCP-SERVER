@@ -2,6 +2,7 @@
 HybridSearch 集成测试
 
 对 fixtures 数据验证混合检索：dense + sparse + RRF 融合，能返回 Top-K（含 chunk 文本与 metadata）。
+包含 F3 Trace 集成测试：验证 trace 中存在 dense/sparse/fusion/rerank 阶段。
 """
 import shutil
 import tempfile
@@ -10,11 +11,16 @@ import pytest
 
 from src.core.query_engine.dense_retriever import DenseRetriever
 from src.core.query_engine.hybrid_search import HybridSearch
+from src.core.query_engine.reranker import RerankerOrchestrator
+from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
+from src.core.query_engine.query_processor import QueryProcessor
 from src.core.query_engine.sparse_retriever import SparseRetriever
+from src.core.trace.trace_context import TraceContext
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
 from src.ingestion.models import Chunk
 from src.ingestion.storage.bm25_indexer import BM25Indexer
 from src.libs.embedding.fake_embedding import FakeEmbedding
+from src.libs.reranker.none_reranker import NoneReranker
 from src.libs.vector_store.base_vector_store import QueryResult, VectorRecord
 from src.libs.vector_store.fake_vector_store import FakeVectorStore
 
@@ -303,3 +309,144 @@ class TestHybridSearchEdgeCases:
                 top_k=0,
                 collection_name=fixtures["collection_name"],
             )
+
+
+class TestHybridSearchTrace:
+    """F3 Trace 集成测试：验证 trace 中存在各阶段记录"""
+
+    def test_hybrid_search_records_stages(self, indexed_fixtures) -> None:
+        """HybridSearch.search() 记录 dense/sparse/rrf_fusion 阶段"""
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+
+        trace = TraceContext(operation="retrieval")
+        results = hybrid.search(
+            query="python RAG",
+            top_k=5,
+            collection_name=fixtures["collection_name"],
+            trace=trace,
+        )
+
+        stage_names = [s.name for s in trace.stages]
+        assert "dense_retrieval" in stage_names
+        assert "sparse_retrieval" in stage_names
+        assert "rrf_fusion" in stage_names
+
+        for s in trace.stages:
+            assert s.duration_ms >= 0
+
+    def test_retrieval_pipeline_records_all_stages(self, indexed_fixtures) -> None:
+        """RetrievalPipeline.retrieve() 记录 query_processing + hybrid + rerank 阶段"""
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+        reranker = RerankerOrchestrator(backend=NoneReranker())
+
+        trace = TraceContext(operation="retrieval")
+        pipeline = RetrievalPipeline(
+            query_processor=QueryProcessor(),
+            hybrid_search=hybrid,
+            reranker=reranker,
+        )
+        results = pipeline.retrieve(
+            query="python RAG",
+            top_k=5,
+            collection_name=fixtures["collection_name"],
+            trace=trace,
+        )
+
+        report = trace.finish()
+        stage_names = [s["name"] for s in report["stages"]]
+
+        assert "query_processing" in stage_names
+        assert "dense_retrieval" in stage_names
+        assert "sparse_retrieval" in stage_names
+        assert "rrf_fusion" in stage_names
+        assert "rerank" in stage_names
+
+        assert report["metrics"]["query"] == "python RAG"
+        assert report["metrics"]["top_k"] == 5
+        assert "result_count" in report["metrics"]
+        assert report["total_duration_ms"] >= 0
+
+    def test_reranker_records_fallback_false(self, indexed_fixtures) -> None:
+        """NoneReranker 正常完成时 fallback=False"""
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+
+        trace = TraceContext(operation="retrieval")
+        candidates = hybrid.search(
+            query="python",
+            top_k=5,
+            collection_name=fixtures["collection_name"],
+            trace=trace,
+        )
+
+        reranker = RerankerOrchestrator(backend=NoneReranker())
+        results, fallback = reranker.rerank_with_fallback(
+            query="python", candidates=candidates, trace=trace,
+        )
+
+        rerank_stages = [s for s in trace.stages if s.name == "rerank"]
+        assert len(rerank_stages) == 1
+        assert rerank_stages[0].metadata.get("fallback") is False
+
+    def test_trace_finish_is_json_serializable(self, indexed_fixtures) -> None:
+        """整条链路的 trace.finish() 可 JSON 序列化"""
+        import json
+
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+        reranker = RerankerOrchestrator(backend=NoneReranker())
+        pipeline = RetrievalPipeline(
+            query_processor=QueryProcessor(),
+            hybrid_search=hybrid,
+            reranker=reranker,
+        )
+
+        trace = TraceContext(operation="retrieval")
+        pipeline.retrieve(
+            query="machine learning",
+            top_k=3,
+            collection_name=fixtures["collection_name"],
+            trace=trace,
+        )
+        report = trace.finish()
+        serialized = json.dumps(report, ensure_ascii=False)
+        parsed = json.loads(serialized)
+        assert len(parsed["stages"]) >= 4

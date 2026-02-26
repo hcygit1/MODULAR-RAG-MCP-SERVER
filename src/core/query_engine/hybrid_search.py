@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 from src.core.query_engine.dense_retriever import DenseRetriever
 from src.core.query_engine.fusion import fuse_rrf
 from src.core.query_engine.sparse_retriever import SparseRetriever
+from src.core.trace.trace_context import TraceContext
 from src.libs.vector_store.base_vector_store import QueryResult
 
 
@@ -25,14 +26,6 @@ class HybridSearch:
         sparse_retriever: SparseRetriever,
         rrf_k: float = 60.0,
     ) -> None:
-        """
-        初始化 HybridSearch
-
-        Args:
-            dense_retriever: 稠密向量检索器
-            sparse_retriever: 稀疏检索器（BM25）
-            rrf_k: RRF 融合的平滑常数，默认 60
-        """
         self._dense = dense_retriever
         self._sparse = sparse_retriever
         self._rrf_k = rrf_k
@@ -57,12 +50,12 @@ class HybridSearch:
             top_k_dense: 向量检索候选数，为 None 时使用 top_k
             top_k_sparse: BM25 检索候选数，为 None 时使用 top_k
             top_k_final: 融合后最终返回数，为 None 时使用 top_k
-            collection_name: 集合名称，传给 SparseRetriever（Dense 的 collection 由 VectorStore 绑定）
-            filters: 元数据过滤条件（可选），传给 Dense 与 Sparse
+            collection_name: 集合名称，传给 SparseRetriever
+            filters: 元数据过滤条件（可选）
             trace: 追踪上下文（可选）
 
         Returns:
-            List[QueryResult]: 按 RRF 融合后排序的 Top-K 结果，含 chunk 文本与 metadata
+            List[QueryResult]: 按 RRF 融合后排序的 Top-K 结果
 
         Raises:
             ValueError: 当 query 为空或 top_k <= 0 时
@@ -78,31 +71,48 @@ class HybridSearch:
         if top_k <= 0 or k_dense <= 0 or k_sparse <= 0 or k_final <= 0:
             raise ValueError(f"top_k 必须大于 0，得到: top_k={top_k}, dense={k_dense}, sparse={k_sparse}, final={k_final}")
 
-        # 1. Dense 检索
-        dense_results = self._dense.retrieve(
-            query=query,
-            top_k=k_dense,
-            filters=filters,
-            trace=trace,
-        )
+        _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
 
-        # 2. Sparse 检索（需 collection_name 或 sparse 构造时指定默认集合）
+        # 1. Dense 检索
+        if _trace:
+            with _trace.stage("dense_retrieval", top_k=k_dense):
+                dense_results = self._dense.retrieve(
+                    query=query, top_k=k_dense, filters=filters, trace=trace,
+                )
+        else:
+            dense_results = self._dense.retrieve(
+                query=query, top_k=k_dense, filters=filters, trace=trace,
+            )
+
+        # 2. Sparse 检索
         sparse_results: List[QueryResult] = []
         coll = collection_name or getattr(self._sparse, "_default_collection", None)
         if coll:
-            sparse_results = self._sparse.retrieve(
-                query=query,
-                top_k=k_sparse,
-                collection_name=coll,
-                filters=filters,
-                trace=trace,
-            )
+            if _trace:
+                with _trace.stage("sparse_retrieval", top_k=k_sparse):
+                    sparse_results = self._sparse.retrieve(
+                        query=query, top_k=k_sparse, collection_name=coll,
+                        filters=filters, trace=trace,
+                    )
+            else:
+                sparse_results = self._sparse.retrieve(
+                    query=query, top_k=k_sparse, collection_name=coll,
+                    filters=filters, trace=trace,
+                )
 
         # 3. RRF 融合
-        fused = fuse_rrf(
-            dense_results=dense_results,
-            sparse_results=sparse_results,
-            k=self._rrf_k,
-        )
+        if _trace:
+            with _trace.stage("rrf_fusion", dense_count=len(dense_results), sparse_count=len(sparse_results)):
+                fused = fuse_rrf(
+                    dense_results=dense_results,
+                    sparse_results=sparse_results,
+                    k=self._rrf_k,
+                )
+        else:
+            fused = fuse_rrf(
+                dense_results=dense_results,
+                sparse_results=sparse_results,
+                k=self._rrf_k,
+            )
 
         return fused[:k_final]

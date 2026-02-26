@@ -5,6 +5,7 @@ Reranker 编排模块
 """
 from typing import Any, List, Optional, Tuple
 
+from src.core.trace.trace_context import TraceContext
 from src.libs.reranker.base_reranker import BaseReranker
 from src.libs.vector_store.base_vector_store import QueryResult
 
@@ -18,12 +19,6 @@ class RerankerOrchestrator:
     """
 
     def __init__(self, backend: BaseReranker) -> None:
-        """
-        初始化 RerankerOrchestrator
-
-        Args:
-            backend: libs.reranker 后端实例（NoneReranker / CrossEncoderReranker / LLMReranker）
-        """
         self._backend = backend
 
     def rerank_with_fallback(
@@ -42,17 +37,29 @@ class RerankerOrchestrator:
 
         Returns:
             Tuple[List[QueryResult], bool]: (精排后的结果, 是否发生 fallback)
-            - fallback=False: 正常精排完成
-            - fallback=True: 后端异常/超时，返回原始 candidates 不变
         """
         if not candidates:
             return ([], False)
 
+        _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
+
         try:
-            results = self._backend.rerank(query=query, candidates=candidates, trace=trace)
+            if _trace:
+                with _trace.stage("rerank", backend=self._backend.get_backend(), candidate_count=len(candidates)):
+                    results = self._backend.rerank(query=query, candidates=candidates, trace=trace)
+                _trace.stages[-1].metadata["fallback"] = False
+            else:
+                results = self._backend.rerank(query=query, candidates=candidates, trace=trace)
             return (results, False)
         except Exception:
-            # 回退：返回原始 fusion 排名，标记 fallback
+            if _trace:
+                _trace.record_stage(
+                    "rerank",
+                    duration_ms=0.0,
+                    backend=self._backend.get_backend(),
+                    candidate_count=len(candidates),
+                    fallback=True,
+                )
             return (self._copy_candidates(candidates), True)
 
     def _copy_candidates(self, candidates: List[QueryResult]) -> List[QueryResult]:
