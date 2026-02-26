@@ -9,7 +9,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
+
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
 # 默认 BM25 索引路径
 _DEFAULT_BM25_BASE_PATH = "data/db/bm25"
@@ -17,43 +19,10 @@ _DEFAULT_BM25_BASE_PATH = "data/db/bm25"
 _bm25_base_path: str = _DEFAULT_BM25_BASE_PATH
 
 
-GET_DOCUMENT_SUMMARY_DEFINITION: Dict[str, Any] = {
-    "name": "get_document_summary",
-    "description": "根据文档 ID 获取文档摘要信息（title、summary、tags）。从已索引的 chunk 元数据中聚合。",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "doc_id": {
-                "type": "string",
-                "description": "文档唯一标识符",
-            },
-            "collection_name": {
-                "type": "string",
-                "description": "集合名称，指定时仅在对应集合中查找（可选）",
-            },
-        },
-        "required": ["doc_id"],
-    },
-}
-
-
 def set_bm25_base_path(path: str) -> None:
     """测试注入用：设置 BM25 索引根路径。"""
     global _bm25_base_path
     _bm25_base_path = path
-
-
-def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
-    """将 dict 格式转为 CallToolResult。"""
-    content = [
-        TextContent(type=c.get("type", "text"), text=c.get("text", ""))
-        for c in d.get("content", [])
-    ]
-    return CallToolResult(
-        content=content,
-        structuredContent=d.get("structuredContent") or {},
-        isError=d.get("isError", False),
-    )
 
 
 def _load_chunk_metadata_for_collection(collection_name: str) -> Dict[str, Dict[str, Any]]:
@@ -182,4 +151,4 @@ def get_document_summary(
         "doc_id": doc_id,
         "collection_name": collection_name,
     })
-    return _dict_to_call_tool_result(d)
+    return dict_to_call_tool_result(d)

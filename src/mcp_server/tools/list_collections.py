@@ -9,7 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
+
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
 # 默认文档根路径
 _DEFAULT_DOCUMENTS_PATH = "data/documents"
@@ -18,40 +20,10 @@ _DEFAULT_DOCUMENTS_PATH = "data/documents"
 _base_path: str = _DEFAULT_DOCUMENTS_PATH
 
 
-# 工具 schema
-LIST_COLLECTIONS_DEFINITION: Dict[str, Any] = {
-    "name": "list_collections",
-    "description": "列出知识库中的集合名称。每个集合对应 data/documents/ 下的一个子目录，或已构建的索引集合。",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "base_path": {
-                "type": "string",
-                "description": "文档根路径，默认为 data/documents",
-            },
-        },
-        "required": [],
-    },
-}
-
-
 def set_base_path(path: str) -> None:
     """测试注入用：设置文档根路径。"""
     global _base_path
     _base_path = path
-
-
-def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
-    """将 dict 格式转为 CallToolResult。"""
-    content = [
-        TextContent(type=c.get("type", "text"), text=c.get("text", ""))
-        for c in d.get("content", [])
-    ]
-    return CallToolResult(
-        content=content,
-        structuredContent=d.get("structuredContent") or {},
-        isError=d.get("isError", False),
-    )
 
 
 def _list_collections_from_fs(base_path: str) -> List[str]:
@@ -115,4 +87,4 @@ def list_collections(base_path: str = "data/documents") -> CallToolResult:
         CallToolResult 含 content（文本）、structuredContent.collections
     """
     d = execute_list_collections({"base_path": base_path})
-    return _dict_to_call_tool_result(d)
+    return dict_to_call_tool_result(d)

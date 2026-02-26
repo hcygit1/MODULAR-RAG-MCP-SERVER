@@ -8,59 +8,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
+
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
 logger = logging.getLogger(__name__)
 
-
-def _dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
-    """将 dict 格式转为 CallToolResult。支持 TextContent 与 ImageContent。"""
-    from mcp.types import ImageContent
-
-    content_blocks = []
-    for c in d.get("content", []):
-        ctype = c.get("type", "text")
-        if ctype == "image":
-            content_blocks.append(
-                ImageContent(
-                    type="image",
-                    data=c.get("data", ""),
-                    mimeType=c.get("mimeType", "image/png"),
-                )
-            )
-        else:
-            content_blocks.append(TextContent(type="text", text=c.get("text", "")))
-    return CallToolResult(
-        content=content_blocks,
-        structuredContent=d.get("structuredContent") or {},
-        isError=d.get("isError", False),
-    )
-
-
-# 工具 schema，供 tools/list 返回（自实现 ProtocolHandler 用，FastMCP 可忽略）
-QUERY_KNOWLEDGE_HUB_DEFINITION: Dict[str, Any] = {
-    "name": "query_knowledge_hub",
-    "description": "在知识库中检索与查询相关的文档片段，返回 Markdown 格式的检索结果和结构化引用（source, page, chunk_id, score）。",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "检索查询字符串",
-            },
-            "collection_name": {
-                "type": "string",
-                "description": "集合名称，需与 ingest 时一致（可选）",
-            },
-            "top_k": {
-                "type": "integer",
-                "description": "返回 Top-K 数量，默认 10",
-                "default": 10,
-            },
-        },
-        "required": ["query"],
-    },
-}
 
 # 默认配置路径
 _DEFAULT_CONFIG_PATH = "config/settings.yaml"
@@ -223,4 +176,4 @@ def query_knowledge_hub(
         "collection_name": collection_name,
         "top_k": top_k,
     })
-    return _dict_to_call_tool_result(d)
+    return dict_to_call_tool_result(d)
