@@ -53,14 +53,17 @@ def temp_bm25_with_doc(tmp_path: Path):
 
 
 def test_get_document_summary_not_found() -> None:
-    """对不存在 doc_id 返回规范错误"""
+    """对不存在 doc_id 返回规范错误（E6 统一格式：errorCode/errorType/message）"""
     with tempfile.TemporaryDirectory() as td:
         set_bm25_base_path(td)
         try:
             result = execute_get_document_summary({"doc_id": "nonexistent_doc"})
             assert result["isError"] is True
             assert "不存在" in result["content"][0]["text"]
-            assert result["structuredContent"] == {}
+            sc = result["structuredContent"]
+            assert sc.get("errorType") == "RESOURCE_NOT_FOUND"
+            assert sc.get("errorCode") == -32001
+            assert "message" in sc
         finally:
             set_bm25_base_path("data/db/bm25")
 

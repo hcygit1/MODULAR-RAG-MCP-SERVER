@@ -119,13 +119,11 @@ def execute_get_document_summary(arguments: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         MCP tools/call result：存在时 content + structuredContent；不存在时 isError=True
     """
+    from src.mcp_server.tools.error_utils import build_error_response
+
     doc_id = arguments.get("doc_id")
     if not doc_id or not str(doc_id).strip():
-        return {
-            "content": [{"type": "text", "text": "参数 doc_id 不能为空"}],
-            "structuredContent": {},
-            "isError": True,
-        }
+        return build_error_response("INVALID_PARAMS", "参数 doc_id 不能为空")
 
     doc_id = str(doc_id).strip()
     collection_name = arguments.get("collection_name")
@@ -137,11 +135,10 @@ def execute_get_document_summary(arguments: Dict[str, Any]) -> Dict[str, Any]:
     try:
         meta = _find_doc_metadata(doc_id, collection_name)
         if meta is None:
-            return {
-                "content": [{"type": "text", "text": f"文档不存在: {doc_id}"}],
-                "structuredContent": {},
-                "isError": True,
-            }
+            return build_error_response(
+                "RESOURCE_NOT_FOUND",
+                f"文档不存在: {doc_id}",
+            )
 
         title = _extract_title(meta, doc_id)
         summary = meta.get("summary")
@@ -164,11 +161,7 @@ def execute_get_document_summary(arguments: Dict[str, Any]) -> Dict[str, Any]:
             "isError": False,
         }
     except Exception as e:
-        return {
-            "content": [{"type": "text", "text": f"获取文档摘要失败: {e}"}],
-            "structuredContent": {},
-            "isError": True,
-        }
+        return build_error_response("INTERNAL_ERROR", f"获取文档摘要失败: {e}")
 
 
 def get_document_summary(

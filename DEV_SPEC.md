@@ -1705,7 +1705,7 @@ observability:
 | E3 | list_collections Tool | [x] | - | |
 | E4 | get_document_summary Tool | [x] | - | |
 | E5 | 多模态返回（ImageContent） | [x] | 2026-02-25 | |
-| E6 | 错误处理与协议合规 | [ ] | - | |
+| E6 | 错误处理与协议合规 | [x] | 2026-02-26 | |
 
 #### 阶段 F：Observability + Evaluation
 
@@ -1736,10 +1736,10 @@ observability:
 | 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 7 | 6 | 86% |
+| 阶段 E | 7 | 7 | 100% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **45** | **82%** |
+| **总计** | **55** | **46** | **84%** |
 
 
 ---
@@ -2224,6 +2224,35 @@ observability:
   - `tests/integration/test_mcp_server.py`（补图像返回用例）
 - **验收标准**：返回 content 中包含 image type，mimeType 正确，data 为 base64 字符串。
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py -k image`。
+
+### E6：错误处理与协议合规 ✅
+- **目标**：为 MCP Tools 建立统一的错误处理与返回格式，确保协议合规、错误信息可被 Client 正确解析，并覆盖无效参数、资源不存在、服务不可用等异常场景。
+- **修改文件**：
+  - `src/mcp_server/tools/error_utils.py`（新建：统一错误构造与错误码映射）
+  - `src/mcp_server/tools/query_knowledge_hub.py`
+  - `src/mcp_server/tools/list_collections.py`
+  - `src/mcp_server/tools/get_document_summary.py`
+  - `tests/integration/test_mcp_server.py`（补错误场景用例）
+- **实现要点**：
+  1. **统一错误返回格式**：所有 tool 错误返回结构一致：
+     - `content`: `[{ "type": "text", "text": "人类可读错误说明" }]`
+     - `structuredContent`: `{ "errorCode": "...", "errorType": "...", "message": "..." }`（可选，便于 Client 程序化处理）
+     - `isError`: `true`
+  2. **错误类型/错误码映射**（参考 MCP 扩展码）：
+     - `INVALID_PARAMS`（-32602）：query/doc_id 为空、top_k 非法、collection_name 类型错误等
+     - `RESOURCE_NOT_FOUND`（-32001）：文档不存在、collection 不存在、BM25 索引缺失
+     - `INTERNAL_ERROR`（-32603）：检索失败、Pipeline 初始化失败、向量库/索引加载异常
+  3. **覆盖场景**：
+     - 无效参数：空 query、空 doc_id、非法 top_k
+     - 资源不存在：doc_id 无匹配、collection 不存在、索引未构建（需先 ingest）
+     - 内部异常：捕获并转换为规范错误，不向 stdout 泄露堆栈，日志到 stderr
+  4. **三个 tool 一致性**：`query_knowledge_hub`、`list_collections`、`get_document_summary` 均使用统一错误构造逻辑。
+- **验收标准**：
+  - 三个 tool 的错误返回格式统一，且 `content` 第一项为可读文本。
+  - 无效参数、资源不存在、内部异常均有明确错误信息，不泄露敏感信息。
+  - `tests/integration/test_mcp_server.py` 中新增错误场景测试：空 query、空 doc_id、不存在的 doc_id、索引缺失等，断言 `isError=true` 且 `content` 含预期提示。
+  - 错误时 stdout 仍仅输出合法 MCP 消息，不混入日志/堆栈。
+- **测试方法**：`pytest -q tests/integration/test_mcp_server.py -k error`。
 
 ---
 

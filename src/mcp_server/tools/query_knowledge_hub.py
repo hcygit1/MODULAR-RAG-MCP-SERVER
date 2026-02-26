@@ -145,14 +145,15 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         MCP tools/call result：{ content, structuredContent, isError }
     """
     from src.core.response.response_builder import build_mcp_content
+    from src.mcp_server.tools.error_utils import build_error_response
 
     query = arguments.get("query")
     if not query or not str(query).strip():
-        return {
-            "content": [{"type": "text", "text": "参数 query 不能为空"}],
-            "structuredContent": {"citations": []},
-            "isError": True,
-        }
+        return build_error_response(
+            "INVALID_PARAMS",
+            "参数 query 不能为空",
+            structured_content_base={"citations": []},
+        )
 
     collection_name = arguments.get("collection_name")
     top_k = arguments.get("top_k", 10)
@@ -181,24 +182,24 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
             collection_name=collection_name,
         )
     except FileNotFoundError as e:
-        return {
-            "content": [{"type": "text", "text": f"BM25 索引不存在，请先运行 ingest: {e}"}],
-            "structuredContent": {"citations": []},
-            "isError": True,
-        }
+        return build_error_response(
+            "RESOURCE_NOT_FOUND",
+            f"BM25 索引不存在，请先运行 ingest: {e}",
+            structured_content_base={"citations": []},
+        )
     except ValueError as e:
-        return {
-            "content": [{"type": "text", "text": str(e)}],
-            "structuredContent": {"citations": []},
-            "isError": True,
-        }
+        return build_error_response(
+            "INVALID_PARAMS",
+            str(e),
+            structured_content_base={"citations": []},
+        )
     except Exception as e:
         logger.exception("query_knowledge_hub failed: %s", e)
-        return {
-            "content": [{"type": "text", "text": f"检索失败: {e}"}],
-            "structuredContent": {"citations": []},
-            "isError": True,
-        }
+        return build_error_response(
+            "INTERNAL_ERROR",
+            f"检索失败: {e}",
+            structured_content_base={"citations": []},
+        )
 
 
 def query_knowledge_hub(

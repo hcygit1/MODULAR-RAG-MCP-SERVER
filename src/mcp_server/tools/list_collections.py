@@ -95,11 +95,13 @@ def execute_list_collections(arguments: Dict[str, Any]) -> Dict[str, Any]:
             "isError": False,
         }
     except Exception as e:
-        return {
-            "content": [{"type": "text", "text": f"列出集合失败: {e}"}],
-            "structuredContent": {"collections": []},
-            "isError": True,
-        }
+        from src.mcp_server.tools.error_utils import build_error_response
+
+        return build_error_response(
+            "INTERNAL_ERROR",
+            f"列出集合失败: {e}",
+            structured_content_base={"collections": []},
+        )
 
 
 def list_collections(base_path: str = "data/documents") -> CallToolResult:
