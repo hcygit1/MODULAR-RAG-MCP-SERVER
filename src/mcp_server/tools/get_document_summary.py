@@ -11,23 +11,29 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import CallToolResult
 
+from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
-# 默认 BM25 索引路径
-_DEFAULT_BM25_BASE_PATH = "data/db/bm25"
-
-_bm25_base_path: str = _DEFAULT_BM25_BASE_PATH
+# 测试注入用：非 None 时直接使用，否则从 settings 读取
+_bm25_base_path_override: Optional[str] = None
 
 
-def set_bm25_base_path(path: str) -> None:
-    """测试注入用：设置 BM25 索引根路径。"""
-    global _bm25_base_path
-    _bm25_base_path = path
+def set_bm25_base_path(path: Optional[str]) -> None:
+    """测试注入用：设置 BM25 索引根路径。传入 None 可恢复为从 settings 读取。"""
+    global _bm25_base_path_override
+    _bm25_base_path_override = path
+
+
+def _get_bm25_base_path() -> str:
+    """返回 BM25 索引根路径，与 query_knowledge_hub、list_collections、ingest 一致。"""
+    if _bm25_base_path_override is not None:
+        return _bm25_base_path_override
+    return load_mcp_settings().ingestion.bm25_base_path
 
 
 def _load_chunk_metadata_for_collection(collection_name: str) -> Dict[str, Dict[str, Any]]:
     """从 BM25 索引文件加载 chunk_metadata。"""
-    index_file = Path(_bm25_base_path) / collection_name / "index.json"
+    index_file = Path(_get_bm25_base_path()) / collection_name / "index.json"
     if not index_file.exists():
         return {}
     try:
@@ -45,7 +51,7 @@ def _find_doc_metadata(doc_id: str, collection_name: Optional[str] = None) -> Op
     通过 chunk_id 前缀（doc_id_chunk_）或 source_doc_id 匹配。
     返回第一个匹配 chunk 的 metadata（通常含 title/summary/tags/source_path）。
     """
-    base = Path(_bm25_base_path)
+    base = Path(_get_bm25_base_path())
     if not base.exists():
         return None
 

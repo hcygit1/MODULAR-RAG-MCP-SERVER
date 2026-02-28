@@ -10,22 +10,19 @@ from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
+from src.mcp_server.tools.config_utils import load_mcp_settings, set_config_path as _set_config_path
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
 logger = logging.getLogger(__name__)
 
-
-# 默认配置路径
-_DEFAULT_CONFIG_PATH = "config/settings.yaml"
-
-# 懒加载的 pipeline
+# 懒加载的 pipeline 与缓存的 settings（避免重复 load）
 _pipeline: Optional[Any] = None
-_config_path: str = _DEFAULT_CONFIG_PATH
+_cached_settings: Optional[Any] = None
 
 
 def _get_pipeline():
     """懒加载并返回 RetrievalPipeline。"""
-    global _pipeline
+    global _pipeline, _cached_settings
     if _pipeline is not None:
         return _pipeline
     try:
@@ -35,12 +32,12 @@ def _get_pipeline():
         from src.core.query_engine.reranker import RerankerOrchestrator
         from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
         from src.core.query_engine.sparse_retriever import SparseRetriever
-        from src.core.settings import load_settings
         from src.libs.embedding.embedding_factory import EmbeddingFactory
         from src.libs.reranker.reranker_factory import RerankerFactory
         from src.libs.vector_store.vector_store_factory import VectorStoreFactory
 
-        settings = load_settings(_config_path)
+        settings = load_mcp_settings()
+        _cached_settings = settings
         embedding = EmbeddingFactory.create(settings)
         vector_store = VectorStoreFactory.create(settings)
         reranker_backend = RerankerFactory.create(settings)
@@ -73,9 +70,10 @@ def set_pipeline(pipeline: Any) -> None:
 
 def set_config_path(path: str) -> None:
     """设置配置文件路径（测试用）。"""
-    global _config_path, _pipeline
-    _config_path = path
+    global _pipeline, _cached_settings
+    _set_config_path(path)
     _pipeline = None
+    _cached_settings = None
 
 
 _images_base_path_override: Optional[str] = None
@@ -123,9 +121,11 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         if _images_base_path_override is not None:
             images_base = _images_base_path_override
         else:
-            from src.core.settings import load_settings
-
-            settings = load_settings(_config_path)
+            # 复用 _get_pipeline 加载时的 settings，避免重复 load_settings；测试注入 pipeline 时可能无缓存则再加载
+            _get_pipeline()
+            settings = _cached_settings
+            if settings is None:
+                settings = load_mcp_settings()
             images_base = getattr(
                 getattr(settings, "ingestion", None), "images_base_path", "data/images"
             )

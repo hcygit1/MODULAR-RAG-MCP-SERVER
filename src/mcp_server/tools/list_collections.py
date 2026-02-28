@@ -11,12 +11,10 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import CallToolResult
 
+from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
-# 默认配置路径，用于读取 bm25_base_path
-_DEFAULT_CONFIG_PATH = "config/settings.yaml"
-
-# 测试注入用：为 None 时从 settings 读取；非 None 时直接使用
+# 测试注入用：非 None 时直接使用，否则从 settings 读取
 _base_path: Optional[str] = None
 
 
@@ -28,9 +26,7 @@ def set_base_path(path: Optional[str]) -> None:
 
 def _get_default_base_path() -> str:
     """从 settings 读取 bm25_base_path，与 query_knowledge_hub、ingest 一致。"""
-    from src.core.settings import load_settings
-
-    settings = load_settings(_DEFAULT_CONFIG_PATH)
+    settings = load_mcp_settings()
     return settings.ingestion.bm25_base_path
 
 
