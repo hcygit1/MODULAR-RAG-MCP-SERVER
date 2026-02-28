@@ -23,10 +23,10 @@ def main():
     logger.info("Starting Modular RAG MCP Server...")
     
     try:
-        # A3: 配置加载（可选，用于验证配置）
-        from src.core.settings import load_settings
+        # A3: 配置加载（可选，用于验证配置），支持 MODULAR_RAG_CONFIG_PATH 环境变量
+        from src.mcp_server.tools.config_utils import load_mcp_settings
 
-        settings = load_settings("config/settings.yaml")
+        settings = load_mcp_settings()
         logger.info(f"配置加载成功: LLM provider={settings.llm.provider}, Embedding provider={settings.embedding.provider}")
 
         # 启动 MCP Server（Stdio Transport，与 Copilot/Claude 对接）

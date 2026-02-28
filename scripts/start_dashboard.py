@@ -34,8 +34,8 @@ def main() -> None:
     port = args.port
     if port is None:
         try:
-            from src.core.settings import load_settings
-            settings = load_settings("config/settings.yaml")
+            from src.mcp_server.tools.config_utils import load_mcp_settings
+            settings = load_mcp_settings()
             port = settings.observability.dashboard.port
         except Exception:
             port = 8501

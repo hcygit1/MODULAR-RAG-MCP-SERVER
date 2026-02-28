@@ -4,8 +4,9 @@ Ingestion Pipeline 模块
 提供文档摄取、处理、存储的完整流程。
 实现 integrity→load→split→transform→encode→store 的完整编排。
 """
-from typing import List, Optional, Any, Dict
+import logging
 from pathlib import Path
+from typing import List, Optional, Any, Dict
 
 from src.ingestion.models import Document, Chunk
 from src.libs.splitter.splitter_factory import SplitterFactory
@@ -25,6 +26,8 @@ from src.ingestion.embedding.batch_processor import BatchProcessor
 from src.ingestion.storage.vector_upserter import VectorUpserter
 from src.ingestion.storage.bm25_indexer import BM25Indexer
 from src.ingestion.storage.image_storage import ImageStorage
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
@@ -262,11 +265,11 @@ class IngestionPipeline:
         except Exception as e:
             raise RuntimeError(f"存储失败: {str(e)}") from e
         
-        # 标记处理成功
+        # 标记处理成功（失败不影响主流程，但需记录日志避免重复处理未被发现）
         try:
             self._integrity_checker.mark_success(file_hash)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s", file_hash[:16] if file_hash else "?", e)
         
         if _trace:
             _trace.set_metric("skipped", False)

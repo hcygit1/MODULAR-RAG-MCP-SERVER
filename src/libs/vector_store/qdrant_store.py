@@ -5,6 +5,7 @@ Qdrant VectorStore 实现
 支持 list、dict 等复杂 metadata 类型，无需序列化。
 """
 import hashlib
+import logging
 import uuid
 from typing import List, Dict, Any, Optional
 
@@ -14,6 +15,8 @@ from src.libs.vector_store.base_vector_store import (
     QueryResult
 )
 from src.core.settings import VectorStoreConfig
+
+logger = logging.getLogger(__name__)
 
 try:
     from qdrant_client import QdrantClient
@@ -120,8 +123,8 @@ class QdrantStore(BaseVectorStore):
             self._client.get_collection(eff_name)
             self._initialized_collections.add(eff_name)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("集合 %s 不存在，将创建: %s", eff_name, e)
         self._client.create_collection(
             collection_name=eff_name,
             vectors_config=VectorParams(
@@ -300,8 +303,8 @@ class QdrantStore(BaseVectorStore):
         if hasattr(self, "_client") and self._client is not None:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Qdrant 客户端关闭时异常（可忽略）: %s", e)
             self._client = None
 
     def get_backend(self) -> str:

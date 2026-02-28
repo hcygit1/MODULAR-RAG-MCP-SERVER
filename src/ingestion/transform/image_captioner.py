@@ -6,12 +6,15 @@ Image Captioner 实现
 2. 可选 Vision LLM 增强：使用 Vision LLM 生成图片描述
 3. 失败降级：Vision LLM 不可用时保留 image_refs，标记 has_unprocessed_images
 """
+import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import Optional, Any, Dict, List, TYPE_CHECKING
 
 from src.ingestion.models import Chunk
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from src.ingestion.storage.image_storage import ImageStorage
@@ -310,8 +313,8 @@ class ImageCaptioner(BaseTransform):
                     ) as tmp:
                         tmp.write(image_data)
                         return tmp.name
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("保存图片到临时文件失败 (image_id=%s): %s", image_id, e)
         
         return None
     
