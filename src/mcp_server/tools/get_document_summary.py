@@ -6,6 +6,7 @@ get_document_summary Tool
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -13,6 +14,8 @@ from mcp.types import CallToolResult
 
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
+
+logger = logging.getLogger(__name__)
 
 # 测试注入用：非 None 时直接使用，否则从 settings 读取
 _bm25_base_path_override: Optional[str] = None
@@ -40,7 +43,8 @@ def _load_chunk_metadata_for_collection(collection_name: str) -> Dict[str, Dict[
         with open(index_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         return data.get("chunk_metadata", {})
-    except Exception:
+    except Exception as e:
+        logger.warning("加载 chunk_metadata 失败 %s: %s", index_file, e)
         return {}
 
 

@@ -64,8 +64,9 @@ def _get_pipeline():
 
 def set_pipeline(pipeline: Any) -> None:
     """测试注入用：替换默认 pipeline。"""
-    global _pipeline
+    global _pipeline, _cached_settings
     _pipeline = pipeline
+    _cached_settings = None  # 避免 images_base_path 解析时使用过期配置
 
 
 def set_config_path(path: str) -> None:
