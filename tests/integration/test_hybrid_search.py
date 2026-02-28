@@ -450,3 +450,71 @@ class TestHybridSearchTrace:
         serialized = json.dumps(report, ensure_ascii=False)
         parsed = json.loads(serialized)
         assert len(parsed["stages"]) >= 4
+
+
+class TestGoldenSetSmoke:
+    """F5 黄金测试集 smoke 测试：用 fixture 数据验证 EvalRunner 端到端可跑"""
+
+    def test_eval_runner_with_fixtures(self, indexed_fixtures, tmp_path) -> None:
+        """EvalRunner + RetrievalPipeline 端到端产出指标"""
+        import json
+
+        from src.observability.evaluation.eval_runner import EvalRunner
+
+        fixtures = indexed_fixtures
+
+        dense = DenseRetriever(
+            embedding=fixtures["embedding"],
+            vector_store=fixtures["vector_store"],
+        )
+        sparse = SparseRetriever(
+            base_path=fixtures["bm25_path"],
+            collection_name=fixtures["collection_name"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+        reranker = RerankerOrchestrator(backend=NoneReranker())
+        pipeline = RetrievalPipeline(
+            query_processor=QueryProcessor(),
+            hybrid_search=hybrid,
+            reranker=reranker,
+        )
+
+        golden_path = str(tmp_path / "golden.json")
+        golden_data = [
+            {
+                "query": "python programming",
+                "golden_chunk_ids": ["chunk_1"],
+                "top_k": 5,
+            },
+            {
+                "query": "machine learning",
+                "golden_chunk_ids": ["chunk_2"],
+                "top_k": 5,
+            },
+        ]
+        with open(golden_path, "w") as f:
+            json.dump(golden_data, f)
+
+        def retrieve_func(query, top_k, collection):
+            results = pipeline.retrieve(
+                query=query,
+                top_k=top_k,
+                collection_name=fixtures["collection_name"],
+            )
+            return [r.id for r in results]
+
+        runner = EvalRunner(retrieve_func=retrieve_func)
+        report = runner.run(golden_path)
+
+        assert report.total_cases == 2
+        assert report.successful_cases == 2
+        assert report.failed_cases == 0
+        assert "custom_hit_rate" in report.avg_metrics
+        assert "custom_mrr" in report.avg_metrics
+        assert 0.0 <= report.avg_metrics["custom_hit_rate"] <= 1.0
+        assert 0.0 <= report.avg_metrics["custom_mrr"] <= 1.0
+        assert report.total_time_ms >= 0
+
+        report_dict = report.to_dict()
+        serialized = json.dumps(report_dict, ensure_ascii=False)
+        assert serialized

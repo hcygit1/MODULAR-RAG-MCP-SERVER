@@ -212,6 +212,106 @@ class BM25Indexer:
         
         return sorted_results[:top_k]
     
+    def index_exists(self, collection_name: str) -> bool:
+        """
+        检查指定集合的索引文件是否存在
+
+        Args:
+            collection_name: 集合名称
+
+        Returns:
+            bool: 索引是否存在
+        """
+        if not collection_name:
+            return False
+        index_file = self._base_path / collection_name / "index.json"
+        return index_file.exists()
+
+    def merge(
+        self,
+        chunks: List[Chunk],
+        sparse_vectors: List[Dict[str, float]],
+        collection_name: str,
+        trace: Optional[Any] = None,
+    ) -> None:
+        """
+        将新 chunks 增量合并到现有索引（或创建新索引）。
+
+        若索引已存在则 load 后合并；若不存在则等价于 build。
+        同一 chunk_id 若已存在则先移除旧 postings 再添加新 postings（支持重新 ingest 覆盖）。
+
+        Args:
+            chunks: Chunk 对象列表
+            sparse_vectors: 稀疏向量列表
+            collection_name: 集合名称
+            trace: 追踪上下文（可选）
+
+        Raises:
+            ValueError: 当输入参数不匹配时
+        """
+        if not chunks:
+            raise ValueError("chunks 列表不能为空")
+
+        if len(chunks) != len(sparse_vectors):
+            raise ValueError(
+                f"chunks 数量 ({len(chunks)}) 与 sparse_vectors 数量 ({len(sparse_vectors)}) 不一致"
+            )
+
+        if not collection_name:
+            raise ValueError("collection_name 不能为空")
+
+        self._collection_name = collection_name
+        index_file = self._base_path / collection_name / "index.json"
+
+        if index_file.exists():
+            self.load(collection_name)
+        else:
+            self._inverted_index = defaultdict(list)
+            self._chunk_metadata = {}
+
+        # 待合并的 chunk_ids，用于先移除旧 postings（覆盖场景）
+        new_chunk_ids = {chunk.id for chunk in chunks}
+        for cid in new_chunk_ids:
+            if cid in self._chunk_metadata:
+                self._remove_chunk_from_index(cid)
+
+        # 添加新 chunks
+        for chunk, sparse_vector in zip(chunks, sparse_vectors):
+            chunk_id = chunk.id
+
+            metadata_safe = {
+                k: v for k, v in chunk.metadata.items()
+                if k not in ("image_data",) and not isinstance(v, bytes)
+            }
+
+            self._chunk_metadata[chunk_id] = {
+                "text": chunk.text,
+                "metadata": metadata_safe,
+                "start_offset": chunk.start_offset,
+                "end_offset": chunk.end_offset,
+            }
+
+            for term, weight in sparse_vector.items():
+                if weight != 0:
+                    if term not in self._inverted_index:
+                        self._inverted_index[term] = []
+                    self._inverted_index[term].append((chunk_id, weight))
+
+        for term in self._inverted_index:
+            self._inverted_index[term].sort(key=lambda x: x[1], reverse=True)
+
+    def _remove_chunk_from_index(self, chunk_id: str) -> None:
+        """从倒排索引中移除指定 chunk_id 的所有 postings"""
+        if chunk_id not in self._chunk_metadata:
+            return
+        del self._chunk_metadata[chunk_id]
+        for term in list(self._inverted_index.keys()):
+            self._inverted_index[term] = [
+                (cid, w) for cid, w in self._inverted_index[term] if cid != chunk_id
+            ]
+            if not self._inverted_index[term]:
+                del self._inverted_index[term]
+
     def get_collection_name(self) -> Optional[str]:
         """
         获取当前集合名称

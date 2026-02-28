@@ -1,0 +1,17 @@
+# 本地配置模板
+# 复制为 config/settings.local.yaml 并填入真实值，该文件不提交到 git
+#
+# 用法: cp config/settings.local.yaml.example config/settings.local.yaml
+# 然后编辑 settings.local.yaml 填入 API Key 等敏感信息
+
+llm:
+  dashscope_api_key: ""  # 必填，使用 qwen/dashscope 时
+
+vision_llm:
+  dashscope_api_key: ""  # 必填，使用 qwen-vl 时
+
+embedding:
+  dashscope_api_key: ""  # 必填，使用 qwen embedding 时
+
+# vector_store:
+#   qdrant_api_key: ""   # 使用 Qdrant 云服务时

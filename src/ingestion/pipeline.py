@@ -134,16 +134,18 @@ class IngestionPipeline:
         self,
         file_path: str,
         collection_name: str,
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        force: bool = False,
     ) -> None:
         """
         处理单个文件，执行完整的 ingestion 流程
-        
+
         Args:
             file_path: 文件路径
             collection_name: 集合名称，用于组织存储
             trace: 追踪上下文（可选）
-        
+            force: 是否强制重新处理，为 True 时跳过完整性检查（忽略已处理记录）
+
         Raises:
             FileNotFoundError: 当文件不存在时
             ValueError: 当参数无效时
@@ -167,15 +169,15 @@ class IngestionPipeline:
             _trace.set_metric("file_path", file_path)
             _trace.set_metric("collection_name", collection_name)
 
-        # 步骤 1: Integrity Check（文件完整性检查）
+        # 步骤 1: Integrity Check（文件完整性检查，force 时跳过）
         try:
             if _trace:
                 with _trace.stage("integrity_check"):
                     file_hash = self._integrity_checker.compute_sha256(file_path)
-                    should_skip = self._integrity_checker.should_skip(file_hash)
+                    should_skip = False if force else self._integrity_checker.should_skip(file_hash)
             else:
                 file_hash = self._integrity_checker.compute_sha256(file_path)
-                should_skip = self._integrity_checker.should_skip(file_hash)
+                should_skip = False if force else self._integrity_checker.should_skip(file_hash)
             if should_skip:
                 if _trace:
                     _trace.set_metric("skipped", True)
@@ -327,13 +329,13 @@ class IngestionPipeline:
             trace=trace,
             collection_name=collection_name,
         )
-        
-        # 2. 构建并保存 BM25 索引
-        self._bm25_indexer.build(
+
+        # 2. BM25 索引：使用 merge 支持增量合并（索引存在则 load+merge，否则新建）
+        self._bm25_indexer.merge(
             chunks=chunks,
             sparse_vectors=sparse_vectors,
             collection_name=collection_name,
-            trace=trace
+            trace=trace,
         )
         self._bm25_indexer.save()
     

@@ -147,7 +147,8 @@ def main():
             # 调用 Pipeline 处理
             pipeline.process(
                 file_path=str(file_path),
-                collection_name=args.collection
+                collection_name=args.collection,
+                force=args.force,
             )
             success_count += 1
             logger.info(f"✅ 文件处理成功: {file_path}")

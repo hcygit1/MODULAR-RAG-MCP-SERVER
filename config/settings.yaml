@@ -3,8 +3,8 @@
 
 # LLM 配置
 llm:
-  provider: azure  # azure | openai | ollama | deepseek
-  model: gpt-4o
+  provider: qwen  # azure | openai | ollama | deepseek | dashscope | qwen
+  model: qwen-turbo  # qwen-turbo | qwen-plus | qwen-max
   # Azure 配置
   azure_endpoint: ""  # 从环境变量读取: ${AZURE_OPENAI_ENDPOINT}
   azure_api_key: ""   # 从环境变量读取: ${AZURE_OPENAI_API_KEY}
@@ -17,32 +17,42 @@ llm:
   # DeepSeek 配置
   deepseek_api_key: ""  # 从环境变量读取: ${DEEPSEEK_API_KEY}
   deepseek_base_url: "https://api.deepseek.com"
+  # DashScope/Qwen 配置（可在 settings.local.yaml 中覆盖）
+  dashscope_api_key: ""
+  dashscope_base_url: "https://dashscope.aliyuncs.com"
 
 # Vision LLM 配置 (图片描述生成)
 vision_llm:
-  provider: azure  # azure | dashscope (Qwen-VL)
-  model: gpt-4o
+  provider: qwen  # azure | dashscope | qwen (Qwen-VL)
+  model: qwen-vl-max  # qwen-vl-max | qwen-vl-plus
   azure_endpoint: ""
   azure_api_key: ""
   azure_api_version: "2024-02-15-preview"
   deployment_name: ""
-  # DashScope (Qwen-VL) 配置
-  dashscope_api_key: ""  # 从环境变量读取: ${DASHSCOPE_API_KEY}
+  # DashScope (Qwen-VL) 配置（可在 settings.local.yaml 中覆盖）
+  dashscope_api_key: ""
+  dashscope_base_url: "https://dashscope.aliyuncs.com"
 
 # Embedding 配置
 embedding:
-  provider: openai  # openai | ollama | local
-  model: text-embedding-3-small
+  provider: qwen  # openai | ollama | local | dashscope | qwen
+  model: text-embedding-v1  # text-embedding-v1 | text-embedding-v2
   openai_api_key: ""
+  # DashScope/Qwen Embedding 配置（可在 settings.local.yaml 中覆盖）
+  dashscope_api_key: ""
+  dashscope_base_url: "https://dashscope.aliyuncs.com"
   # 本地模型配置
   local_model_path: ""
   device: "cpu"  # cpu | cuda
 
 # 向量存储配置
 vector_store:
-  backend: chroma  # chroma | qdrant | pinecone
-  persist_path: "./data/db/chroma"
-  collection_name: "knowledge_base"
+  backend: qdrant  # chroma | qdrant | pinecone
+  persist_path: "./data/db/qdrant"
+  collection_name: "report"
+  # Qdrant 专用（backend=qdrant 时生效）
+  qdrant_url: ""
+  qdrant_api_key: ""  # 云服务时从 ${QDRANT_API_KEY} 读取
 
 # 检索配置
 retrieval:
@@ -54,7 +64,7 @@ retrieval:
 
 # 重排配置
 rerank:
-  backend: cross_encoder  # none | cross_encoder | llm
+  backend: none  # none | cross_encoder | llm
   model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
   top_m: 30
   timeout_seconds: 5
@@ -80,6 +90,9 @@ ingestion:
   chunk_size: 512
   chunk_overlap: 50
   enable_llm_refinement: false  # 是否启用 LLM 重写 Chunk
-  enable_metadata_enrichment: true
+  enable_metadata_enrichment: false
   enable_image_captioning: true
   batch_size: 32
+  # 存储路径（与 vector_store 配置保持一致）
+  bm25_base_path: "./data/db/bm25"
+  images_base_path: "./data/images"

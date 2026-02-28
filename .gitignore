@@ -56,6 +56,9 @@ data/db/
 cache/
 *.pyc
 
+# 本地配置（含敏感信息，不提交）
+config/settings.local.yaml
+
 # 测试样例文件（不提交到仓库）
 tests/fixtures/sample_documents/*.pdf
 tests/fixtures/sample_documents/*.txt
@@ -65,3 +68,6 @@ tests/fixtures/sample_documents/*.doc
 
 # 规范同步生成的临时文件
 .cursor/skills/spec-sync/.spec_hash
+
+uv.lock
+TODO.md

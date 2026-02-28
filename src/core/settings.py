@@ -153,14 +153,25 @@ def _load_yaml(path: str) -> dict:
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"配置文件不存在: {path}")
-    
+
     with open(config_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    
+
     if data is None:
         raise ValueError(f"配置文件为空或格式错误: {path}")
-    
+
     return data
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """深度合并，override 中的值覆盖 base。仅处理 dict 与标量，不改动 base 中未被 override 的键。"""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 
 def _parse_config(data: dict) -> Settings:
@@ -345,25 +356,28 @@ def validate_settings(settings: Settings) -> None:
 
 def load_settings(path: str = "config/settings.yaml") -> Settings:
     """
-    加载配置文件并返回 Settings 对象
-    
+    加载配置文件并返回 Settings 对象。
+    若同目录下存在 settings.local.yaml，则对其做深度合并以覆盖敏感项等。
+
     Args:
-        path: 配置文件路径，默认为 "config/settings.yaml"
-        
+        path: 主配置文件路径，默认为 "config/settings.yaml"
+
     Returns:
         Settings: 解析后的配置对象
-        
+
     Raises:
-        FileNotFoundError: 配置文件不存在
+        FileNotFoundError: 主配置文件不存在
         ValueError: 配置文件格式错误或必填字段缺失
     """
-    # 加载 YAML
     data = _load_yaml(path)
-    
-    # 解析为 Settings 对象
+
+    # 加载本地覆盖配置（若存在）
+    base_dir = Path(path).parent
+    local_path = base_dir / "settings.local.yaml"
+    if local_path.exists():
+        local_data = _load_yaml(str(local_path))
+        data = _deep_merge(data, local_data)
+
     settings = _parse_config(data)
-    
-    # 校验必填字段
     validate_settings(settings)
-    
     return settings

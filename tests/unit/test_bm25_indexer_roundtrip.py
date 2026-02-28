@@ -167,6 +167,60 @@ class TestBM25IndexerRoundtrip:
         results = indexer.query(["nonexistentword12345"], top_k=3)
         assert len(results) == 0
 
+    def test_merge_incremental(self, temp_dir):
+        """测试 merge 增量合并：多批次 chunks 合并到同一 collection"""
+        encoder = SparseEncoder()
+        batch1 = [
+            Chunk(id="doc1_chunk_0", text="Python programming", metadata={}),
+            Chunk(id="doc1_chunk_1", text="Java programming", metadata={}),
+        ]
+        batch2 = [
+            Chunk(id="doc2_chunk_0", text="Python and machine learning", metadata={}),
+            Chunk(id="doc2_chunk_1", text="Rust systems programming", metadata={}),
+        ]
+        sv1 = encoder.encode(batch1)
+        sv2 = encoder.encode(batch2)
+
+        indexer = BM25Indexer(base_path=temp_dir)
+        assert indexer.index_exists("merge_test") is False
+
+        indexer.merge(batch1, sv1, collection_name="merge_test")
+        indexer.save()
+        assert indexer.get_total_chunks() == 2
+        assert indexer.index_exists("merge_test") is True
+
+        indexer.merge(batch2, sv2, collection_name="merge_test")
+        indexer.save()
+        assert indexer.get_total_chunks() == 4
+
+        # 验证 4 个 chunk 的 metadata 都存在
+        for cid in ("doc1_chunk_0", "doc1_chunk_1", "doc2_chunk_0", "doc2_chunk_1"):
+            assert cid in indexer._chunk_metadata
+
+        # 用 batch1+batch2 中出现的词查询，应能命中
+        results = indexer.query(["programming", "machine"], top_k=5)
+        assert len(results) > 0
+        chunk_ids = [cid for cid, _ in results]
+        assert any(cid.startswith("doc1_") or cid.startswith("doc2_") for cid in chunk_ids)
+
+    def test_merge_overwrite_same_chunk_id(self, temp_dir):
+        """测试 merge 时同一 chunk_id 被覆盖（重新 ingest）"""
+        encoder = SparseEncoder()
+        chunk = Chunk(id="doc1_chunk_0", text="Original Python text", metadata={})
+        sv = encoder.encode([chunk])
+
+        indexer = BM25Indexer(base_path=temp_dir)
+        indexer.merge([chunk], sv, collection_name="overwrite_test")
+        indexer.save()
+        assert indexer.get_total_chunks() == 1
+
+        chunk_updated = Chunk(id="doc1_chunk_0", text="Updated Python text", metadata={})
+        sv_updated = encoder.encode([chunk_updated])
+        indexer.merge([chunk_updated], sv_updated, collection_name="overwrite_test")
+        indexer.save()
+        assert indexer.get_total_chunks() == 1
+        assert indexer._chunk_metadata["doc1_chunk_0"]["text"] == "Updated Python text"
+
 
 class TestBM25IndexerBasic:
     """BM25Indexer 基础功能测试"""
