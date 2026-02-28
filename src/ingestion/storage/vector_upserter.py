@@ -38,17 +38,19 @@ class VectorUpserter:
         chunks: List[Chunk],
         dense_vectors: List[List[float]],
         sparse_vectors: List[Dict[str, float]],
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         批量将 Chunks 及其向量写入向量数据库
-        
+
         Args:
             chunks: Chunk 对象列表
             dense_vectors: 稠密向量列表，每个 Chunk 对应一个向量
             sparse_vectors: 稀疏向量列表（Term Weights），每个 Chunk 对应一个字典
             trace: 追踪上下文（可选），用于记录性能指标和调试信息
-        
+            collection_name: 集合名称（可选），为 None 时使用 VectorStore 配置中的默认集合
+
         Raises:
             ValueError: 当输入参数不匹配或格式不正确时
             RuntimeError: 当存储操作失败时
@@ -93,7 +95,7 @@ class VectorUpserter:
             records.append(record)
         
         # 批量写入向量数据库
-        self._vector_store.upsert(records, trace=trace)
+        self._vector_store.upsert(records, trace=trace, collection_name=collection_name)
     
     def _compute_content_hash(self, text: str) -> str:
         """

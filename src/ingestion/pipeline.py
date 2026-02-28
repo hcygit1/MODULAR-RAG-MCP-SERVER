@@ -324,7 +324,8 @@ class IngestionPipeline:
             chunks=chunks,
             dense_vectors=dense_vectors,
             sparse_vectors=sparse_vectors,
-            trace=trace
+            trace=trace,
+            collection_name=collection_name,
         )
         
         # 2. 构建并保存 BM25 索引

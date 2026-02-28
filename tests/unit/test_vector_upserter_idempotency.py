@@ -22,13 +22,13 @@ class MockVectorStore(BaseVectorStore):
         self._records = {}  # id -> VectorRecord
         self._upsert_calls = []  # 记录所有 upsert 调用
     
-    def upsert(self, records, trace=None):
+    def upsert(self, records, trace=None, collection_name=None):
         """存储记录"""
         self._upsert_calls.append(records)
         for record in records:
             self._records[record.id] = record
-    
-    def query(self, vector, top_k, filters=None, trace=None):
+
+    def query(self, vector, top_k, filters=None, trace=None, collection_name=None):
         """查询（测试中不使用）"""
         return []
     

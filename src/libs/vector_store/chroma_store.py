@@ -63,25 +63,21 @@ class ChromaStore(BaseVectorStore):
         else:
             # 内存模式（仅用于测试）
             self._client = chromadb.Client()
-        
-        # 获取或创建集合
-        # ChromaDB 会自动创建集合（如果不存在）
-        self._collection = self._client.get_or_create_collection(
-            name=self._collection_name
-        )
-    
+
     def upsert(
         self,
         records: List[VectorRecord],
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
-        
+
         Args:
             records: 向量记录列表
             trace: 追踪上下文（可选）
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Raises:
             ValueError: 当记录格式不正确时
             RuntimeError: 当存储操作失败时
@@ -102,15 +98,14 @@ class ChromaStore(BaseVectorStore):
             if not record.text:
                 raise ValueError(f"记录 {i} 的 text 不能为空")
         
+        eff_name = collection_name or self._collection_name
         try:
-            # 准备数据
+            coll = self._client.get_or_create_collection(name=eff_name)
             ids = [record.id for record in records]
             embeddings = [record.vector for record in records]
             documents = [record.text for record in records]
             metadatas = [record.metadata for record in records]
-            
-            # ChromaDB upsert（如果 id 存在则更新，否则插入）
-            self._collection.upsert(
+            coll.upsert(
                 ids=ids,
                 embeddings=embeddings,
                 documents=documents,
@@ -118,28 +113,30 @@ class ChromaStore(BaseVectorStore):
             )
         except Exception as e:
             raise RuntimeError(
-                f"ChromaDB upsert 失败 (backend={self._backend}, collection={self._collection_name}): {str(e)}"
+                f"ChromaDB upsert 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
-    
+
     def query(
         self,
         vector: List[float],
         top_k: int,
         filters: Optional[Dict[str, Any]] = None,
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
         """
         向量相似度查询
-        
+
         Args:
             vector: 查询向量
             top_k: 返回最相似的 top_k 条记录
             filters: 元数据过滤条件（可选）
             trace: 追踪上下文（可选）
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Returns:
             List[QueryResult]: 查询结果列表，按相似度分数降序排列
-        
+
         Raises:
             ValueError: 当向量维度不匹配或 top_k <= 0 时
             RuntimeError: 当查询操作失败时
@@ -152,16 +149,14 @@ class ChromaStore(BaseVectorStore):
         
         if top_k <= 0:
             raise ValueError(f"top_k 必须大于 0，得到: {top_k}")
-        
+
+        eff_name = collection_name or self._collection_name
         try:
-            # 构建查询
-            # ChromaDB 的 where 过滤器格式：{"metadata_key": "value"} 或 {"metadata_key": {"$in": ["value1", "value2"]}}
+            coll = self._client.get_or_create_collection(name=eff_name)
             where = None
             if filters:
                 where = filters
-            
-            # 执行查询
-            results = self._collection.query(
+            results = coll.query(
                 query_embeddings=[vector],
                 n_results=top_k,
                 where=where
@@ -205,7 +200,7 @@ class ChromaStore(BaseVectorStore):
             return query_results
         except Exception as e:
             raise RuntimeError(
-                f"ChromaDB query 失败 (backend={self._backend}, collection={self._collection_name}): {str(e)}"
+                f"ChromaDB query 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
     
     def get_backend(self) -> str:

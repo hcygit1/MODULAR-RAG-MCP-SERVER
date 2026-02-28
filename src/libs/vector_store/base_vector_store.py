@@ -97,44 +97,47 @@ class BaseVectorStore(ABC):
     def upsert(
         self,
         records: List[VectorRecord],
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
-        
+
         Args:
             records: 向量记录列表，每个记录包含 id、vector、text、metadata
             trace: 追踪上下文（可选），用于记录性能指标和调试信息
-                   TraceContext 将在 F1 阶段实现，此处预留接口
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Raises:
             ValueError: 当记录格式不正确时
             RuntimeError: 当存储操作失败时（数据库错误、网络错误等）
         """
         pass
-    
+
     @abstractmethod
     def query(
         self,
         vector: List[float],
         top_k: int,
         filters: Optional[Dict[str, Any]] = None,
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
         """
         向量相似度查询
-        
+
         Args:
             vector: 查询向量
             top_k: 返回最相似的 top_k 条记录
             filters: 元数据过滤条件（可选），例如 {"source": "doc1.pdf"}
             trace: 追踪上下文（可选），用于记录性能指标和调试信息
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Returns:
             List[QueryResult]: 查询结果列表，按相似度分数降序排列
                               - 每个结果包含 id、score、text、metadata
                               - 结果数量 <= top_k
-        
+
         Raises:
             ValueError: 当向量维度不匹配或 top_k <= 0 时
             RuntimeError: 当查询操作失败时

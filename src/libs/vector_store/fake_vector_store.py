@@ -65,7 +65,8 @@ class FakeVectorStore(BaseVectorStore):
     def upsert(
         self,
         records: List[VectorRecord],
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         批量插入或更新向量记录（内存存储）
@@ -101,7 +102,8 @@ class FakeVectorStore(BaseVectorStore):
         vector: List[float],
         top_k: int,
         filters: Optional[Dict[str, Any]] = None,
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
         """
         向量相似度查询（使用余弦相似度）

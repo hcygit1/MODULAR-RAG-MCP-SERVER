@@ -107,40 +107,43 @@ class QdrantStore(BaseVectorStore):
                 api_key=config.qdrant_api_key if config.qdrant_api_key else None,
             )
         
-        # 集合在首次 upsert 时按需创建
-        self._collection_initialized = False
-    
-    def _ensure_collection(self, vector_size: int) -> None:
+        # 已初始化的集合名称集合（按需创建）
+        self._initialized_collections: set[str] = set()
+
+    def _ensure_collection(self, vector_size: int, collection_name: Optional[str] = None) -> None:
         """按需创建集合（若不存在）"""
-        if self._collection_initialized:
+        eff_name = collection_name or self._collection_name
+        if eff_name in self._initialized_collections:
             return
         try:
-            self._client.get_collection(self._collection_name)
-            self._collection_initialized = True
+            self._client.get_collection(eff_name)
+            self._initialized_collections.add(eff_name)
             return
         except Exception:
             pass
         self._client.create_collection(
-            collection_name=self._collection_name,
+            collection_name=eff_name,
             vectors_config=VectorParams(
                 size=vector_size,
                 distance=Distance.COSINE,
             ),
         )
-        self._collection_initialized = True
-    
+        self._initialized_collections.add(eff_name)
+
     def upsert(
         self,
         records: List[VectorRecord],
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
-        
+
         Args:
             records: 向量记录列表
             trace: 追踪上下文（可选）
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Raises:
             ValueError: 当记录格式不正确时
             RuntimeError: 当存储操作失败时
@@ -160,10 +163,10 @@ class QdrantStore(BaseVectorStore):
             if not record.text:
                 raise ValueError(f"记录 {i} 的 text 不能为空")
         
+        eff_name = collection_name or self._collection_name
         try:
             vector_size = len(records[0].vector)
-            self._ensure_collection(vector_size)
-            
+            self._ensure_collection(vector_size, collection_name=eff_name)
             points = []
             for record in records:
                 payload = _prepare_payload(record.metadata)
@@ -179,38 +182,41 @@ class QdrantStore(BaseVectorStore):
                 )
             
             self._client.upsert(
-                collection_name=self._collection_name,
+                collection_name=eff_name,
                 points=points,
                 wait=True,
             )
         except Exception as e:
             raise RuntimeError(
-                f"Qdrant upsert 失败 (backend={self._backend}, collection={self._collection_name}): {str(e)}"
+                f"Qdrant upsert 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
-    
+
     def query(
         self,
         vector: List[float],
         top_k: int,
         filters: Optional[Dict[str, Any]] = None,
-        trace: Optional[Any] = None
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
         """
         向量相似度查询
-        
+
         Args:
             vector: 查询向量
             top_k: 返回最相似的 top_k 条记录
             filters: 元数据过滤条件（可选）
             trace: 追踪上下文（可选）
-        
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
         Returns:
             List[QueryResult]: 查询结果列表，按相似度分数降序排列
-        
+
         Raises:
             ValueError: 当向量维度不匹配或 top_k <= 0 时
             RuntimeError: 当查询操作失败时
         """
+        eff_name = collection_name or self._collection_name
         if not vector:
             raise ValueError("查询向量不能为空")
         
@@ -237,7 +243,7 @@ class QdrantStore(BaseVectorStore):
                     query_filter = Filter(must=conditions)
             
             response = self._client.query_points(
-                collection_name=self._collection_name,
+                collection_name=eff_name,
                 query=vector,
                 limit=top_k,
                 query_filter=query_filter,
@@ -260,7 +266,7 @@ class QdrantStore(BaseVectorStore):
             return query_results
         except Exception as e:
             raise RuntimeError(
-                f"Qdrant query 失败 (backend={self._backend}, collection={self._collection_name}): {str(e)}"
+                f"Qdrant query 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
     
     def close(self) -> None:

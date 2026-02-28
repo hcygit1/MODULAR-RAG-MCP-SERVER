@@ -45,6 +45,7 @@ class DenseRetriever:
         top_k: int,
         filters: Optional[Dict[str, Any]] = None,
         trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
         """
         执行稠密向量检索
@@ -80,6 +81,7 @@ class DenseRetriever:
             top_k=top_k,
             filters=filters,
             trace=trace,
+            collection_name=collection_name,
         )
 
         # 3. 透传结果，可选规范化 score

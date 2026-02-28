@@ -74,19 +74,21 @@ class HybridSearch:
         _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
 
         # 1. Dense 检索
+        coll = collection_name or getattr(self._sparse, "_default_collection", None)
         if _trace:
             with _trace.stage("dense_retrieval", top_k=k_dense):
                 dense_results = self._dense.retrieve(
                     query=query, top_k=k_dense, filters=filters, trace=trace,
+                    collection_name=coll,
                 )
         else:
             dense_results = self._dense.retrieve(
                 query=query, top_k=k_dense, filters=filters, trace=trace,
+                collection_name=coll,
             )
 
         # 2. Sparse 检索
         sparse_results: List[QueryResult] = []
-        coll = collection_name or getattr(self._sparse, "_default_collection", None)
         if coll:
             if _trace:
                 with _trace.stage("sparse_retrieval", top_k=k_sparse):
