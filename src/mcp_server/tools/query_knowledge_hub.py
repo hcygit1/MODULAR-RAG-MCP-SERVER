@@ -122,8 +122,6 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         if _images_base_path_override is not None:
             images_base = _images_base_path_override
         else:
-            # 复用 _get_pipeline 加载时的 settings，避免重复 load_settings；测试注入 pipeline 时可能无缓存则再加载
-            _get_pipeline()
             settings = _cached_settings
             if settings is None:
                 settings = load_mcp_settings()

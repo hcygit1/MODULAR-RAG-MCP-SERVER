@@ -167,27 +167,3 @@ def assemble_content(
             items = _image_refs_to_content_items([image_id], coll, images_base_path, index)
             content.extend(items)
     return content
-
-
-def build_mcp_content_with_images(
-    results: List["QueryResult"],
-    images_base_path: str = "data/images",
-    collection_name: Optional[str] = None,
-    max_chars_per_chunk: int = 500,
-) -> Dict[str, Any]:
-    """
-    构建含图片的 MCP content。当 chunk 有 image_refs 时追加 ImageContent。
-
-    内部复用 response_builder 的 markdown 与 citation 逻辑。
-    """
-    from src.core.response.citation_generator import generate_citations
-    from src.core.response.response_builder import _results_to_markdown
-
-    markdown = _results_to_markdown(results, max_chars_per_chunk)
-    citations = generate_citations(results)
-    content = assemble_content(results, markdown, images_base_path, collection_name)
-    return {
-        "content": content,
-        "structuredContent": {"citations": citations},
-        "isError": False,
-    }

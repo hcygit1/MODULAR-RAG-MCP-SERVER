@@ -10,10 +10,10 @@ import pytest
 
 from src.core.response.multimodal_assembler import (
     assemble_content,
-    build_mcp_content_with_images,
     _load_image_index,
     _image_refs_to_content_items,
 )
+from src.core.response.response_builder import build_mcp_content
 
 
 def test_load_image_index_missing() -> None:
@@ -114,11 +114,9 @@ def test_assemble_content_with_image_refs(tmp_path: Path) -> None:
     assert content[1]["data"] == base64.b64encode(b"fake-png-data").decode("ascii")
 
 
-def test_build_mcp_content_with_images_empty() -> None:
-    """空结果时返回标准结构"""
-    from src.libs.vector_store.base_vector_store import QueryResult
-
-    result = build_mcp_content_with_images([])
+def test_build_mcp_content_empty() -> None:
+    """空结果时返回标准结构（build_mcp_content 已通过 assemble_content 支持 image_refs）"""
+    result = build_mcp_content([])
     assert result["content"][0]["type"] == "text"
     assert "未找到相关内容" in result["content"][0]["text"]
     assert "citations" in result["structuredContent"]
