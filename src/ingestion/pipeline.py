@@ -312,8 +312,8 @@ class IngestionPipeline:
         trace: Optional[Any] = None
     ) -> None:
         """
-        存储处理结果
-        
+        存储处理结果。若 BM25 步骤失败，会回滚已写入的向量以保持 collection 一致性。
+
         Args:
             chunks: Chunk 列表
             dense_vectors: 稠密向量列表
@@ -321,6 +321,8 @@ class IngestionPipeline:
             collection_name: 集合名称
             trace: 追踪上下文（可选）
         """
+        chunk_ids = [c.id for c in chunks]
+
         # 1. 存储向量到向量数据库
         self._vector_upserter.upsert_chunks(
             chunks=chunks,
@@ -330,14 +332,28 @@ class IngestionPipeline:
             collection_name=collection_name,
         )
 
-        # 2. BM25 索引：使用 merge 支持增量合并（索引存在则 load+merge，否则新建）
-        self._bm25_indexer.merge(
-            chunks=chunks,
-            sparse_vectors=sparse_vectors,
-            collection_name=collection_name,
-            trace=trace,
-        )
-        self._bm25_indexer.save()
+        try:
+            # 2. BM25 索引：使用 merge 支持增量合并（索引存在则 load+merge，否则新建）
+            self._bm25_indexer.merge(
+                chunks=chunks,
+                sparse_vectors=sparse_vectors,
+                collection_name=collection_name,
+                trace=trace,
+            )
+            self._bm25_indexer.save()
+        except Exception as e:
+            # BM25 失败，回滚已写入的向量
+            try:
+                self._vector_upserter.delete_chunks(
+                    chunk_ids=chunk_ids,
+                    trace=trace,
+                    collection_name=collection_name,
+                )
+            except Exception as rollback_err:
+                pass  # 回滚失败仅记录，仍向上抛出原异常
+            raise RuntimeError(
+                f"BM25 索引写入失败，已回滚向量数据: {str(e)}"
+            ) from e
     
     def _save_images(
         self,

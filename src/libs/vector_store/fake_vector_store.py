@@ -147,7 +147,25 @@ class FakeVectorStore(BaseVectorStore):
         # 按分数降序排序，返回 top_k
         candidates.sort(key=lambda x: x.score, reverse=True)
         return candidates[:top_k]
-    
+
+    def delete(
+        self,
+        ids: List[str],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        按 id 删除向量记录（内存存储）。
+        """
+        if not ids:
+            return 0
+        deleted = 0
+        for rid in ids:
+            if rid in self._records:
+                del self._records[rid]
+                deleted += 1
+        return deleted
+
     def _matches_filters(self, metadata: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         """
         检查元数据是否匹配过滤条件

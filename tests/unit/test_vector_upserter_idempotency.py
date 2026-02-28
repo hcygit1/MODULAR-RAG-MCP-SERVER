@@ -31,7 +31,16 @@ class MockVectorStore(BaseVectorStore):
     def query(self, vector, top_k, filters=None, trace=None, collection_name=None):
         """查询（测试中不使用）"""
         return []
-    
+
+    def delete(self, ids, trace=None, collection_name=None):
+        """删除记录"""
+        deleted = 0
+        for rid in ids:
+            if rid in self._records:
+                del self._records[rid]
+                deleted += 1
+        return deleted
+
     def get_backend(self) -> str:
         return "mock"
     

@@ -65,7 +65,7 @@ def test_execute_list_collections_with_fixtures(tmp_path: Path) -> None:
         assert set(collections) == {"report", "knowledge_base"}
         assert "report" in result["content"][0]["text"]
     finally:
-        set_base_path("data/documents")
+        set_base_path(None)
 
 
 def test_execute_list_collections_custom_base_path(tmp_path: Path) -> None:

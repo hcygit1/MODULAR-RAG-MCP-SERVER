@@ -25,6 +25,7 @@ try:
         FieldCondition,
         MatchValue,
         MatchAny,
+        PointIdsList,
     )
     QDRANT_AVAILABLE = True
 except ImportError:
@@ -268,7 +269,32 @@ class QdrantStore(BaseVectorStore):
             raise RuntimeError(
                 f"Qdrant query 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
-    
+
+    def delete(
+        self,
+        ids: List[str],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        按 id 删除向量记录。将 record_id 转为 Qdrant UUID 后删除。
+        """
+        if not ids:
+            return 0
+        eff_name = collection_name or self._collection_name
+        try:
+            qdrant_ids = [_to_qdrant_id(rid) for rid in ids]
+            self._client.delete(
+                collection_name=eff_name,
+                points_selector=PointIdsList(points=qdrant_ids),
+                wait=True,
+            )
+            return len(ids)
+        except Exception as e:
+            raise RuntimeError(
+                f"Qdrant delete 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
+            ) from e
+
     def close(self) -> None:
         """关闭 Qdrant 客户端，避免进程退出时 __del__ 报错"""
         if hasattr(self, "_client") and self._client is not None:

@@ -202,7 +202,28 @@ class ChromaStore(BaseVectorStore):
             raise RuntimeError(
                 f"ChromaDB query 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
-    
+
+    def delete(
+        self,
+        ids: List[str],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        按 id 删除向量记录。
+        """
+        if not ids:
+            return 0
+        eff_name = collection_name or self._collection_name
+        try:
+            coll = self._client.get_or_create_collection(name=eff_name)
+            coll.delete(ids=ids)
+            return len(ids)
+        except Exception as e:
+            raise RuntimeError(
+                f"ChromaDB delete 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
+            ) from e
+
     def get_backend(self) -> str:
         """获取后端名称"""
         return self._backend

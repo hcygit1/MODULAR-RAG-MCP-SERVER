@@ -164,6 +164,29 @@ class BaseVectorStore(ABC):
         """
         pass
 
+    @abstractmethod
+    def delete(
+        self,
+        ids: List[str],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        按 id 删除向量记录。用于 ingest 失败时回滚已写入的 chunks。
+
+        Args:
+            ids: 要删除的记录 id 列表（如 chunk_id）
+            trace: 追踪上下文（可选）
+            collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+
+        Returns:
+            int: 实际删除的记录数量
+
+        Raises:
+            RuntimeError: 当删除操作失败时
+        """
+        pass
+
     def close(self) -> None:
         """
         关闭连接，释放资源。

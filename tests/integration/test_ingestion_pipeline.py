@@ -220,6 +220,54 @@ class TestIngestionPipelineIntegration:
         with pytest.raises(ValueError, match="collection_name 不能为空"):
             pipeline.process("test.pdf", "")
 
+    def test_store_results_rollback_on_bm25_failure(self, temp_dir, test_settings):
+        """BM25 写入失败时，已写入的向量应被回滚，保持 collection 一致性"""
+        from unittest.mock import patch
+
+        from src.ingestion.models import Chunk
+
+        fake_embedding = FakeEmbedding(dimension=128)
+        fake_vector_store = FakeVectorStore()
+        pipeline = IngestionPipeline(
+            test_settings,
+            embedding=fake_embedding,
+            vector_store=fake_vector_store,
+        )
+
+        chunks = [
+            Chunk(
+                id="doc_x_chunk_0",
+                text="hello",
+                metadata={"source_path": "/a.pdf", "chunk_index": 0},
+            ),
+            Chunk(
+                id="doc_x_chunk_1",
+                text="world",
+                metadata={"source_path": "/a.pdf", "chunk_index": 1},
+            ),
+        ]
+        dense_vectors = [[0.1] * 128, [0.2] * 128]
+        sparse_vectors = [{"a": 1.0}, {"b": 1.0}]
+
+        with patch.object(
+            pipeline._bm25_indexer,
+            "save",
+            side_effect=RuntimeError("BM25 save failed"),
+        ):
+            with pytest.raises(RuntimeError, match="BM25 索引写入失败"):
+                pipeline._store_results(
+                    chunks,
+                    dense_vectors,
+                    sparse_vectors,
+                    "test_coll",
+                )
+
+        # 验证向量已回滚
+        for c in chunks:
+            assert c.id not in fake_vector_store._records, (
+                f"chunk {c.id} 应在回滚时被删除"
+            )
+
 
 class TestIngestionPipelineWithFixtures:
     """使用 fixtures 样例文档的 Pipeline 测试"""

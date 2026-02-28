@@ -1,29 +1,37 @@
 """
 list_collections Tool
 
-列出 data/documents/ 下集合并附带统计（统计可延后）。
-每个子目录视为一个集合。
+列出 BM25 索引目录下的集合（与 query、ingest 数据源一致）。
+每个子目录视为一个集合，数据源自 settings.ingestion.bm25_base_path。
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcp.types import CallToolResult
 
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 
-# 默认文档根路径
-_DEFAULT_DOCUMENTS_PATH = "data/documents"
+# 默认配置路径，用于读取 bm25_base_path
+_DEFAULT_CONFIG_PATH = "config/settings.yaml"
 
-# 测试注入用
-_base_path: str = _DEFAULT_DOCUMENTS_PATH
+# 测试注入用：为 None 时从 settings 读取；非 None 时直接使用
+_base_path: Optional[str] = None
 
 
-def set_base_path(path: str) -> None:
-    """测试注入用：设置文档根路径。"""
+def set_base_path(path: Optional[str]) -> None:
+    """测试注入用：设置文档根路径。传入 None 可恢复为从 settings 读取。"""
     global _base_path
     _base_path = path
+
+
+def _get_default_base_path() -> str:
+    """从 settings 读取 bm25_base_path，与 query_knowledge_hub、ingest 一致。"""
+    from src.core.settings import load_settings
+
+    settings = load_settings(_DEFAULT_CONFIG_PATH)
+    return settings.ingestion.bm25_base_path
 
 
 def _list_collections_from_fs(base_path: str) -> List[str]:
@@ -48,15 +56,18 @@ def execute_list_collections(arguments: Dict[str, Any]) -> Dict[str, Any]:
     执行 list_collections 工具。
 
     Args:
-        arguments: 可选 base_path
+        arguments: 可选 base_path，不传则从 settings.ingestion.bm25_base_path 读取
 
     Returns:
         MCP tools/call result：{ content, structuredContent: { collections }, isError }
     """
-    base = arguments.get("base_path") if isinstance(arguments.get("base_path"), str) else _base_path
-    base = base.strip() if base else _base_path
-    if not base:
-        base = _DEFAULT_DOCUMENTS_PATH
+    arg_base = arguments.get("base_path")
+    if isinstance(arg_base, str) and arg_base.strip():
+        base = arg_base.strip()
+    elif _base_path is not None:
+        base = _base_path
+    else:
+        base = _get_default_base_path()
 
     try:
         collections = _list_collections_from_fs(base)
@@ -76,15 +87,18 @@ def execute_list_collections(arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
 
 
-def list_collections(base_path: str = "data/documents") -> CallToolResult:
+def list_collections(base_path: Optional[str] = None) -> CallToolResult:
     """
-    列出知识库中的集合名称。每个集合对应 data/documents/ 下的一个子目录，或已构建的索引集合。
+    列出知识库中的集合名称。数据源自 BM25 索引目录（与 query、ingest 一致）。
 
     Args:
-        base_path: 文档根路径，默认为 data/documents
+        base_path: 索引根路径，不传则从 config 的 bm25_base_path 读取
 
     Returns:
         CallToolResult 含 content（文本）、structuredContent.collections
     """
-    d = execute_list_collections({"base_path": base_path})
+    args: Dict[str, Any] = (
+        {} if base_path is None or (isinstance(base_path, str) and not base_path.strip()) else {"base_path": base_path.strip()}
+    )
+    d = execute_list_collections(args)
     return dict_to_call_tool_result(d)

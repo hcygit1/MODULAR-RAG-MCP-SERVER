@@ -96,7 +96,32 @@ class VectorUpserter:
         
         # 批量写入向量数据库
         self._vector_store.upsert(records, trace=trace, collection_name=collection_name)
-    
+
+    def delete_chunks(
+        self,
+        chunk_ids: List[str],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        按 chunk_id 删除已写入的向量记录。用于 ingest 失败时回滚。
+
+        Args:
+            chunk_ids: 要删除的 chunk id 列表
+            trace: 追踪上下文（可选）
+            collection_name: 集合名称（可选）
+
+        Returns:
+            int: 实际删除的记录数量
+        """
+        if not chunk_ids:
+            return 0
+        return self._vector_store.delete(
+            ids=chunk_ids,
+            trace=trace,
+            collection_name=collection_name,
+        )
+
     def _compute_content_hash(self, text: str) -> str:
         """
         计算文本内容的哈希值
