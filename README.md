@@ -55,7 +55,7 @@
 本项目采用创新的 **AI 协作开发模式**，让您专注于架构设计与业务逻辑，将代码实现高效委托给 AI：
 
 #### ✨ 项目特色
-- **完整的 Skills 体系**：通过精心设计的 Markdown 技能文件（`.github/skills/`），AI 可以理解项目规范、遵循最佳实践，自动化完成代码实现
+- **完整的 Skills 体系**：通过精心设计的 Markdown 技能文件（`.cursor/skills/`），AI 可以理解项目规范、遵循最佳实践，自动化完成代码实现
 - **VibeCoding 实践**：掌握最新的 AI 协作开发技巧（VibeCoding），通过自然语言描述需求，让 AI 自动生成符合规范的代码
 - **规范驱动开发**：`DEV_SPEC.md` 作为项目的"宪法"，定义架构、模块设计、技术选型等核心规范，AI 严格遵循文档完成编码
 - **零背景快速上手**：即使您不熟悉 RAG 技术栈，只需理解文档、修改需求描述，AI 会自动将您的想法转化为生产级代码
@@ -76,7 +76,7 @@
 | 资源类型 | 内容说明 |
 |---------|---------|
 | 📄 **详尽的技术文档** | `DEV_SPEC.md` 提供完整的架构设计、技术选型、模块详解 |
-| 💻 **Skills 工作流** | `.github/skills/` 包含 spec-sync、implement、testing 等 AI 技能，指导 AI 完成开发任务 |
+| 💻 **Skills 工作流** | `.cursor/skills/` 包含 spec-sync、implement、testing 等 AI 技能，指导 AI 完成开发任务 |
 | 🎬 **视频教程** | 从环境搭建到核心模块实现，全程实战演示 |
 
 > 💡 **提示**：详细的设计理念、技术选型与模块设计请参考 [DEV_SPEC.md](DEV_SPEC.md)
@@ -133,17 +133,29 @@
 git clone https://github.com/yourusername/Modular-RAG-MCP-Server.git
 cd Modular-RAG-MCP-Server
 
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（推荐使用 pyproject.toml 安装）
+pip install -e .
 
-# 配置环境变量（复制配置模板）
-cp .env.example .env
-# 编辑 .env 文件，填入您的 API Keys
+# 可选：启用 Rerank 精排（需 sentence-transformers）
+pip install -e ".[reranker]"
+
+# 可选：启用可观测性 Dashboard（需 Streamlit）
+pip install -e ".[dashboard]"
+
+# 配置文件：config/settings.yaml
+# 可复制为 config/settings.local.yaml 并覆盖本地配置
+# API Keys 可通过环境变量设置，或在配置中使用 ${VAR_NAME} 语法
 
 # 运行 MCP Server（Stdio，供 Copilot/Claude 对接）
 python main.py
 # 或：python -m src.mcp_server.server
 ```
+
+### 配置说明
+
+- **主配置**：`config/settings.yaml`，支持 `MODULAR_RAG_CONFIG_PATH` 环境变量指定配置路径
+- **本地覆盖**：创建 `config/settings.local.yaml` 覆盖部分配置（如 API 密钥、LLM/Embedding 提供商等）
+- **Reranker 后端**：`rerank.backend` 支持 `none`（默认）、`cross_encoder`、`llm`；使用 `cross_encoder` 需安装 `pip install -e ".[reranker]"`
 
 详细的环境配置、部署指南与使用示例请参考 [DEV_SPEC.md](DEV_SPEC.md)。
 
@@ -154,17 +166,22 @@ python main.py
 ```
 .
 ├── DEV_SPEC.md              # 核心设计文档（项目"宪法"）
-├── .github/
+├── config/
+│   └── settings.yaml        # 主配置文件
+├── .cursor/
 │   └── skills/              # AI 协作开发技能库
 │       ├── spec-sync/       # 规范同步
 │       ├── implement/       # 代码实现
 │       ├── testing-stage/   # 测试验证
-│       └── ...
+│       ├── progress-tracker/
+│       ├── dev-workflow/
+│       └── checkpoint/
 ├── src/                     # 源代码
-│   ├── retrieval/           # 检索模块（Hybrid Search, Rerank）
-│   ├── generation/          # 生成模块（LLM 调用）
-│   ├── pipeline/            # RAG 流程编排
-│   └── ...
+│   ├── core/                # 核心模块（配置、Query Engine、Trace）
+│   ├── ingestion/           # 文档解析、切分、Embedding、存储管道
+│   ├── libs/                # 可插拔组件（Loader、Embedding、Reranker、VectorStore 等）
+│   ├── mcp_server/          # MCP Server 与工具（query_knowledge_hub、list_collections）
+│   └── observability/       # 可观测性（Dashboard、评测）
 ├── tests/                   # 测试用例
 └── docs/                    # 补充文档
 ```
@@ -191,6 +208,3 @@ python main.py
 如果这个项目对您有帮助，欢迎 Star ⭐️ 支持！
 
 ---
-
-**📢 关注我的小红书：不转到大模型不改名 (ID: 4740535877)**
-获取更多 RAG 技术分享、面试经验与职业发展建议 🚀
