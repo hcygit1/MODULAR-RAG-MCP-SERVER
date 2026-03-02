@@ -4,6 +4,7 @@ PDF Loader 实现
 使用 MarkItDown 将 PDF 文件转换为 Markdown 格式的 Document 对象。
 支持使用 PyMuPDF 提取图片数据和位置信息。
 """
+import logging
 import os
 import hashlib
 import re
@@ -12,6 +13,8 @@ from typing import Optional, Any, Dict, List, Tuple
 
 from src.ingestion.models import Document
 from src.libs.loader.base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 # 尝试导入 MarkItDown
 try:
@@ -107,9 +110,7 @@ class PdfLoader(BaseLoader):
                             path
                         )
                 except Exception as e:
-                    # 图片提取失败不影响主流程，记录警告
-                    # TODO: 使用 logging 记录警告
-                    print(f"警告: 图片提取失败: {str(e)}")
+                    logger.warning("图片提取失败: %s", e)
             
             # 4. 构建元数据
             metadata = self._build_metadata(path, result)
@@ -311,9 +312,7 @@ class PdfLoader(BaseLoader):
                         ))
                         
                     except Exception as e:
-                        # 单个图片提取失败，记录但继续处理其他图片
-                        # TODO: 使用 logging 记录警告
-                        print(f"警告: 提取第 {page_num} 页第 {img_idx} 张图片失败: {str(e)}")
+                        logger.warning("提取第 %s 页第 %s 张图片失败: %s", page_num, img_idx, e)
                         continue
                 
                 # 对每页的图片按 Y 坐标排序（从上到下）
@@ -504,9 +503,7 @@ class PdfLoader(BaseLoader):
             try:
                 page_to_markdown = self._map_pages_to_markdown(pdf_path, markdown_text)
             except Exception as e:
-                # 如果映射失败，使用简单策略
-                # TODO: 使用 logging 记录警告
-                print(f"警告: 页面映射失败，使用简单策略: {str(e)}")
+                logger.warning("页面映射失败，使用简单策略: %s", e)
                 return self._insert_image_placeholders_simple(markdown_text, page_images)
         
         # 如果没有找到任何页面映射，使用简单策略

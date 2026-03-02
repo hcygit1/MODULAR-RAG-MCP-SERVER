@@ -104,11 +104,11 @@
 
 ### P2 中
 
-- [ ] **query_knowledge_hub：冗余 _get_pipeline() 调用**
+- [x] **query_knowledge_hub：冗余 _get_pipeline() 调用**
   - L124–128 为取 settings 再次调用 `_get_pipeline()`，L115 已调用过
   - 建议：直接 `settings = _cached_settings`，为 None 时再 `load_mcp_settings()`
 
-- [ ] **build_mcp_content_with_images 冗余**
+- [x] **build_mcp_content_with_images 冗余**
   - `response_builder.build_mcp_content` 已通过 `assemble_content` 处理 image_refs
   - `multimodal_assembler.build_mcp_content_with_images` 逻辑重复，仅测试使用
   - 建议：删除或改为调用 `build_mcp_content`
@@ -131,14 +131,14 @@
 
 ### P3 低
 
-- [ ] **pdf_loader：TODO 使用 logging**
-  - 多处 `# TODO: 使用 logging 记录警告`，当前用 print
+- [x] **pdf_loader：TODO 使用 logging**（已完成）
+  - 3 处 print 改为 logger.warning
 
-- [ ] **batch_processor：TODO 批次耗时记录到 trace**
-  - L116 已有 TODO，trace 已接入，可补充批次耗时打点
+- [x] **batch_processor：TODO 批次耗时记录到 trace**（已完成）
+  - 每批次调用 trace.record_stage(encode_batch_N, duration_ms, batch_size)
 
-- [ ] **reranker：except Exception 范围过大**
-  - 精排失败直接 fallback，可区分超时等异常类型单独处理
+- [x] **reranker：except Exception 范围过大**（已完成）
+  - 先捕获 TimeoutError/OSError/RuntimeError/ConnectionError，再捕获其余并打 logger.warning
 
-- [ ] **start_dashboard：except Exception 范围过大**
-  - L40 捕获所有异常并回退端口 8501，可能掩盖配置错误，建议至少打日志
+- [x] **start_dashboard：except Exception 范围过大**（已完成）
+  - 配置读取失败时 logger.warning 后再回退 8501

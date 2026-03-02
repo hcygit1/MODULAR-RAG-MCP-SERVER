@@ -10,9 +10,12 @@
     python scripts/start_dashboard.py --log-file ./logs/traces.jsonl
 """
 import argparse
+import logging
 import subprocess
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -37,7 +40,8 @@ def main() -> None:
             from src.mcp_server.tools.config_utils import load_mcp_settings
             settings = load_mcp_settings()
             port = settings.observability.dashboard.port
-        except Exception:
+        except Exception as e:
+            logger.warning("读取 Dashboard 端口配置失败，使用默认 8501: %s", e)
             port = 8501
 
     app_path = Path(__file__).resolve().parent.parent / "src" / "observability" / "dashboard" / "app.py"

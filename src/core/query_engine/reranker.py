@@ -3,11 +3,17 @@ Reranker 编排模块
 
 接入 libs.reranker 后端，对 fusion 结果进行精排；失败或超时时回退到 fusion 排名并标记 fallback。
 """
+import logging
 from typing import Any, List, Optional, Tuple
 
 from src.core.trace.trace_context import TraceContext
 from src.libs.reranker.base_reranker import BaseReranker
 from src.libs.vector_store.base_vector_store import QueryResult
+
+logger = logging.getLogger(__name__)
+
+# 预期可回退的异常：超时、网络、模型运行时错误
+_FALLBACK_EXCEPTIONS = (TimeoutError, OSError, RuntimeError, ConnectionError)
 
 
 class RerankerOrchestrator:
@@ -51,7 +57,19 @@ class RerankerOrchestrator:
             else:
                 results = self._backend.rerank(query=query, candidates=candidates, trace=trace)
             return (results, False)
-        except Exception:
+        except _FALLBACK_EXCEPTIONS as e:
+            logger.debug("精排失败（预期可回退）: %s", e)
+            if _trace:
+                _trace.record_stage(
+                    "rerank",
+                    duration_ms=0.0,
+                    backend=self._backend.get_backend(),
+                    candidate_count=len(candidates),
+                    fallback=True,
+                )
+            return (self._copy_candidates(candidates), True)
+        except Exception as e:
+            logger.warning("精排失败（非常见异常），回退到 fusion 排名: %s", e)
             if _trace:
                 _trace.record_stage(
                     "rerank",

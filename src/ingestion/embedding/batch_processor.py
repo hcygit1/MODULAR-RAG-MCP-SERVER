@@ -113,9 +113,12 @@ class BatchProcessor:
                     "elapsed_time": batch_elapsed_time
                 })
                 
-                # TODO: 将批次耗时记录到 trace（当 trace 实现后）
-                # if trace is not None:
-                #     trace.record_batch_timing(batch_idx, batch_elapsed_time)
+                if trace is not None and hasattr(trace, "record_stage"):
+                    trace.record_stage(
+                        f"encode_batch_{batch_idx}",
+                        duration_ms=batch_elapsed_time * 1000,
+                        batch_size=len(batch_chunks),
+                    )
                 
             except Exception as e:
                 raise RuntimeError(
