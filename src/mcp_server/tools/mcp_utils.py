@@ -1,8 +1,7 @@
 """
 MCP Tools 公共工具
 
-提供 dict → CallToolResult 的统一转换，供 query_knowledge_hub、list_collections、
-get_document_summary 复用，消除重复的 _dict_to_call_tool_result 实现。
+提供 dict → CallToolResult 的统一转换，供 query_knowledge_hub、list_collections 复用。
 """
 from __future__ import annotations
 

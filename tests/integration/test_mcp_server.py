@@ -201,17 +201,6 @@ class TestMCPServerE2:
         names = [t["name"] for t in resp["result"]["tools"]]
         assert "list_collections" in names
 
-    def test_tools_list_includes_get_document_summary(self) -> None:
-        """tools/list 包含 get_document_summary schema"""
-        proc = _start_server_subprocess()
-        request = {"jsonrpc": "2.0", "id": 12, "method": "tools/list"}
-        stdout_data, _ = _send_with_handshake(proc, request)
-        assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[-1])
-        names = [t["name"] for t in resp["result"]["tools"]]
-        assert "get_document_summary" in names
-
     def test_query_knowledge_hub_returns_markdown_and_citations(
         self, retrieval_pipeline, indexed_fixtures
     ) -> None:
@@ -361,46 +350,11 @@ class TestMCPServerE6:
         assert sc.get("errorCode") == -32602
         assert "message" in sc
 
-    def test_get_document_summary_empty_doc_id_returns_error(self) -> None:
-        """空 doc_id 返回 isError=True，errorType=INVALID_PARAMS"""
-        from src.mcp_server.tools.get_document_summary import execute_get_document_summary
-
-        result = execute_get_document_summary({"doc_id": ""})
-        assert result["isError"] is True
-        assert len(result["content"]) >= 1
-        assert "doc_id" in result["content"][0]["text"].lower() or "参数" in result["content"][0]["text"]
-        sc = result["structuredContent"]
-        assert sc.get("errorType") == "INVALID_PARAMS"
-        assert sc.get("errorCode") == -32602
-
-    def test_get_document_summary_nonexistent_doc_returns_error(self) -> None:
-        """不存在的 doc_id 返回 isError=True，errorType=RESOURCE_NOT_FOUND"""
-        from src.mcp_server.tools.get_document_summary import (
-            execute_get_document_summary,
-            set_bm25_base_path,
-        )
-        import tempfile
-        from pathlib import Path
-
-        # 使用空 BM25 目录，确保 doc 不存在
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp) / "bm25" / "any_coll"
-            base.mkdir(parents=True)
-            (base / "index.json").write_text('{"chunk_metadata":{}}', encoding="utf-8")
-            set_bm25_base_path(str(Path(tmp) / "bm25"))
-
-            result = execute_get_document_summary({"doc_id": "nonexistent_id_xyz"})
-            assert result["isError"] is True
-            assert "不存在" in result["content"][0]["text"] or "not found" in result["content"][0]["text"].lower()
-            sc = result["structuredContent"]
-            assert sc.get("errorType") == "RESOURCE_NOT_FOUND"
-            assert sc.get("errorCode") == -32001
-
     def test_error_response_has_unified_format(self) -> None:
         """错误响应统一包含 content[0].text、structuredContent.errorCode/errorType/message"""
-        from src.mcp_server.tools.get_document_summary import execute_get_document_summary
+        from src.mcp_server.tools.query_knowledge_hub import execute_query_knowledge_hub
 
-        result = execute_get_document_summary({"doc_id": ""})
+        result = execute_query_knowledge_hub({"query": ""})
         assert result["isError"] is True
         assert "content" in result
         assert len(result["content"]) >= 1

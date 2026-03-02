@@ -5,7 +5,6 @@ MCP Server 入口 (FastMCP + Stdio Transport)
 """
 from mcp.server.fastmcp import FastMCP
 
-from src.mcp_server.tools.get_document_summary import get_document_summary
 from src.mcp_server.tools.list_collections import list_collections
 from src.mcp_server.tools.query_knowledge_hub import query_knowledge_hub
 
@@ -13,7 +12,6 @@ mcp = FastMCP("modular-rag-mcp-server")
 
 mcp.tool()(query_knowledge_hub)
 mcp.tool()(list_collections)
-mcp.tool()(get_document_summary)
 
 
 def run_server() -> None:

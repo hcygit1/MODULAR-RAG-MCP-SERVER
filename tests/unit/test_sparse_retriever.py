@@ -147,6 +147,21 @@ class TestSparseRetrieverEdgeCases:
         with pytest.raises(FileNotFoundError, match="索引文件不存在"):
             retriever.retrieve(["python"], top_k=5)
 
+    def test_index_exists_true(self, indexed_collection) -> None:
+        """index_exists 对已存在索引返回 True"""
+        retriever = SparseRetriever(base_path=indexed_collection)
+        assert retriever.index_exists("test_collection") is True
+
+    def test_index_exists_false(self, temp_bm25_dir) -> None:
+        """index_exists 对不存在索引返回 False"""
+        retriever = SparseRetriever(base_path=temp_bm25_dir)
+        assert retriever.index_exists("nonexistent") is False
+
+    def test_index_exists_empty_collection_returns_false(self, temp_bm25_dir) -> None:
+        """index_exists 对空字符串返回 False"""
+        retriever = SparseRetriever(base_path=temp_bm25_dir)
+        assert retriever.index_exists("") is False
+
 
 class TestSparseRetrieverFilters:
     """filters 测试"""

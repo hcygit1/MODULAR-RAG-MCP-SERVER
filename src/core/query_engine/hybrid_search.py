@@ -71,10 +71,16 @@ class HybridSearch:
         if top_k <= 0 or k_dense <= 0 or k_sparse <= 0 or k_final <= 0:
             raise ValueError(f"top_k 必须大于 0，得到: top_k={top_k}, dense={k_dense}, sparse={k_sparse}, final={k_final}")
 
+        coll = collection_name or getattr(self._sparse, "_default_collection", None)
+        if coll and not self._sparse.index_exists(coll):
+            raise ValueError(
+                f"集合 '{coll}' 的 BM25 索引不存在，请先对该集合运行 ingest。"
+                f"索引路径: {self._sparse._base_path / coll / 'index.json'}"
+            )
+
         _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
 
         # 1. Dense 检索
-        coll = collection_name or getattr(self._sparse, "_default_collection", None)
         if _trace:
             with _trace.stage("dense_retrieval", top_k=k_dense):
                 dense_results = self._dense.retrieve(

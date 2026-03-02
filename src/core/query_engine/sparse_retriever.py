@@ -89,6 +89,13 @@ class SparseRetriever:
             return [str(k).strip() for k in query if str(k).strip()]
         return []
 
+    def index_exists(self, collection_name: str) -> bool:
+        """检查 collection 的 BM25 索引是否存在。"""
+        if not collection_name:
+            return False
+        index_file = self._base_path / collection_name / "index.json"
+        return index_file.exists()
+
     def _get_indexer(self, collection_name: str) -> BM25Indexer:
         """获取或加载指定集合的 BM25Indexer"""
         if collection_name not in self._indexers:

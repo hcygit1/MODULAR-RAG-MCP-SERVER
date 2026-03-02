@@ -241,6 +241,33 @@ class TestHybridSearchBasic:
 class TestHybridSearchEdgeCases:
     """边界情况测试"""
 
+    def test_search_nonexistent_collection_raises_early(
+        self,
+        temp_bm25_dir,
+        indexed_fixtures,
+    ) -> None:
+        """不存在的 BM25 集合在入口提前抛出友好 ValueError，不执行 Dense 检索"""
+        # sparse 指向空目录（无任何 collection 索引）
+        sparse = SparseRetriever(
+            base_path=temp_bm25_dir,
+            collection_name="nonexistent",
+        )
+        dense = DenseRetriever(
+            embedding=indexed_fixtures["embedding"],
+            vector_store=indexed_fixtures["vector_store"],
+        )
+        hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
+
+        with pytest.raises(ValueError, match="BM25 索引不存在") as exc_info:
+            hybrid.search(
+                query="python",
+                top_k=5,
+                collection_name="nonexistent",
+            )
+
+        assert "请先对该集合运行 ingest" in str(exc_info.value)
+        assert "nonexistent" in str(exc_info.value)
+
     def test_search_respects_top_k(
         self,
         indexed_fixtures,
