@@ -55,6 +55,7 @@ htmlcov/
 data/db/
 cache/
 *.pyc
+data/*
 
 # 本地配置（含敏感信息，不提交）
 config/settings.local.yaml
@@ -71,3 +72,4 @@ tests/fixtures/sample_documents/*.doc
 
 uv.lock
 TODO.md
+docs/*

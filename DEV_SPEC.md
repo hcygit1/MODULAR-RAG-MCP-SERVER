@@ -1715,7 +1715,7 @@ observability:
 | F2 | 结构化日志 logger（JSON Lines） | [x] | 2026-02-26 | |
 | F3 | 在关键路径打点（Query 与 Ingestion） | [x] | 2026-02-26 | |
 | F4 | Dashboard MVP（Streamlit） | [x] | 2026-02-26 | |
-| F5 | Evaluation Runner + Golden Test Set 回归 | [ ] | - | |
+| F5 | Evaluation Runner + Golden Test Set 回归 | [x] | 2026-02-26 | |
 
 #### 阶段 G：端到端验收与文档收口
 
@@ -1737,9 +1737,9 @@ observability:
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
 | 阶段 E | 7 | 7 | 100% |
-| 阶段 F | 5 | 4 | 80% |
+| 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **55** | **50** | **91%** |
+| **总计** | **55** | **51** | **93%** |
 
 
 ---

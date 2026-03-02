@@ -1,0 +1,23 @@
+[
+  {
+    "query": "Python is a programming language",
+    "golden_chunk_ids": ["chunk_1"],
+    "collection": null,
+    "top_k": 5,
+    "description": "基础文本匹配：查找与 Python 编程语言相关的 chunk"
+  },
+  {
+    "query": "machine learning artificial intelligence",
+    "golden_chunk_ids": ["chunk_2"],
+    "collection": null,
+    "top_k": 5,
+    "description": "语义匹配：机器学习与人工智能"
+  },
+  {
+    "query": "RAG retrieval augmented generation",
+    "golden_chunk_ids": ["chunk_3"],
+    "collection": null,
+    "top_k": 5,
+    "description": "专有名词检索：RAG 检索增强生成"
+  }
+]
