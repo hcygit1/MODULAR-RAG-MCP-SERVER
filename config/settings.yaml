@@ -85,6 +85,13 @@ observability:
     enabled: true
     port: 8501
 
+# MinerU 云端 API 配置（ingest_document_mineru 工具使用，可在 settings.local.yaml 中覆盖）
+mineru:
+  api_token: ""  # 从 settings.local.yaml 或 ${MINERU_API_TOKEN} 读取
+  model_version: vlm
+  poll_interval_seconds: 5
+  poll_timeout_seconds: 600
+
 # Ingestion Pipeline 配置
 ingestion:
   chunk_size: 512

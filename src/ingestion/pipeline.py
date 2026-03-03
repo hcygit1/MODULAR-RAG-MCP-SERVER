@@ -273,6 +273,109 @@ class IngestionPipeline:
         
         if _trace:
             _trace.set_metric("skipped", False)
+
+    def process_document(
+        self,
+        document: Document,
+        collection_name: str,
+        trace: Optional[Any] = None,
+    ) -> int:
+        """
+        从已有 Document 执行 Split → Transform → Encode → Store（跳过 integrity、load）
+
+        用于 MinerU 或普通解析工具产出的 Document 直接入库。
+
+        Args:
+            document: 已构建的 Document 对象
+            collection_name: 集合名称
+            trace: 追踪上下文（可选）
+
+        Returns:
+            int: 写入的 chunk 数量
+
+        Raises:
+            ValueError: Document 无效
+            RuntimeError: 处理步骤失败
+        """
+        if not document or not document.text:
+            raise ValueError("Document 或 Document.text 不能为空")
+        if not collection_name or not str(collection_name).strip():
+            raise ValueError("collection_name 不能为空")
+
+        if trace is None:
+            trace = TraceContext(operation="ingestion")
+        _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
+
+        if _trace:
+            _trace.set_metric("doc_id", document.id)
+            _trace.set_metric("collection_name", collection_name)
+
+        # 步骤 1: Split
+        try:
+            if _trace:
+                with _trace.stage("split"):
+                    chunks = self.split_document(document, trace=trace)
+                _trace.set_metric("chunk_count", len(chunks))
+            else:
+                chunks = self.split_document(document, trace=trace)
+            if not chunks:
+                raise RuntimeError("文档切分后未产生任何 chunks")
+        except Exception as e:
+            raise RuntimeError(f"文档切分失败: {str(e)}") from e
+
+        # 步骤 2: 保存图片
+        try:
+            if _trace:
+                with _trace.stage("image_save"):
+                    self._save_images(chunks, collection_name, trace=trace)
+                    self._image_storage.save_index(collection_name)
+            else:
+                self._save_images(chunks, collection_name, trace=trace)
+                self._image_storage.save_index(collection_name)
+        except Exception as e:
+            raise RuntimeError(f"图片保存失败: {str(e)}") from e
+
+        # 步骤 3: Transform
+        try:
+            if _trace:
+                with _trace.stage("transform"):
+                    transformed_chunks = self._apply_transforms(chunks, trace=trace)
+            else:
+                transformed_chunks = self._apply_transforms(chunks, trace=trace)
+        except Exception as e:
+            raise RuntimeError(f"Chunk 转换失败: {str(e)}") from e
+
+        # 步骤 4: Encode
+        try:
+            if _trace:
+                with _trace.stage("encode"):
+                    dense_vectors, sparse_vectors = self._batch_processor.process(
+                        transformed_chunks, trace=trace
+                    )
+            else:
+                dense_vectors, sparse_vectors = self._batch_processor.process(
+                    transformed_chunks, trace=trace
+                )
+        except Exception as e:
+            raise RuntimeError(f"向量编码失败: {str(e)}") from e
+
+        # 步骤 5: Store
+        try:
+            if _trace:
+                with _trace.stage("store"):
+                    self._store_results(
+                        transformed_chunks, dense_vectors, sparse_vectors,
+                        collection_name, trace=trace,
+                    )
+            else:
+                self._store_results(
+                    transformed_chunks, dense_vectors, sparse_vectors,
+                    collection_name, trace=trace,
+                )
+        except Exception as e:
+            raise RuntimeError(f"存储失败: {str(e)}") from e
+
+        return len(transformed_chunks)
     
     def _apply_transforms(
         self,

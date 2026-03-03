@@ -114,6 +114,15 @@ class ObservabilityConfig:
 
 
 @dataclass
+class MinerUConfig:
+    """MinerU 云端 API 配置"""
+    api_token: str = ""
+    model_version: str = "vlm"
+    poll_interval_seconds: int = 5
+    poll_timeout_seconds: int = 600
+
+
+@dataclass
 class IngestionConfig:
     """Ingestion Pipeline 配置"""
     chunk_size: int
@@ -138,6 +147,7 @@ class Settings:
     evaluation: EvaluationConfig
     observability: ObservabilityConfig
     ingestion: IngestionConfig
+    mineru: MinerUConfig = field(default_factory=lambda: MinerUConfig())
 
 
 def _resolve_env_vars(value: str) -> str:
@@ -277,6 +287,14 @@ def _parse_config(data: dict) -> Settings:
         bm25_base_path=ingestion_data.get("bm25_base_path", "./data/db/bm25"),
         images_base_path=ingestion_data.get("images_base_path", "./data/images"),
     )
+
+    mineru_data = data.get("mineru", {})
+    mineru = MinerUConfig(
+        api_token=_resolve_env_vars(mineru_data.get("api_token", "")),
+        model_version=mineru_data.get("model_version", "vlm"),
+        poll_interval_seconds=mineru_data.get("poll_interval_seconds", 5),
+        poll_timeout_seconds=mineru_data.get("poll_timeout_seconds", 600),
+    )
     
     return Settings(
         llm=llm,
@@ -288,6 +306,7 @@ def _parse_config(data: dict) -> Settings:
         evaluation=evaluation,
         observability=observability,
         ingestion=ingestion,
+        mineru=mineru,
     )
 
 
