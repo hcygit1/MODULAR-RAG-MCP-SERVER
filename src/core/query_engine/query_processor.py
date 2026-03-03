@@ -5,9 +5,10 @@ Query Processor 实现
 - 关键词提取：从 query 中提取关键实体与动词（去停用词），用于稀疏检索（BM25）
 - Filters 解析：解析通用 filters 结构（如 collection、doc_type 等）
 """
-import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
+
+from src.libs.tokenizer import tokenize as tokenize_text
 
 
 @dataclass
@@ -78,36 +79,21 @@ class QueryProcessor:
 
     def _extract_keywords(self, query: str) -> List[str]:
         """
-        从查询中提取关键词
-
-        使用与 SparseEncoder 一致的分词策略：支持中英文，
-        过滤停用词和过短的 token。
-
-        Args:
-            query: 原始查询
-
-        Returns:
-            List[str]: 关键词列表（去重、保持顺序）
+        从查询中提取关键词（使用与 SparseEncoder 一致的 jieba 分词）
         """
-        if not query:
-            return []
-
-        text_lower = query.lower()
-        # 与 SparseEncoder 一致：英文单词、数字、中文字符
-        tokens = re.findall(r"\b[a-zA-Z0-9]+\b|[\u4e00-\u9fff]+", text_lower)
-
+        keywords = tokenize_text(
+            query,
+            stopwords=self._stopwords,
+            min_length=self._min_term_length,
+        )
+        # 去重保持顺序
         seen: Set[str] = set()
-        keywords: List[str] = []
-        for token in tokens:
-            if (
-                len(token) >= self._min_term_length
-                and token not in self._stopwords
-                and token not in seen
-            ):
-                seen.add(token)
-                keywords.append(token)
-
-        return keywords
+        result: List[str] = []
+        for k in keywords:
+            if k not in seen:
+                seen.add(k)
+                result.append(k)
+        return result
 
     def _parse_filters(self, query: str) -> Dict[str, any]:
         """
@@ -126,124 +112,6 @@ class QueryProcessor:
         return {}
 
     def _get_default_stopwords(self) -> Set[str]:
-        """获取默认停用词集合（与 SparseEncoder 保持一致）"""
-        english_stopwords = {
-            "a",
-            "an",
-            "and",
-            "are",
-            "as",
-            "at",
-            "be",
-            "by",
-            "for",
-            "from",
-            "has",
-            "he",
-            "in",
-            "is",
-            "it",
-            "its",
-            "of",
-            "on",
-            "that",
-            "the",
-            "to",
-            "was",
-            "will",
-            "with",
-            "this",
-            "but",
-            "they",
-            "have",
-            "had",
-            "what",
-            "said",
-            "each",
-            "which",
-            "their",
-            "time",
-            "if",
-            "up",
-            "out",
-            "many",
-            "then",
-            "them",
-            "these",
-            "so",
-            "some",
-            "her",
-            "would",
-            "make",
-            "like",
-            "into",
-            "him",
-            "two",
-            "more",
-            "very",
-            "after",
-            "words",
-            "long",
-            "than",
-            "first",
-            "been",
-            "call",
-            "who",
-            "oil",
-            "sit",
-            "now",
-            "find",
-            "down",
-            "day",
-            "did",
-            "get",
-            "come",
-            "made",
-            "may",
-            "part",
-        }
-        chinese_stopwords = {
-            "的",
-            "了",
-            "在",
-            "是",
-            "我",
-            "有",
-            "和",
-            "就",
-            "不",
-            "人",
-            "都",
-            "一",
-            "一个",
-            "上",
-            "也",
-            "很",
-            "到",
-            "说",
-            "要",
-            "去",
-            "你",
-            "会",
-            "着",
-            "没有",
-            "看",
-            "好",
-            "自己",
-            "这",
-        }
-        additional_stopwords = {
-            "over",
-            "under",
-            "through",
-            "during",
-            "before",
-            "after",
-            "above",
-            "below",
-            "between",
-            "among",
-            "within",
-            "without",
-        }
-        return english_stopwords | chinese_stopwords | additional_stopwords
+        """获取默认停用词集合（与共享 tokenizer 一致）"""
+        from src.libs.tokenizer.jieba_tokenizer import _get_default_stopwords
+        return _get_default_stopwords()

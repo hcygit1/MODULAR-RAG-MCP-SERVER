@@ -113,12 +113,21 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         top_k = 10
 
     try:
+        from src.core.trace.trace_context import TraceContext
+        from src.observability.logger import get_trace_collector
+
         pipeline = _get_pipeline()
-        results = pipeline.retrieve(
-            query=str(query).strip(),
-            top_k=top_k,
-            collection_name=collection_name,
-        )
+        trace = TraceContext(operation="retrieval")
+        try:
+            results = pipeline.retrieve(
+                query=str(query).strip(),
+                top_k=top_k,
+                collection_name=collection_name,
+                trace=trace,
+            )
+        finally:
+            get_trace_collector().collect(trace)
+
         if _images_base_path_override is not None:
             images_base = _images_base_path_override
         else:

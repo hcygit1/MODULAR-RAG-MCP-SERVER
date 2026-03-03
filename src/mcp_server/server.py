@@ -36,6 +36,17 @@ mcp.tool(description=(
 
 def run_server() -> None:
     """启动 MCP Server（stdio transport）。"""
+    # 确保 TraceCollector 已初始化（main.py 与 python -m src.mcp_server.server 两种入口均会执行）
+    try:
+        from src.mcp_server.tools.config_utils import load_mcp_settings
+        from src.observability.logger import init_trace_collector
+        settings = load_mcp_settings()
+        log_file = "./logs/traces.jsonl"
+        if getattr(settings, "observability", None) and getattr(settings.observability, "logging", None):
+            log_file = getattr(settings.observability.logging, "log_file", log_file)
+        init_trace_collector(log_file)
+    except Exception:
+        pass  # 初始化失败不影响 Server 启动，get_trace_collector 将返回不写文件的默认实例
     mcp.run(transport="stdio")
 
 

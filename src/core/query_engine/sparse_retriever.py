@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from src.ingestion.storage.bm25_indexer import BM25Indexer
+from src.libs.tokenizer import tokenize as tokenize_query
 from src.libs.vector_store.base_vector_store import QueryResult
 
 
@@ -81,10 +82,9 @@ class SparseRetriever:
         return results[:top_k]
 
     def _to_keywords(self, query: Union[str, List[str]]) -> List[str]:
-        """将 query 转为关键词列表"""
+        """将 query 转为关键词列表（使用与 SparseEncoder 一致的 jieba 分词）"""
         if isinstance(query, str):
-            parts = query.strip().split()
-            return [p for p in parts if p]
+            return tokenize_query(query)
         if isinstance(query, list):
             return [str(k).strip() for k in query if str(k).strip()]
         return []

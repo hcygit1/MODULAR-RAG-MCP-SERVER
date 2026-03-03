@@ -87,15 +87,20 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
         raw = client.upload_and_parse(file_path)
         document = to_document(raw)
 
+        from src.core.trace.trace_context import TraceContext
+        from src.observability.logger import get_trace_collector
+
         pipeline = IngestionPipeline(settings)
+        trace = TraceContext(operation="ingestion")
         try:
-            chunk_count = pipeline.process_document(document, collection_name)
+            chunk_count = pipeline.process_document(document, collection_name, trace=trace)
             return {
                 "content": [{"type": "text", "text": f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks 到集合 {collection_name}"}],
                 "structuredContent": {"chunk_count": chunk_count, "collection_name": collection_name},
                 "isError": False,
             }
         finally:
+            get_trace_collector().collect(trace)
             pipeline.close()
     except FileNotFoundError as e:
         return build_error_response(

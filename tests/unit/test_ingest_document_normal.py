@@ -1,6 +1,6 @@
 """ingest_document_normal 单元测试"""
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -71,7 +71,7 @@ def test_execute_success(
     assert "普通解析" in result["content"][0]["text"]
 
     mock_loader.load.assert_called_once_with(str(pdf_path))
-    mock_pipeline.process_document.assert_called_once_with(mock_doc, "report")
+    mock_pipeline.process_document.assert_called_once_with(mock_doc, "report", trace=ANY)
     mock_pipeline.close.assert_called_once()
 
 
@@ -100,5 +100,5 @@ def test_execute_uses_default_collection(
 
     assert result["isError"] is False
     mock_pipeline_cls.return_value.process_document.assert_called_once_with(
-        mock_doc, "default_coll"
+        mock_doc, "default_coll", trace=ANY
     )

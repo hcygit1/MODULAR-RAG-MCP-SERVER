@@ -6,11 +6,11 @@ Sparse Encoder 实现
 - Term Weights：生成词到权重的映射结构
 - 输出格式：便于后续 bm25_indexer 使用
 """
-import re
 from typing import List, Dict, Optional, Any
 from collections import Counter
 
 from src.ingestion.models import Chunk
+from src.libs.tokenizer import tokenize as tokenize_text
 
 
 class SparseEncoder:
@@ -84,32 +84,13 @@ class SparseEncoder:
     
     def _tokenize(self, text: str) -> List[str]:
         """
-        分词：将文本转换为词列表
-        
-        Args:
-            text: 输入文本
-        
-        Returns:
-            List[str]: 词列表
+        分词：将文本转换为词列表（使用共享 jieba 分词）
         """
-        if not text:
-            return []
-        
-        # 转换为小写
-        text_lower = text.lower()
-        
-        # 使用正则表达式提取单词（支持中英文）
-        # 匹配：字母、数字、中文字符
-        tokens = re.findall(r'\b[a-zA-Z0-9]+\b|[\u4e00-\u9fff]+', text_lower)
-        
-        # 过滤：长度、停用词
-        filtered_tokens = [
-            token for token in tokens
-            if len(token) >= self._min_term_length
-            and token not in self._stopwords
-        ]
-        
-        return filtered_tokens
+        return tokenize_text(
+            text,
+            stopwords=self._stopwords,
+            min_length=self._min_term_length,
+        )
     
     def _compute_term_frequency(self, text: str) -> Dict[str, int]:
         """
@@ -241,36 +222,6 @@ class SparseEncoder:
         return idf
     
     def _get_default_stopwords(self) -> set:
-        """
-        获取默认停用词集合
-        
-        Returns:
-            set: 停用词集合
-        """
-        # 英文常用停用词
-        english_stopwords = {
-            'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
-            'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
-            'to', 'was', 'will', 'with', 'the', 'this', 'but', 'they', 'have',
-            'had', 'what', 'said', 'each', 'which', 'their', 'time', 'if',
-            'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her',
-            'would', 'make', 'like', 'into', 'him', 'has', 'two', 'more',
-            'very', 'after', 'words', 'long', 'than', 'first', 'been', 'call',
-            'who', 'oil', 'sit', 'now', 'find', 'down', 'day', 'did', 'get',
-            'come', 'made', 'may', 'part'
-        }
-        
-        # 中文常用停用词
-        chinese_stopwords = {
-            '的', '了', '在', '是', '我', '有', '和', '就', '不', '人',
-            '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去',
-            '你', '会', '着', '没有', '看', '好', '自己', '这'
-        }
-        
-        # 添加更多英文停用词
-        additional_stopwords = {
-            'over', 'under', 'through', 'during', 'before', 'after',
-            'above', 'below', 'between', 'among', 'within', 'without'
-        }
-        
-        return english_stopwords | chinese_stopwords | additional_stopwords
+        """获取默认停用词集合（与共享 tokenizer 一致）"""
+        from src.libs.tokenizer.jieba_tokenizer import _get_default_stopwords
+        return _get_default_stopwords()

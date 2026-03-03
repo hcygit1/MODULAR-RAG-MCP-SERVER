@@ -61,9 +61,13 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
         loader = PdfLoader()
         document = loader.load(file_path)
 
+        from src.core.trace.trace_context import TraceContext
+        from src.observability.logger import get_trace_collector
+
         pipeline = IngestionPipeline(settings)
+        trace = TraceContext(operation="ingestion")
         try:
-            chunk_count = pipeline.process_document(document, collection_name)
+            chunk_count = pipeline.process_document(document, collection_name, trace=trace)
             return {
                 "content": [
                     {
@@ -78,6 +82,7 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
                 "isError": False,
             }
         finally:
+            get_trace_collector().collect(trace)
             pipeline.close()
     except FileNotFoundError as e:
         return build_error_response(

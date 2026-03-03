@@ -29,6 +29,12 @@ def main():
         settings = load_mcp_settings()
         logger.info(f"配置加载成功: LLM provider={settings.llm.provider}, Embedding provider={settings.embedding.provider}")
 
+        # 初始化 TraceCollector，MCP 工具调用时写入 logs/traces.jsonl
+        if getattr(settings, "observability", None) and getattr(settings.observability, "logging", None):
+            log_file = getattr(settings.observability.logging, "log_file", "./logs/traces.jsonl")
+            from src.observability.logger import init_trace_collector
+            init_trace_collector(log_file)
+
         # 启动 MCP Server（Stdio Transport，与 Copilot/Claude 对接）
         from src.mcp_server.server import run_server
 
