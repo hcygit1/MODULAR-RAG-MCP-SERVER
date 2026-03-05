@@ -4,6 +4,7 @@
 负责读取 config/settings.yaml 并解析为类型安全的 Settings 对象。
 提供配置校验功能，确保必填字段存在。
 """
+import logging
 import os
 import yaml
 from dataclasses import dataclass, field
@@ -59,6 +60,9 @@ class VectorStoreConfig:
     backend: str
     persist_path: str
     collection_name: str
+    # SQLite 专用配置
+    sqlite_path: str = "./data/db/rag.sqlite"
+    embedding_dim: int = 1536
     # Qdrant 专用配置
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
@@ -131,8 +135,6 @@ class IngestionConfig:
     enable_metadata_enrichment: bool
     enable_image_captioning: bool
     batch_size: int
-    bm25_base_path: str = "./data/db/bm25"
-    images_base_path: str = "./data/images"
 
 
 @dataclass
@@ -231,6 +233,8 @@ def _parse_config(data: dict) -> Settings:
         backend=vector_store_data.get("backend", ""),
         persist_path=vector_store_data.get("persist_path", ""),
         collection_name=vector_store_data.get("collection_name", ""),
+        sqlite_path=vector_store_data.get("sqlite_path", "./data/db/rag.sqlite"),
+        embedding_dim=int(vector_store_data.get("embedding_dim", 1536)),
         qdrant_url=_resolve_env_vars(vector_store_data.get("qdrant_url", "http://localhost:6333")),
         qdrant_api_key=_resolve_env_vars(vector_store_data.get("qdrant_api_key", "")),
     )
@@ -284,8 +288,6 @@ def _parse_config(data: dict) -> Settings:
         enable_metadata_enrichment=ingestion_data.get("enable_metadata_enrichment", True),
         enable_image_captioning=ingestion_data.get("enable_image_captioning", True),
         batch_size=ingestion_data.get("batch_size", 32),
-        bm25_base_path=ingestion_data.get("bm25_base_path", "./data/db/bm25"),
-        images_base_path=ingestion_data.get("images_base_path", "./data/images"),
     )
 
     mineru_data = data.get("mineru", {})
@@ -343,7 +345,12 @@ def validate_settings(settings: Settings) -> None:
     # 校验 VectorStore 配置
     if not settings.vector_store.backend:
         errors.append("vector_store.backend")
-    if not settings.vector_store.persist_path:
+    if settings.vector_store.backend.lower() == "sqlite":
+        if not settings.vector_store.sqlite_path:
+            errors.append("vector_store.sqlite_path")
+        if not settings.vector_store.embedding_dim or settings.vector_store.embedding_dim <= 0:
+            errors.append("vector_store.embedding_dim")
+    elif not settings.vector_store.persist_path:
         errors.append("vector_store.persist_path")
     if not settings.vector_store.collection_name:
         errors.append("vector_store.collection_name")
@@ -353,6 +360,30 @@ def validate_settings(settings: Settings) -> None:
         errors.append("retrieval.sparse_backend")
     if not settings.retrieval.fusion_algorithm:
         errors.append("retrieval.fusion_algorithm")
+
+    # 统一存储约束：backend=sqlite 时必须 sparse_backend=fts5
+    vs_backend = (settings.vector_store.backend or "").lower()
+    sparse_backend = (settings.retrieval.sparse_backend or "").lower()
+    if vs_backend == "sqlite" and sparse_backend != "fts5":
+        errors.append(
+            "retrieval.sparse_backend: backend=sqlite 时必须为 fts5 以实现统一存储"
+        )
+
+    # 弃用警告：sparse_backend=bm25（JSON BM25）为遗留模式
+    if sparse_backend == "bm25":
+        logging.warning(
+            "sparse_backend=bm25 为遗留模式，推荐迁移至 backend=sqlite + sparse_backend=fts5 实现统一存储。"
+            "参见 docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md"
+        )
+
+    # 弃用警告：chroma/qdrant 当前未实现统一存储（chunk+vec+BM25+图片同容器）
+    if vs_backend in ("chroma", "qdrant"):
+        logging.warning(
+            "backend=%s 当前未满足统一存储约束（BM25/图片在独立容器）。"
+            "推荐使用 backend=sqlite + sparse_backend=fts5。"
+            "参见 docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md",
+            vs_backend,
+        )
     
     # 校验 Rerank 配置
     if not settings.rerank.backend:

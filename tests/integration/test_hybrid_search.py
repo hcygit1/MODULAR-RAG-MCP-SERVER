@@ -3,97 +3,21 @@ HybridSearch 集成测试
 
 对 fixtures 数据验证混合检索：dense + sparse + RRF 融合，能返回 Top-K（含 chunk 文本与 metadata）。
 包含 F3 Trace 集成测试：验证 trace 中存在 dense/sparse/fusion/rerank 阶段。
+统一存储：使用 conftest 的 indexed_fixtures（SQLite）。
 """
-import shutil
-import tempfile
+import os
 
 import pytest
 
 from src.core.query_engine.dense_retriever import DenseRetriever
 from src.core.query_engine.hybrid_search import HybridSearch
+from src.core.query_engine.query_processor import QueryProcessor
 from src.core.query_engine.reranker import RerankerOrchestrator
 from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
-from src.core.query_engine.query_processor import QueryProcessor
 from src.core.query_engine.sparse_retriever import SparseRetriever
 from src.core.trace.trace_context import TraceContext
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
-from src.ingestion.models import Chunk
-from src.ingestion.storage.bm25_indexer import BM25Indexer
-from src.libs.embedding.fake_embedding import FakeEmbedding
 from src.libs.reranker.none_reranker import NoneReranker
-from src.libs.vector_store.base_vector_store import QueryResult, VectorRecord
-from src.libs.vector_store.fake_vector_store import FakeVectorStore
-
-
-@pytest.fixture
-def temp_bm25_dir():
-    """创建临时 BM25 索引目录"""
-    temp_path = tempfile.mkdtemp()
-    yield temp_path
-    shutil.rmtree(temp_path)
-
-
-@pytest.fixture
-def sample_chunks():
-    """测试用 chunks：含 python、machine、RAG 等关键词"""
-    return [
-        Chunk(
-            id="chunk_1",
-            text="Python is a programming language for data science",
-            metadata={"source_path": "/path/to/doc1.pdf", "chunk_index": 0},
-        ),
-        Chunk(
-            id="chunk_2",
-            text="Machine learning is a subset of artificial intelligence",
-            metadata={"source_path": "/path/to/doc1.pdf", "chunk_index": 1},
-        ),
-        Chunk(
-            id="chunk_3",
-            text="Python and RAG are used for retrieval augmented generation",
-            metadata={"source_path": "/path/to/doc2.pdf", "chunk_index": 0},
-        ),
-    ]
-
-
-@pytest.fixture
-def indexed_fixtures(temp_bm25_dir, sample_chunks):
-    """
-    构建 Dense 与 Sparse 双路 fixtures：
-    - BM25 索引
-    - FakeVectorStore 向量数据
-    返回 (vector_store, bm25_path) 供 HybridSearch 使用
-    """
-    # 1. BM25 索引
-    encoder = SparseEncoder()
-    sparse_vectors = encoder.encode(sample_chunks)
-    indexer = BM25Indexer(base_path=temp_bm25_dir)
-    indexer.build(sample_chunks, sparse_vectors, collection_name="test_collection")
-    indexer.save()
-
-    # 2. FakeVectorStore 向量数据（与 BM25 使用相同 chunk id）
-    embedding = FakeEmbedding(dimension=16)
-    vector_store = FakeVectorStore(collection_name="test_collection")
-
-    texts = [c.text for c in sample_chunks]
-    vectors = embedding.embed(texts)
-
-    records = [
-        VectorRecord(
-            id=c.id,
-            vector=vectors[i],
-            text=c.text,
-            metadata=c.metadata,
-        )
-        for i, c in enumerate(sample_chunks)
-    ]
-    vector_store.upsert(records)
-
-    return {
-        "vector_store": vector_store,
-        "embedding": embedding,
-        "bm25_path": temp_bm25_dir,
-        "collection_name": "test_collection",
-    }
+from src.libs.vector_store.base_vector_store import QueryResult
 
 
 class TestHybridSearchBasic:
@@ -111,7 +35,8 @@ class TestHybridSearchBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -144,7 +69,8 @@ class TestHybridSearchBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -170,7 +96,8 @@ class TestHybridSearchBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -196,7 +123,8 @@ class TestHybridSearchBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -224,7 +152,8 @@ class TestHybridSearchBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -249,7 +178,7 @@ class TestHybridSearchEdgeCases:
         """不存在的 BM25 集合在入口提前抛出友好 ValueError，不执行 Dense 检索"""
         # sparse 指向空目录（无任何 collection 索引）
         sparse = SparseRetriever(
-            base_path=temp_bm25_dir,
+            sqlite_path=os.path.join(temp_bm25_dir, "empty.sqlite"),
             collection_name="nonexistent",
         )
         dense = DenseRetriever(
@@ -258,14 +187,14 @@ class TestHybridSearchEdgeCases:
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
 
-        with pytest.raises(ValueError, match="BM25 索引不存在") as exc_info:
+        with pytest.raises(ValueError, match="稀疏索引不存在") as exc_info:
             hybrid.search(
                 query="python",
                 top_k=5,
                 collection_name="nonexistent",
             )
 
-        assert "请先对该集合运行 ingest" in str(exc_info.value)
+        assert "ingest" in str(exc_info.value)
         assert "nonexistent" in str(exc_info.value)
 
     def test_search_respects_top_k(
@@ -280,7 +209,8 @@ class TestHybridSearchEdgeCases:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -305,7 +235,8 @@ class TestHybridSearchEdgeCases:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -325,7 +256,8 @@ class TestHybridSearchEdgeCases:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -350,7 +282,8 @@ class TestHybridSearchTrace:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -380,7 +313,8 @@ class TestHybridSearchTrace:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -422,7 +356,8 @@ class TestHybridSearchTrace:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -455,7 +390,8 @@ class TestHybridSearchTrace:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -495,7 +431,8 @@ class TestGoldenSetSmoke:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)

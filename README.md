@@ -155,6 +155,7 @@ python main.py
 
 - **主配置**：`config/settings.yaml`，支持 `MODULAR_RAG_CONFIG_PATH` 环境变量指定配置路径
 - **本地覆盖**：创建 `config/settings.local.yaml` 覆盖部分配置（如 API 密钥、LLM/Embedding 提供商等）
+- **统一存储（推荐）**：`backend=sqlite` + `sparse_backend=fts5` 将 chunk、向量、FTS5、图片存入同一 SQLite 文件。参见 `docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md` 与 `docs/FACTORY_AND_BACKENDS.md`
 - **Reranker 后端**：`rerank.backend` 支持 `none`（默认）、`cross_encoder`、`llm`；使用 `cross_encoder` 需安装 `pip install -e ".[reranker]"`
 
 详细的环境配置、部署指南与使用示例请参考 [DEV_SPEC.md](DEV_SPEC.md)。

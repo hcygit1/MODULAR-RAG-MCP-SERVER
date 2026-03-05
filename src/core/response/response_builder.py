@@ -47,19 +47,20 @@ def _results_to_markdown(results: List["QueryResult"], max_chars_per_chunk: int 
 def build_mcp_content(
     results: List["QueryResult"],
     max_chars_per_chunk: int = 500,
-    images_base_path: str = "data/images",
     collection_name: Optional[str] = None,
+    sqlite_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     构建 MCP tools/call 返回的 content 结构。
 
     当 chunk metadata 含 image_refs 时，追加 ImageContent（base64）。
+    Phase C：仅从 sqlite_path 的 images 表加载图片，不再支持文件系统。
 
     Args:
         results: 检索结果
         max_chars_per_chunk: 每个 chunk 在 Markdown 中最多显示的字符数
-        images_base_path: 图片存储根路径，用于解析 image_refs
-        collection_name: 集合名称，用于定位 index.json（可选，可推断）
+        collection_name: 集合名称（可选，可推断）
+        sqlite_path: SQLite 路径，非空时从 images 表加载图片
 
     Returns:
         MCP content 格式：{ content: [...], structuredContent: { citations: [...] }, isError: False }
@@ -71,8 +72,8 @@ def build_mcp_content(
     content = assemble_content(
         results,
         markdown,
-        images_base_path=images_base_path,
         collection_name=collection_name,
+        sqlite_path=sqlite_path,
     )
     return {
         "content": content,

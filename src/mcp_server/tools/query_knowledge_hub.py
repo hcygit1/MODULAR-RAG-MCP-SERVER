@@ -43,8 +43,10 @@ def _get_pipeline():
         reranker_backend = RerankerFactory.create(settings)
 
         dense = DenseRetriever(embedding=embedding, vector_store=vector_store)
+        sqlite_path = getattr(settings.vector_store, "sqlite_path", None)
         sparse = SparseRetriever(
-            base_path=settings.ingestion.bm25_base_path,
+            vector_store=vector_store,
+            sqlite_path=sqlite_path,
             collection_name=settings.vector_store.collection_name,
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
@@ -66,7 +68,7 @@ def set_pipeline(pipeline: Any) -> None:
     """测试注入用：替换默认 pipeline。"""
     global _pipeline, _cached_settings
     _pipeline = pipeline
-    _cached_settings = None  # 避免 images_base_path 解析时使用过期配置
+    _cached_settings = None
 
 
 def set_config_path(path: str) -> None:
@@ -77,13 +79,13 @@ def set_config_path(path: str) -> None:
     _cached_settings = None
 
 
-_images_base_path_override: Optional[str] = None
+_sqlite_path_override: Optional[str] = None
 
 
-def set_images_base_path(path: Optional[str]) -> None:
-    """测试注入：覆盖 images_base_path，None 表示使用配置。"""
-    global _images_base_path_override
-    _images_base_path_override = path
+def set_sqlite_path(path: Optional[str]) -> None:
+    """测试注入：覆盖 sqlite_path，None 表示使用配置。"""
+    global _sqlite_path_override
+    _sqlite_path_override = path
 
 
 def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -128,19 +130,22 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         finally:
             get_trace_collector().collect(trace)
 
-        if _images_base_path_override is not None:
-            images_base = _images_base_path_override
+        settings = _cached_settings
+        if settings is None:
+            settings = load_mcp_settings()
+        vs_backend = getattr(getattr(settings, "vector_store", None), "backend", "")
+        sparse_backend = getattr(getattr(settings, "retrieval", None), "sparse_backend", "bm25")
+        use_sqlite_images = vs_backend == "sqlite" and sparse_backend == "fts5"
+        if _sqlite_path_override is not None:
+            sqlite_path = _sqlite_path_override
+        elif use_sqlite_images:
+            sqlite_path = getattr(settings.vector_store, "sqlite_path", None)
         else:
-            settings = _cached_settings
-            if settings is None:
-                settings = load_mcp_settings()
-            images_base = getattr(
-                getattr(settings, "ingestion", None), "images_base_path", "data/images"
-            )
+            sqlite_path = None
         return build_mcp_content(
             results,
-            images_base_path=images_base,
             collection_name=collection_name,
+            sqlite_path=sqlite_path,
         )
     except FileNotFoundError as e:
         return build_error_response(

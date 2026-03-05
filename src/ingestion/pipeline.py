@@ -24,8 +24,6 @@ from src.ingestion.embedding.dense_encoder import DenseEncoder
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
 from src.ingestion.embedding.batch_processor import BatchProcessor
 from src.ingestion.storage.vector_upserter import VectorUpserter
-from src.ingestion.storage.bm25_indexer import BM25Indexer
-from src.ingestion.storage.image_storage import ImageStorage
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +86,8 @@ class IngestionPipeline:
             llm=llm
         )
         
-        # ImageStorage 需在 ImageCaptioner 之前创建，以便传入
-        self._image_storage = ImageStorage(
-            base_path=self._ingestion_config.images_base_path
-        )
-        
+        # 统一存储：图片经 VectorStore 写入，不再使用 ImageStorage 文件写入
+        # ImageCaptioner 从 chunk metadata 的 image_data 获取图片（回退路径）
         # Vision LLM：仅在未传入且 enable_image_captioning 时创建
         if vision_llm is None and self._ingestion_config.enable_image_captioning:
             from src.libs.llm.llm_factory import LLMFactory
@@ -102,7 +97,7 @@ class IngestionPipeline:
             config=self._ingestion_config,
             vision_llm_config=settings.vision_llm,
             vision_llm=vision_llm,
-            image_storage=self._image_storage
+            image_storage=None
         )
         
         # Embedding 组件
@@ -119,16 +114,13 @@ class IngestionPipeline:
             batch_size=self._ingestion_config.batch_size
         )
         
-        # Storage 组件
+        # Storage 组件（统一存储：chunk+vec+sparse 由 VectorStore 完成，不再使用独立 BM25Indexer）
         if vector_store is None:
             vector_store = VectorStoreFactory.create(settings)
         self._vector_upserter = VectorUpserter(vector_store=vector_store)
-        self._bm25_indexer = BM25Indexer(
-            base_path=self._ingestion_config.bm25_base_path
-        )
 
     def close(self) -> None:
-        """关闭资源（如 VectorStore 连接），避免进程退出时析构报错"""
+        """关闭资源（如 VectorStore、FTS5 连接），避免进程退出时析构报错"""
         store = self._vector_upserter.get_vector_store()
         if store is not None:
             store.close()
@@ -213,18 +205,8 @@ class IngestionPipeline:
         except Exception as e:
             raise RuntimeError(f"文档切分失败: {str(e)}") from e
         
-        # 步骤 3.5: 保存图片
-        try:
-            if _trace:
-                with _trace.stage("image_save"):
-                    self._save_images(chunks, collection_name, trace=trace)
-                    self._image_storage.save_index(collection_name)
-            else:
-                self._save_images(chunks, collection_name, trace=trace)
-                self._image_storage.save_index(collection_name)
-        except Exception as e:
-            raise RuntimeError(f"图片保存失败: {str(e)}") from e
-        
+        # 统一存储：图片在 store 阶段经 VectorStore 写入 images 表，不再写入文件
+
         # 步骤 4: Transform（转换和增强）
         try:
             if _trace:
@@ -323,17 +305,7 @@ class IngestionPipeline:
         except Exception as e:
             raise RuntimeError(f"文档切分失败: {str(e)}") from e
 
-        # 步骤 2: 保存图片
-        try:
-            if _trace:
-                with _trace.stage("image_save"):
-                    self._save_images(chunks, collection_name, trace=trace)
-                    self._image_storage.save_index(collection_name)
-            else:
-                self._save_images(chunks, collection_name, trace=trace)
-                self._image_storage.save_index(collection_name)
-        except Exception as e:
-            raise RuntimeError(f"图片保存失败: {str(e)}") from e
+        # 统一存储：图片在 store 阶段经 VectorStore 写入 images 表，不再写入文件
 
         # 步骤 3: Transform
         try:
@@ -429,7 +401,6 @@ class IngestionPipeline:
         """
         chunk_ids = [c.id for c in chunks]
 
-        # 1. 存储向量到向量数据库
         self._vector_upserter.upsert_chunks(
             chunks=chunks,
             dense_vectors=dense_vectors,
@@ -437,86 +408,6 @@ class IngestionPipeline:
             trace=trace,
             collection_name=collection_name,
         )
-
-        try:
-            # 2. BM25 索引：使用 merge 支持增量合并（索引存在则 load+merge，否则新建）
-            self._bm25_indexer.merge(
-                chunks=chunks,
-                sparse_vectors=sparse_vectors,
-                collection_name=collection_name,
-                trace=trace,
-            )
-            self._bm25_indexer.save()
-        except Exception as e:
-            # BM25 失败，回滚已写入的向量
-            try:
-                self._vector_upserter.delete_chunks(
-                    chunk_ids=chunk_ids,
-                    trace=trace,
-                    collection_name=collection_name,
-                )
-            except Exception as rollback_err:
-                pass  # 回滚失败仅记录，仍向上抛出原异常
-            raise RuntimeError(
-                f"BM25 索引写入失败，已回滚向量数据: {str(e)}"
-            ) from e
-    
-    def _save_images(
-        self,
-        chunks: List[Chunk],
-        collection_name: str,
-        trace: Optional[Any] = None
-    ) -> None:
-        """
-        保存 chunks 中引用的图片
-        
-        从各 chunk 的 metadata 中收集 image_refs、image_data、image_metadata，
-        对每个 image_id 去重后调用 ImageStorage.save_image 保存。
-        单张图片保存失败不影响其他图片。
-        
-        Args:
-            chunks: Chunk 列表
-            collection_name: 集合名称
-            trace: 追踪上下文（可选）
-        """
-        # 收集所有图片引用（去重）
-        all_image_ids: set[str] = set()
-        # 构建 image_id -> (image_data, image_metadata) 映射
-        image_data_map: Dict[str, bytes] = {}
-        image_metadata_map: Dict[str, Dict[str, Any]] = {}
-        
-        for chunk in chunks:
-            image_refs = chunk.metadata.get("image_refs", [])
-            for img_id in image_refs:
-                all_image_ids.add(img_id)
-                # 从 chunk 的 image_data 获取二进制
-                chunk_image_data = chunk.metadata.get("image_data", {})
-                if img_id in chunk_image_data and img_id not in image_data_map:
-                    image_data_map[img_id] = chunk_image_data[img_id]
-                # 从 chunk 的 image_metadata 获取元数据
-                chunk_image_metadata = chunk.metadata.get("image_metadata", [])
-                for meta in chunk_image_metadata:
-                    if meta.get("image_id") == img_id and img_id not in image_metadata_map:
-                        image_metadata_map[img_id] = meta
-                        break
-        
-        # 逐个保存，单张失败不影响其他
-        for image_id in all_image_ids:
-            image_bytes = image_data_map.get(image_id)
-            if not image_bytes:
-                continue
-            metadata = image_metadata_map.get(image_id)
-            try:
-                self._image_storage.save_image(
-                    image_id=image_id,
-                    image_data=image_bytes,
-                    collection_name=collection_name,
-                    metadata=metadata,
-                    trace=trace
-                )
-            except Exception:
-                # 单张图片保存失败不影响其他图片，静默跳过
-                pass
     
     def split_document(
         self,

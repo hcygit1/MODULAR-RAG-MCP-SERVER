@@ -79,7 +79,7 @@ class TestSparseEncoderTermWeights:
     """SparseEncoder Term Weights 测试"""
     
     def test_term_weights_structure(self):
-        """测试 term weights 结构可用于 bm25_indexer（核心验收标准）"""
+        """测试 term weights 结构可用于 FTS5/稀疏索引（核心验收标准）"""
         encoder = SparseEncoder()
         
         chunks = [

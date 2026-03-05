@@ -523,10 +523,10 @@ LlamaIndex 为向量数据库定义了统一的 `VectorStore` 抽象接口，所
 	  model: text-embedding-3-small
 	
 	vector_store:
-	  backend: chroma  # chroma | qdrant | pinecone
+	  backend: sqlite  # chroma | qdrant | pinecone | sqlite（推荐 sqlite 统一存储）
 	
 	retrieval:
-	  sparse_backend: bm25  # bm25 | elasticsearch
+	  sparse_backend: fts5  # backend=sqlite 时必须为 fts5
 	  fusion_algorithm: rrf  # rrf | weighted_sum
 	  rerank_backend: cross_encoder  # none | cross_encoder | llm
 	
@@ -538,6 +538,8 @@ LlamaIndex 为向量数据库定义了统一的 `VectorStore` 抽象接口，所
 	1. 修改 `settings.yaml` 中对应组件的 `backend` / `provider` 字段。
 	2. 确保新后端的依赖已安装、凭据已配置。
 	3. 重启服务，工厂函数自动加载新实现，无需修改业务代码。
+
+- **统一存储约束**：任一 backend 需在其自身容器内存储 chunk、向量、稀疏索引、图片，避免跨库一致性问题。推荐 `backend=sqlite` + `sparse_backend=fts5`。参见 `docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md` 与 `docs/FACTORY_AND_BACKENDS.md`。
 
 ### 3.4 可观测性与追踪设计 (Observability & Tracing Design)
 
@@ -742,8 +744,8 @@ observability:
   - 在 Document 的 Metadata 中维护 `images` 列表，记录每张图片的 `image_id`、原始路径、页码、尺寸等基础信息。
 
 - **存储原始图片**：
-  - 将提取的图片保存至本地文件系统的约定目录（如 `data/images/{collection}/{image_id}.png`）。
-  - 仅保存需要的图片格式（推荐统一转换为 PNG/JPEG），控制存储体积。
+  - 图片由当前 VectorStore 在其容器内存储（如 SQLite 的 images 表、Qdrant 的 payload）。
+  - 不再使用文件系统 `data/images/`；统一存储架构见 `docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md`。
 
 **2. Splitter 阶段：保持图文关联**
 
@@ -1271,9 +1273,9 @@ smart-knowledge-hub/
 │   │   │
 │   │   └── storage/                     # Storage 模块 (存储)
 │   │       ├── __init__.py
-│   │       ├── vector_upserter.py       # 向量库 Upsert
-│   │       ├── bm25_indexer.py          # BM25 索引构建
-│   │       └── image_storage.py         # 图片文件存储
+│   │       ├── vector_upserter.py       # 向量库 Upsert（统一经 VectorStore 写入）
+│   │       ├── fts5_bm25_indexer.py     # FTS5 稀疏索引（SQLite 内部使用）
+│   │       └── image_storage.py         # 兼容保留；图片统一存于 VectorStore
 │   │
 │   ├── libs/                            # Libs 层 (可插拔抽象层)
 │   │   ├── __init__.py
@@ -1341,11 +1343,10 @@ smart-knowledge-hub/
 ├── data/                                # 数据目录
 │   ├── documents/                       # 原始文档存放
 │   │   └── {collection}/                # 按集合分类
-│   ├── images/                          # 提取的图片存放
-│   │   └── {collection}/                # 按集合分类
 │   └── db/                              # 数据库文件
-│       ├── chroma/                      # Chroma 向量库
-│       └── bm25/                        # BM25 索引
+│       ├── chroma/                      # Chroma 向量库（backend=chroma 时）
+│       ├── qdrant/                       # Qdrant 持久化（backend=qdrant 时）
+│       └── rag.sqlite                   # SQLite 统一存储（backend=sqlite 时：chunk+vec+FTS5+images 同库）
 │
 ├── cache/                               # 缓存目录
 │   ├── embeddings/                      # Embedding 缓存 (按内容哈希)
@@ -1569,7 +1570,7 @@ vector_store:
 
 # 检索配置
 retrieval:
-  sparse_backend: bm25      # bm25 | elasticsearch
+  sparse_backend: fts5      # backend=sqlite 时必须为 fts5
   fusion_algorithm: rrf     # rrf | weighted_sum
   top_k_dense: 20
   top_k_sparse: 20
@@ -2056,7 +2057,7 @@ observability:
 - **修改文件**：
   - `src/ingestion/embedding/sparse_encoder.py`
   - `tests/unit/test_sparse_encoder.py`
-- **验收标准**：输出结构可用于 bm25_indexer；对空文本有明确行为。
+- **验收标准**：输出结构可用于稀疏索引（FTS5 或 sparse_vector）；对空文本有明确行为。
 - **测试方法**：`pytest -q tests/unit/test_sparse_encoder.py`。
 
 ### C10：BatchProcessor（批处理编排） ✅
@@ -2075,28 +2076,20 @@ observability:
 - **验收标准**：同一 chunk 两次 upsert 产生相同 id；内容变更 id 变更。
 - **测试方法**：`pytest -q tests/unit/test_vector_upserter_idempotency.py`。
 
-### C12：BM25Indexer（倒排索引落地） ✅
-- **目标**：实现 `bm25_indexer.py`：把 sparse encoder 输出落盘到 `data/db/bm25/`（文件结构自行定义但需可重建）。
-- **修改文件**：
-  - `src/ingestion/storage/bm25_indexer.py`
-  - `tests/unit/test_bm25_indexer_roundtrip.py`
-- **验收标准**：build 后能 load 并对同一语料查询返回稳定 top ids。
-- **测试方法**：`pytest -q tests/unit/test_bm25_indexer_roundtrip.py`。
+### C12：BM25Indexer / FTS5（稀疏索引落地） ✅
+- **目标**：稀疏索引由 VectorStore 在其容器内完成。SQLite 使用 `fts5_bm25_indexer.py` + `chunks_fts` 表；不再使用独立 `data/db/bm25/`。
+- **当前实现**：`src/ingestion/storage/fts5_bm25_indexer.py`，由 `SQLiteVectorStore` 内部调用。
 
-### C13：ImageStorage（图片文件存储与索引表契约） ✅
-- **目标**：实现 `image_storage.py`：保存图片到 `data/images/{collection}/`，并记录 image_id→path 映射（可先用 JSON/SQLite）。
-- **修改文件**：
-  - `src/ingestion/storage/image_storage.py`
-  - `tests/unit/test_image_storage.py`
-- **验收标准**：保存后文件存在；查找 image_id 返回正确路径。
-- **测试方法**：`pytest -q tests/unit/test_image_storage.py`。
+### C13：ImageStorage / 图片统一存储 ✅
+- **目标**：图片由 VectorStore 在其容器内存储。SQLite 使用 `images` 表；不再使用 `data/images/` 文件目录。
+- **当前实现**：`SQLiteVectorStore._upsert_images`；`ImageStorage` 类保留供兼容性测试。
 
 ### C14：Pipeline 编排（MVP 串起来） ✅
 - **目标**：实现 `pipeline.py`：串行执行（integrity→load→split→transform→encode→store），并对失败步骤做清晰异常。
 - **修改文件**：
   - `src/ingestion/pipeline.py`
   - `tests/integration/test_ingestion_pipeline.py`
-- **验收标准**：对 fixtures 样例文档跑完整 pipeline，输出向量与 bm25 索引文件。
+- **验收标准**：对 fixtures 样例文档跑完整 pipeline，输出向量与稀疏索引（统一存于 VectorStore）。
 - **测试方法**：`pytest -q tests/integration/test_ingestion_pipeline.py`。
 
 ### C15：脚本入口 ingest.py（离线可用） ✅
@@ -2127,13 +2120,9 @@ observability:
 - **验收标准**：当 VectorStore 返回候选列表时，dense retriever 透传并规范化 score。
 - **测试方法**：`pytest -q tests/unit/test_dense_retriever.py`（mock vector store）。
 
-### D3：SparseRetriever（BM25 查询）
-- **目标**：实现 `sparse_retriever.py`：从 `data/db/bm25/` 载入索引并查询。
-- **修改文件**：
-  - `src/core/query_engine/sparse_retriever.py`
-  - `tests/unit/test_sparse_retriever.py`
-- **验收标准**：对已构建索引的 fixtures 语料，关键词检索命中预期 chunk_id。
-- **测试方法**：`pytest -q tests/unit/test_sparse_retriever.py`。
+### D3：SparseRetriever（稀疏检索） ✅
+- **目标**：`sparse_retriever.py` 调用 VectorStore.sparse_query 或传入 sqlite_path 使用 FTS5，从 VectorStore 容器内检索。
+- **当前实现**：`src/core/query_engine/sparse_retriever.py`，与 `SQLiteVectorStore` / FTS5 集成。
 
 ### D4：Fusion（RRF 实现）
 - **目标**：实现 `fusion.py`：RRF 融合 dense/sparse 排名并输出统一排序。

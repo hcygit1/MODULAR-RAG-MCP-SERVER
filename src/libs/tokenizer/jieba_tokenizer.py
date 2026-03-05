@@ -65,3 +65,38 @@ def tokenize(
         and t.strip()
     ]
     return filtered
+
+
+def tokenize_for_search(
+    text: str,
+    stopwords: Optional[Set[str]] = None,
+    min_length: int = 1,
+) -> List[str]:
+    """
+    使用 jieba.cut_for_search 分词，用于 FTS5 等搜索引擎场景。
+    与 tokenize 相比，cut_for_search 对长词会做更细粒度切分，便于召回。
+
+    Args:
+        text: 输入文本
+        stopwords: 停用词集合，None 时使用默认
+        min_length: 最小 token 长度
+
+    Returns:
+        过滤后的 token 列表
+    """
+    import jieba
+
+    if not text or not text.strip():
+        return []
+
+    _stopwords = stopwords if stopwords is not None else _get_default_stopwords()
+    text_lower = text.strip().lower()
+    tokens = list(jieba.cut_for_search(text_lower))
+
+    filtered = [
+        t for t in tokens
+        if len(t) >= min_length
+        and t not in _stopwords
+        and t.strip()
+    ]
+    return filtered

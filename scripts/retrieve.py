@@ -84,8 +84,9 @@ def main() -> None:
     from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
 
     dense = DenseRetriever(embedding=embedding, vector_store=vector_store)
+    sqlite_path = getattr(settings.vector_store, "sqlite_path", None)
     sparse = SparseRetriever(
-        base_path=settings.ingestion.bm25_base_path,
+        sqlite_path=sqlite_path,
         collection_name=args.collection or settings.vector_store.collection_name,
     )
     hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)

@@ -193,10 +193,8 @@ class TestIngestionPipelineIntegration:
             vector_store=fake_vector_store
         )
         
-        # 验证存储组件已初始化
+        # 验证存储组件已初始化（统一存储：无独立 _bm25_indexer、ImageStorage）
         assert pipeline._vector_upserter is not None
-        assert pipeline._bm25_indexer is not None
-        assert pipeline._image_storage is not None
     
     def test_pipeline_error_handling(self, temp_dir, test_settings):
         """测试 Pipeline 的错误处理"""
@@ -220,10 +218,8 @@ class TestIngestionPipelineIntegration:
         with pytest.raises(ValueError, match="collection_name 不能为空"):
             pipeline.process("test.pdf", "")
 
-    def test_store_results_rollback_on_bm25_failure(self, temp_dir, test_settings):
-        """BM25 写入失败时，已写入的向量应被回滚，保持 collection 一致性"""
-        from unittest.mock import patch
-
+    def test_store_results_vector_upsert(self, temp_dir, test_settings):
+        """向量写入成功（统一存储：chunk+vec+fts 由 VectorStore 单次完成）"""
         from src.ingestion.models import Chunk
 
         fake_embedding = FakeEmbedding(dimension=128)
@@ -249,24 +245,15 @@ class TestIngestionPipelineIntegration:
         dense_vectors = [[0.1] * 128, [0.2] * 128]
         sparse_vectors = [{"a": 1.0}, {"b": 1.0}]
 
-        with patch.object(
-            pipeline._bm25_indexer,
-            "save",
-            side_effect=RuntimeError("BM25 save failed"),
-        ):
-            with pytest.raises(RuntimeError, match="BM25 索引写入失败"):
-                pipeline._store_results(
-                    chunks,
-                    dense_vectors,
-                    sparse_vectors,
-                    "test_coll",
-                )
+        pipeline._store_results(
+            chunks,
+            dense_vectors,
+            sparse_vectors,
+            "test_coll",
+        )
 
-        # 验证向量已回滚
         for c in chunks:
-            assert c.id not in fake_vector_store._records, (
-                f"chunk {c.id} 应在回滚时被删除"
-            )
+            assert c.id in fake_vector_store._records
 
 
 class TestIngestionPipelineWithFixtures:
@@ -309,22 +296,11 @@ class TestIngestionPipelineWithFixtures:
             collection_name="test_collection"
         )
         
-        # 验证输出文件存在
-        # 1. BM25 索引文件
-        bm25_index_path = Path("data/db/bm25/test_collection/index.json")
-        assert bm25_index_path.exists(), "BM25 索引文件应该存在"
-        
-        # 2. 向量存储（FakeVectorStore 使用内存，但可以验证调用）
-        # 实际实现中，Chroma 会创建持久化文件
-        
-        # 验证索引可以加载
-        from src.ingestion.storage.bm25_indexer import BM25Indexer
-        indexer = BM25Indexer()
-        indexer.load("test_collection")
-        assert indexer.get_total_chunks() > 0, "索引应该包含 chunks"
+        # 验证向量已写入（FakeVectorStore 使用内存）
+        assert len(fake_vector_store._records) > 0, "向量应已写入"
     
     def test_pipeline_outputs_vectors_and_index(self, temp_dir, test_settings, sample_pdf_path):
-        """测试 Pipeline 输出向量与 bm25 索引文件（验收标准）"""
+        """测试 Pipeline 输出向量（验收标准，统一存储：无独立 BM25）"""
         # 使用 Fake Embedding 和 VectorStore 进行测试
         fake_embedding = FakeEmbedding(dimension=128)
         fake_vector_store = FakeVectorStore()
@@ -340,19 +316,9 @@ class TestIngestionPipelineWithFixtures:
             collection_name="test_collection"
         )
         
-        # 验收标准：输出向量与 bm25 索引文件
-        # 1. 验证 BM25 索引文件存在
-        bm25_index_path = Path("data/db/bm25/test_collection/index.json")
-        assert bm25_index_path.exists(), "BM25 索引文件应该存在"
-        
-        # 2. 验证索引文件内容有效
-        import json
-        with open(bm25_index_path, "r", encoding="utf-8") as f:
-            index_data = json.load(f)
-        
-        assert "inverted_index" in index_data
-        assert "chunk_metadata" in index_data
-        assert index_data["total_chunks"] > 0
-        
-        # 3. 验证向量已存储（通过 FakeVectorStore 验证调用）
-        # 实际实现中，向量会持久化到 Chroma
+        # 验收标准：向量已存储
+        assert len(fake_vector_store._records) > 0
+        for rid, rec in fake_vector_store._records.items():
+            assert rec.id
+            assert rec.text
+            assert len(rec.vector) > 0

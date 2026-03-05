@@ -1,73 +1,79 @@
 """
 multimodal_assembler 单元测试
+
+Phase C：仅测试 sqlite_path 路径，不再测试文件系统 images_base_path。
 """
 import base64
-import json
-import tempfile
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from src.core.response.multimodal_assembler import (
     assemble_content,
-    _load_image_index,
     _image_refs_to_content_items,
+    _infer_collection_from_sqlite,
 )
 from src.core.response.response_builder import build_mcp_content
 
 
-def test_load_image_index_missing() -> None:
-    """index.json 不存在时返回空 dict"""
-    result = _load_image_index("/nonexistent", "coll")
-    assert result == {}
+def test_image_refs_to_content_items_sqlite(tmp_path: Path) -> None:
+    """image_refs 经 sqlite 转为 ImageContent dict 列表"""
+    db_path = tmp_path / "rag.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE images (
+            id TEXT PRIMARY KEY,
+            collection_name TEXT NOT NULL,
+            image_data BLOB NOT NULL,
+            mime_type TEXT DEFAULT 'image/png',
+            metadata_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+    """)
+    img_bytes = b"\x89PNG\x0d\x0a\x1a\x0a"
+    conn.execute(
+        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
+        ("doc_abc_page_0_img_0", "report", img_bytes, "image/png"),
+    )
+    conn.commit()
+    conn.close()
 
-
-def test_load_image_index_valid(tmp_path: Path) -> None:
-    """正确加载 index.json"""
-    coll_dir = tmp_path / "report"
-    coll_dir.mkdir()
-    index_data = {
-        "collection_name": "report",
-        "images": {
-            "img_1": {
-                "image_id": "img_1",
-                "file_path": str(coll_dir / "img_1.png"),
-                "mime_type": "image/png",
-            },
-        },
-    }
-    (coll_dir / "index.json").write_text(json.dumps(index_data), encoding="utf-8")
-    (coll_dir / "img_1.png").write_bytes(b"\x89PNG\x0d\x0a\x1a\x0a")
-    result = _load_image_index(str(tmp_path), "report")
-    assert "img_1" in result
-    assert result["img_1"]["mime_type"] == "image/png"
-
-
-def test_image_refs_to_content_items(tmp_path: Path) -> None:
-    """image_refs 转为 ImageContent dict 列表"""
-    coll_dir = tmp_path / "report"
-    coll_dir.mkdir()
-    img_path = coll_dir / "doc_abc_page_0_img_0.png"
-    img_path.write_bytes(b"\x89PNG\x0d\x0a")
-    index_data = {
-        "images": {
-            "doc_abc_page_0_img_0": {
-                "file_path": str(img_path),
-                "mime_type": "image/png",
-            },
-        },
-    }
-    (coll_dir / "index.json").write_text(json.dumps(index_data), encoding="utf-8")
     items = _image_refs_to_content_items(
         ["doc_abc_page_0_img_0"],
         "report",
-        str(tmp_path),
-        index_data["images"],
+        str(db_path),
     )
     assert len(items) == 1
     assert items[0]["type"] == "image"
     assert items[0]["mimeType"] == "image/png"
-    assert base64.b64decode(items[0]["data"]) == b"\x89PNG\x0d\x0a"
+    assert base64.b64decode(items[0]["data"]) == img_bytes
+
+
+def test_infer_collection_from_sqlite(tmp_path: Path) -> None:
+    """从 images 表推断 collection_name"""
+    db_path = tmp_path / "rag.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE images (
+            id TEXT PRIMARY KEY,
+            collection_name TEXT NOT NULL,
+            image_data BLOB NOT NULL,
+            mime_type TEXT DEFAULT 'image/png',
+            metadata_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+    """)
+    conn.execute(
+        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
+        ("img_x", "my_coll", b"\x89PNG", "image/png"),
+    )
+    conn.commit()
+    conn.close()
+
+    coll = _infer_collection_from_sqlite(str(db_path), "img_x")
+    assert coll == "my_coll"
+    assert _infer_collection_from_sqlite(str(db_path), "nonexistent") is None
 
 
 def test_assemble_content_no_images() -> None:
@@ -77,45 +83,95 @@ def test_assemble_content_no_images() -> None:
     results = [
         QueryResult(id="c1", score=0.9, text="hello", metadata={}),
     ]
-    content = assemble_content(results, "hello world", "data/images", None)
+    content = assemble_content(results, "hello world", None, None)
     assert len(content) == 1
     assert content[0]["type"] == "text"
     assert content[0]["text"] == "hello world"
 
 
-def test_assemble_content_with_image_refs(tmp_path: Path) -> None:
-    """有 image_refs 时追加 ImageContent"""
+def test_assemble_content_no_sqlite_path() -> None:
+    """sqlite_path 为空时即使有 image_refs 也不加载图片"""
     from src.libs.vector_store.base_vector_store import QueryResult
 
-    coll_dir = tmp_path / "report"
-    coll_dir.mkdir()
-    img_path = coll_dir / "img_1.png"
-    img_path.write_bytes(b"fake-png-data")
-    index_data = {
-        "collection_name": "report",
-        "images": {
-            "img_1": {
-                "image_id": "img_1",
-                "file_path": str(img_path),
-                "mime_type": "image/png",
-            },
-        },
-    }
-    (coll_dir / "index.json").write_text(json.dumps(index_data), encoding="utf-8")
     results = [
         QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["img_1"]}),
     ]
+    content = assemble_content(results, "markdown here", "report", sqlite_path=None)
+    assert len(content) == 1
+    assert content[0]["type"] == "text"
+
+
+def test_assemble_content_sqlite(tmp_path: Path) -> None:
+    """sqlite_path 时从 images 表加载图片"""
+    from src.libs.vector_store.base_vector_store import QueryResult
+
+    db_path = tmp_path / "rag.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE images (
+            id TEXT PRIMARY KEY,
+            collection_name TEXT NOT NULL,
+            image_data BLOB NOT NULL,
+            mime_type TEXT DEFAULT 'image/png',
+            metadata_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+    """)
+    img_bytes = b"\x89PNG\x0d\x0a\x1a\x0a"
+    conn.execute(
+        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
+        ("img_sqlite", "report", img_bytes, "image/png"),
+    )
+    conn.commit()
+    conn.close()
+
+    results = [
+        QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["img_sqlite"], "collection_name": "report"}),
+    ]
     content = assemble_content(
-        results, "markdown here", str(tmp_path), "report"
+        results, "markdown", collection_name="report", sqlite_path=str(db_path)
     )
     assert len(content) >= 2
     assert content[0]["type"] == "text"
     assert content[1]["type"] == "image"
-    assert content[1]["data"] == base64.b64encode(b"fake-png-data").decode("ascii")
+    assert base64.b64decode(content[1]["data"]) == img_bytes
+
+
+def test_assemble_content_infer_collection(tmp_path: Path) -> None:
+    """collection 不在 metadata 时从 images 表推断"""
+    from src.libs.vector_store.base_vector_store import QueryResult
+
+    db_path = tmp_path / "rag.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE images (
+            id TEXT PRIMARY KEY,
+            collection_name TEXT NOT NULL,
+            image_data BLOB NOT NULL,
+            mime_type TEXT DEFAULT 'image/png',
+            metadata_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+    """)
+    img_bytes = b"\x89PNG"
+    conn.execute(
+        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
+        ("img_infer", "inferred_coll", img_bytes, "image/png"),
+    )
+    conn.commit()
+    conn.close()
+
+    results = [
+        QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["img_infer"]}),
+    ]
+    content = assemble_content(results, "markdown", None, sqlite_path=str(db_path))
+    assert len(content) >= 2
+    assert content[1]["type"] == "image"
+    assert base64.b64decode(content[1]["data"]) == img_bytes
 
 
 def test_build_mcp_content_empty() -> None:
-    """空结果时返回标准结构（build_mcp_content 已通过 assemble_content 支持 image_refs）"""
+    """空结果时返回标准结构"""
     result = build_mcp_content([])
     assert result["content"][0]["type"] == "text"
     assert "未找到相关内容" in result["content"][0]["text"]

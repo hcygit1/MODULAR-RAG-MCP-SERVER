@@ -4,15 +4,13 @@
 测试 PDF → Document → Chunks → 图片保存的完整流程，
 验证图片数据传递和图片路径获取。
 """
-import os
 import tempfile
-import shutil
 from pathlib import Path
 
 import pytest
 
 from src.ingestion.pipeline import IngestionPipeline
-from src.ingestion.models import Document, Chunk
+from src.ingestion.models import Document
 
 MARKITDOWN_AVAILABLE = True  # Pipeline 不直接依赖 MarkItDown
 from src.core.settings import (
@@ -116,58 +114,7 @@ class TestImageDataPassing:
         assert refs == ["id_1", "id_2"]
 
 
-@pytest.mark.skipif(not MARKITDOWN_AVAILABLE, reason="MarkItDown 未安装")
-class TestImageSaveE2E:
-    """端到端图片保存测试"""
-    
-    @pytest.fixture
-    def temp_dir(self):
-        path = tempfile.mkdtemp()
-        yield path
-        shutil.rmtree(path, ignore_errors=True)
-    
-    def test_save_images_persists_to_storage(self, temp_dir):
-        """测试 _save_images 将 chunk 中的图片保存到 ImageStorage"""
-        settings = _create_test_settings(temp_dir)
-        pipeline = IngestionPipeline(
-            settings,
-            embedding=FakeEmbedding(dimension=128),
-            vector_store=FakeVectorStore()
-        )
-        
-        image_id = "doc_test_page_0_img_0"
-        image_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50  # 模拟图片数据
-        
-        chunks = [
-            Chunk(
-                id="chunk_0",
-                text=f"Text with [IMAGE: {image_id}]",
-                metadata={
-                    "image_refs": [image_id],
-                    "image_data": {image_id: image_bytes},
-                    "image_metadata": [{"image_id": image_id, "mime_type": "image/png"}],
-                },
-                start_offset=0,
-                end_offset=100,
-            )
-        ]
-        
-        collection_name = "test_image_save_unit"
-        pipeline._save_images(chunks, collection_name)
-        pipeline._image_storage.save_index(collection_name)
-        
-        # 验证 ImageStorage 索引
-        path = pipeline._image_storage.get_image_path(image_id)
-        assert path is not None
-        assert Path(path).exists()
-        
-        # 验证索引文件
-        index_file = Path("data/images") / collection_name / "index.json"
-        assert index_file.exists()
-        import json
-        with open(index_file, "r", encoding="utf-8") as f:
-            index_data = json.load(f)
-        assert image_id in index_data.get("images", {})
+# Phase C：图片统一经 VectorStore 写入 images 表，_save_images 已移除，不再有端到端文件保存测试
 
 
 @pytest.mark.skipif(not MARKITDOWN_AVAILABLE, reason="MarkItDown 未安装")

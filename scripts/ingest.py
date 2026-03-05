@@ -173,18 +173,18 @@ def main():
     logger.info("=" * 60)
     
     # 检查输出目录（根据配置动态生成）
-    output_dirs = [
-        Path(settings.vector_store.persist_path),
-        Path(settings.ingestion.bm25_base_path),
-        Path(settings.ingestion.images_base_path),
-    ]
-    
-    logger.info("输出目录:")
-    for output_dir in output_dirs:
-        if output_dir.exists():
-            logger.info(f"  ✅ {output_dir}")
+    if settings.vector_store.backend == "sqlite":
+        sqlite_path = getattr(settings.vector_store, "sqlite_path", None)
+        output_items = [Path(sqlite_path)] if sqlite_path else []
+        logger.info("输出（SQLite 统一存储）:")
+    else:
+        output_items = [Path(settings.vector_store.persist_path)]
+        logger.info("输出目录:")
+    for p in output_items:
+        if p.exists():
+            logger.info(f"  ✅ {p}")
         else:
-            logger.info(f"  ⚠️  {output_dir} (不存在)")
+            logger.info(f"  ⚠️  {p} (不存在)")
 
     # 显式关闭资源，避免 QdrantClient 等析构时报错
     try:

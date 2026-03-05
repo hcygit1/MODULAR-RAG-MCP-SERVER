@@ -1,13 +1,13 @@
 """
 多模态内容组装
 
-当检索结果 chunk 含 image_refs 时，读取图片并 base64 编码，
+当检索结果 chunk 含 image_refs 时，从 SQLite images 表读取图片并 base64 编码，
 供 MCP tools/call 的 content 中返回 ImageContent。
+Phase C：仅支持 sqlite_path，不再支持文件系统 images_base_path。
 """
 import base64
-import json
 import logging
-from pathlib import Path
+import sqlite3
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -16,47 +16,61 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _load_image_index(images_base_path: str, collection_name: str) -> Dict[str, Dict[str, Any]]:
+def _load_image_from_sqlite(
+    sqlite_path: str,
+    image_id: str,
+    collection_name: str,
+) -> Optional[tuple]:
     """
-    从 data/images/{collection}/index.json 加载图片索引。
-
+    从 images 表加载单张图片。
     Returns:
-        images 字典：{ image_id: { file_path, mime_type, ... } }
+        (image_data: bytes, mime_type: str) 或 None
     """
-    base = Path(images_base_path)
-    index_file = base / collection_name / "index.json"
-    if not index_file.exists():
-        return {}
     try:
-        with open(index_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        images = data.get("images", {})
-        return images if isinstance(images, dict) else {}
+        conn = sqlite3.connect(str(sqlite_path))
+        row = conn.execute(
+            "SELECT image_data, mime_type FROM images WHERE id = ? AND collection_name = ?",
+            (image_id, collection_name),
+        ).fetchone()
+        conn.close()
+        if row:
+            return (row[0], row[1] or "image/png")
     except Exception as e:
-        logger.warning("加载图片索引失败 %s: %s", index_file, e)
-        return {}
+        logger.warning("从 SQLite 加载图片失败 %s: %s", image_id, e)
+    return None
+
+
+def _infer_collection_from_sqlite(sqlite_path: str, image_id: str) -> Optional[str]:
+    """从 images 表推断 image_id 所属的 collection_name。"""
+    try:
+        conn = sqlite3.connect(str(sqlite_path))
+        row = conn.execute(
+            "SELECT collection_name FROM images WHERE id = ? LIMIT 1",
+            (image_id,),
+        ).fetchone()
+        conn.close()
+        return row[0] if row else None
+    except Exception:
+        return None
 
 
 def _image_refs_to_content_items(
     image_refs: List[str],
     collection_name: str,
-    images_base_path: str,
-    image_index: Dict[str, Dict[str, Any]],
+    sqlite_path: str,
 ) -> List[Dict[str, Any]]:
     """
-    将 image_refs 转为 ImageContent 的 dict 列表。
+    将 image_refs 转为 ImageContent 的 dict 列表。仅从 SQLite images 表加载。
 
     Args:
         image_refs: 图片 ID 列表
         collection_name: 集合名称
-        images_base_path: 图片根路径
-        image_index: 已加载的 images 索引
+        sqlite_path: SQLite 路径，从 images 表加载
 
     Returns:
         [{"type": "image", "data": base64_str, "mimeType": "image/png"}, ...]
     """
     items: List[Dict[str, Any]] = []
-    base = Path(images_base_path)
     seen_ids: set = set()
 
     for image_id in image_refs:
@@ -64,89 +78,38 @@ def _image_refs_to_content_items(
             continue
         seen_ids.add(image_id)
 
-        info = image_index.get(image_id) if image_index else None
-        if info:
-            file_path = info.get("file_path")
-            mime_type = info.get("mime_type", "image/png")
-        else:
-            # 回退：尝试常见路径 {base}/{collection}/{image_id}.png|.jpg
-            file_path = None
-            mime_type = "image/png"
-            for ext in (".png", ".jpg", ".jpeg", ".webp"):
-                candidate = base / collection_name / f"{image_id}{ext}"
-                if candidate.exists():
-                    file_path = str(candidate)
-                    mime_type = "image/png" if ext == ".png" else "image/jpeg"
-                    break
-
-        if not file_path:
-            continue
-
-        path = Path(file_path)
-        if not path.exists():
-            # file_path 可能为相对路径（如 data/images/report/xxx.jpg）
-            path = base / file_path
-        if not path.exists():
-            path = base / collection_name / Path(file_path).name
-        if not path.exists():
-            logger.debug("图片文件不存在: %s", file_path)
-            continue
-
-        try:
-            with open(path, "rb") as f:
-                raw = f.read()
+        loaded = _load_image_from_sqlite(sqlite_path, image_id, collection_name)
+        if loaded:
+            raw, mime_type = loaded
             b64 = base64.b64encode(raw).decode("ascii")
-            items.append({"type": "image", "data": b64, "mimeType": mime_type})
-        except Exception as e:
-            logger.warning("读取图片失败 %s: %s", path, e)
+            items.append({"type": "image", "data": b64, "mimeType": mime_type or "image/png"})
     return items
-
-
-def _infer_collection_for_image(
-    image_id: str, images_base_path: str
-) -> Optional[str]:
-    """
-    遍历 images 目录下的 collection，在 index.json 中查找 image_id 所属的 collection。
-    """
-    base = Path(images_base_path)
-    if not base.exists():
-        return None
-    for sub in base.iterdir():
-        if not sub.is_dir():
-            continue
-        index_file = sub / "index.json"
-        if not index_file.exists():
-            continue
-        try:
-            with open(index_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            images = data.get("images", {})
-            if isinstance(images, dict) and image_id in images:
-                return sub.name
-        except Exception:
-            continue
-    return None
 
 
 def assemble_content(
     results: List["QueryResult"],
     text_content: str,
-    images_base_path: str = "data/images",
     collection_name: Optional[str] = None,
+    sqlite_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     组装 MCP content 列表：TextContent + ImageContent（当 metadata 含 image_refs 时）。
 
+    Phase C：仅支持从 sqlite_path 的 images 表加载图片，不再支持文件系统。
+
     Args:
         results: 检索结果
         text_content: 已有的 Markdown 文本（作为第一个 content 项）
-        images_base_path: 图片存储根路径
-        collection_name: 集合名称，用于定位 index.json；若 None 则按 image_id 推断
+        collection_name: 集合名称；若 None 且 sqlite_path 非空则按 image_id 从 images 表推断
+        sqlite_path: SQLite 路径，非空时从 images 表加载图片
 
     Returns:
         content 列表，如 [{"type":"text","text":...}, {"type":"image","data":...,"mimeType":...}]
     """
     content: List[Dict[str, Any]] = [{"type": "text", "text": text_content}]
+    if not sqlite_path:
+        return content
+
     seen_ids: set = set()
 
     for r in results:
@@ -160,10 +123,9 @@ def assemble_content(
                 continue
             seen_ids.add(image_id)
             if not coll:
-                coll = _infer_collection_for_image(image_id, images_base_path)
+                coll = _infer_collection_from_sqlite(sqlite_path, image_id)
             if not coll:
                 continue
-            index = _load_image_index(images_base_path, coll)
-            items = _image_refs_to_content_items([image_id], coll, images_base_path, index)
+            items = _image_refs_to_content_items([image_id], coll, sqlite_path)
             content.extend(items)
     return content

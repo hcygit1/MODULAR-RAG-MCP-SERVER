@@ -74,8 +74,7 @@ class HybridSearch:
         coll = collection_name or getattr(self._sparse, "_default_collection", None)
         if coll and not self._sparse.index_exists(coll):
             raise ValueError(
-                f"集合 '{coll}' 的 BM25 索引不存在，请先对该集合运行 ingest。"
-                f"索引路径: {self._sparse._base_path / coll / 'index.json'}"
+                f"集合 '{coll}' 的稀疏索引不存在，请先对该集合运行 ingest。"
             )
 
         _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None

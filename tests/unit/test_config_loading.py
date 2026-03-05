@@ -189,6 +189,20 @@ def test_validate_settings_valid():
     validate_settings(settings)
 
 
+def test_validate_settings_sqlite_requires_fts5():
+    """backend=sqlite 时必须 sparse_backend=fts5（统一存储约束）"""
+    settings = load_settings("config/settings.yaml")
+    # 模拟 sqlite + bm25 的非法组合
+    settings.vector_store.backend = "sqlite"
+    settings.vector_store.sqlite_path = "./data/db/rag.sqlite"
+    settings.vector_store.embedding_dim = 1536
+    settings.retrieval.sparse_backend = "bm25"
+    with pytest.raises(ValueError) as exc_info:
+        validate_settings(settings)
+    assert "sparse_backend" in str(exc_info.value)
+    assert "fts5" in str(exc_info.value)
+
+
 def test_load_settings_local_override():
     """测试 settings.local.yaml 覆盖敏感项"""
     with tempfile.TemporaryDirectory() as tmpdir:

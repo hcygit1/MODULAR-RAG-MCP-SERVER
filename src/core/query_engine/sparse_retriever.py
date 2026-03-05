@@ -1,41 +1,46 @@
 """
 SparseRetriever 实现
 
-从 data/db/bm25/ 载入 BM25 索引，使用关键词进行稀疏检索。
-返回与 DenseRetriever 一致的 QueryResult 格式，便于 D4 Fusion 融合。
+从统一存储 backend 的稀疏索引检索（SQLite FTS5 等）。
+接收 VectorStore，调用其 sparse_query 能力；或传入 sqlite_path 使用 FTS5。
 """
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from src.ingestion.storage.bm25_indexer import BM25Indexer
-from src.libs.tokenizer import tokenize as tokenize_query
-from src.libs.vector_store.base_vector_store import QueryResult
+from src.libs.tokenizer import tokenize_for_search
+from src.libs.vector_store.base_vector_store import BaseVectorStore, QueryResult
 
 
 class SparseRetriever:
     """
-    Sparse Retriever (BM25)
+    Sparse Retriever（FTS5 / 统一存储）
 
-    从 BM25 倒排索引中检索，输入关键词列表，返回 Top-K 结果。
-    结果格式与 DenseRetriever 一致（QueryResult），便于下游 Fusion 融合。
+    从 VectorStore.sparse_query 或 FTS5（sqlite_path）检索，返回 QueryResult。
     """
 
     def __init__(
         self,
-        base_path: str = "data/db/bm25",
+        *,
+        vector_store: Optional[BaseVectorStore] = None,
+        sqlite_path: Optional[str] = None,
         collection_name: Optional[str] = None,
     ) -> None:
         """
         初始化 SparseRetriever
 
         Args:
-            base_path: BM25 索引存储的基础路径
+            vector_store: 支持 sparse_query 的 VectorStore（如 SQLiteVectorStore write_fts=True）
+            sqlite_path: SQLite 路径（当未传 vector_store 时使用，与 VectorStore 共用）
             collection_name: 默认集合名称，retrieve 时可覆盖
         """
-        self._base_path = Path(base_path)
+        if vector_store is None and not sqlite_path:
+            raise ValueError("需提供 vector_store 或 sqlite_path")
+        self._vector_store = vector_store
+        self._sqlite_path = Path(sqlite_path) if sqlite_path else None
         self._default_collection = collection_name
-        self._indexers: Dict[str, BM25Indexer] = {}
+        self._fts5_indexers: Dict[str, Any] = {}
 
     def retrieve(
         self,
@@ -46,21 +51,17 @@ class SparseRetriever:
         trace: Optional[Any] = None,
     ) -> List[QueryResult]:
         """
-        执行 BM25 稀疏检索
+        执行稀疏检索
 
         Args:
-            query: 关键词列表（或空格分隔的字符串）
+            query: 关键词列表或空格分隔字符串
             top_k: 返回的 Top-K 数量
             collection_name: 集合名称，为 None 时使用默认
-            filters: 元数据过滤条件（可选），对结果做 post-filter
+            filters: 元数据过滤条件（可选）
             trace: 追踪上下文（可选）
 
         Returns:
-            List[QueryResult]: 检索结果列表，按 score 降序
-
-        Raises:
-            ValueError: 当 query 为空、top_k <= 0 或 collection 未指定且无默认时
-            FileNotFoundError: 当索引文件不存在时
+            List[QueryResult]: 检索结果列表
         """
         keywords = self._to_keywords(query)
         if not keywords:
@@ -73,63 +74,111 @@ class SparseRetriever:
         if not coll:
             raise ValueError("collection_name 未指定，且无默认集合")
 
-        indexer = self._get_indexer(coll)
-        raw_results = indexer.query(terms=keywords, top_k=top_k, trace=trace)
-
-        results = self._to_query_results(indexer, coll, raw_results)
+        results = self._do_retrieve(keywords, coll, top_k, trace)
         if filters:
             results = self._apply_filters(results, filters)
         return results[:top_k]
 
     def _to_keywords(self, query: Union[str, List[str]]) -> List[str]:
-        """将 query 转为关键词列表（使用与 SparseEncoder 一致的 jieba 分词）"""
-        if isinstance(query, str):
-            return tokenize_query(query)
+        """将 query 转为关键词列表。"""
         if isinstance(query, list):
             return [str(k).strip() for k in query if str(k).strip()]
+        if not isinstance(query, str):
+            return []
+        return tokenize_for_search(query)
+
+    def _do_retrieve(
+        self,
+        terms: List[str],
+        collection_name: str,
+        top_k: int,
+        trace: Optional[Any],
+    ) -> List[QueryResult]:
+        """执行检索：优先使用 vector_store.sparse_query，否则 FTS5。"""
+        if self._vector_store is not None and hasattr(
+            self._vector_store, "sparse_query"
+        ):
+            return self._vector_store.sparse_query(
+                terms=terms,
+                collection_name=collection_name,
+                top_k=top_k,
+                trace=trace,
+            )
+        if self._sqlite_path:
+            return self._retrieve_via_fts5(terms, collection_name, top_k, trace)
         return []
 
-    def index_exists(self, collection_name: str) -> bool:
-        """检查 collection 的 BM25 索引是否存在。"""
-        if not collection_name:
-            return False
-        index_file = self._base_path / collection_name / "index.json"
-        return index_file.exists()
-
-    def _get_indexer(self, collection_name: str) -> BM25Indexer:
-        """获取或加载指定集合的 BM25Indexer"""
-        if collection_name not in self._indexers:
-            indexer = BM25Indexer(base_path=str(self._base_path))
-            indexer.load(collection_name)
-            self._indexers[collection_name] = indexer
-        return self._indexers[collection_name]
-
-    def _to_query_results(
+    def _retrieve_via_fts5(
         self,
-        indexer: BM25Indexer,
+        terms: List[str],
         collection_name: str,
-        raw_results: List[tuple],
+        top_k: int,
+        trace: Optional[Any],
     ) -> List[QueryResult]:
-        """将 (chunk_id, score) 转为 QueryResult，补齐 text 和 metadata"""
-        chunk_meta = self._load_chunk_metadata(collection_name)
+        """通过 FTS5BM25Indexer 检索。"""
+        from src.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
+
+        if collection_name not in self._fts5_indexers:
+            idx = FTS5BM25Indexer(sqlite_path=str(self._sqlite_path))
+            idx.load(collection_name)
+            self._fts5_indexers[collection_name] = idx
+        indexer = self._fts5_indexers[collection_name]
+        raw = indexer.query(terms=terms, top_k=top_k, trace=trace)
+        chunk_meta = self._load_chunk_metadata_from_sqlite(collection_name)
         results = []
-        for chunk_id, score in raw_results:
+        for chunk_id, score in raw:
             info = chunk_meta.get(chunk_id, {})
-            text = info.get("text", "")
-            metadata = info.get("metadata", {})
             results.append(
-                QueryResult(id=chunk_id, score=score, text=text, metadata=metadata)
+                QueryResult(
+                    id=chunk_id,
+                    score=score,
+                    text=info.get("text", ""),
+                    metadata=info.get("metadata", {}),
+                )
             )
         return results
 
-    def _load_chunk_metadata(self, collection_name: str) -> Dict[str, Dict[str, Any]]:
-        """从索引文件加载 chunk_metadata"""
-        index_file = self._base_path / collection_name / "index.json"
-        if not index_file.exists():
-            return {}
-        with open(index_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("chunk_metadata", {})
+    def _load_chunk_metadata_from_sqlite(
+        self, collection_name: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """从 chunks 表加载 text 和 metadata。"""
+        conn = sqlite3.connect(str(self._sqlite_path))
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, text, metadata_json FROM chunks WHERE collection_name = ?",
+                (collection_name,),
+            ).fetchall()
+        finally:
+            conn.close()
+        out: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            meta = {}
+            if row["metadata_json"]:
+                try:
+                    meta = json.loads(row["metadata_json"])
+                except json.JSONDecodeError:
+                    pass
+            out[row["id"]] = {"text": row["text"] or "", "metadata": meta}
+        return out
+
+    def index_exists(self, collection_name: str) -> bool:
+        """检查 collection 的稀疏索引是否存在。"""
+        if not collection_name:
+            return False
+        if self._vector_store is not None and hasattr(
+            self._vector_store, "sparse_index_exists"
+        ):
+            return self._vector_store.sparse_index_exists(collection_name)
+        if self._sqlite_path:
+            from src.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
+
+            idx = FTS5BM25Indexer(sqlite_path=str(self._sqlite_path))
+            try:
+                return idx.index_exists(collection_name)
+            finally:
+                idx.close()
+        return False
 
     def _apply_filters(
         self,
@@ -137,11 +186,11 @@ class SparseRetriever:
         filters: Dict[str, Any],
     ) -> List[QueryResult]:
         """对结果应用 metadata 过滤"""
-        filtered = []
-        for r in results:
-            if self._matches_filters(r.metadata, filters):
-                filtered.append(r)
-        return filtered
+        return [
+            r
+            for r in results
+            if self._matches_filters(r.metadata, filters)
+        ]
 
     def _matches_filters(self, metadata: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         """检查 metadata 是否匹配 filters"""

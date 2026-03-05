@@ -233,48 +233,34 @@ class TestMCPServerE2:
             assert "score" in c
 
     def test_query_knowledge_hub_returns_image_content_when_chunk_has_image_refs(
-        self, retrieval_pipeline, indexed_fixtures, tmp_path
+        self, indexed_fixtures, tmp_path
     ) -> None:
-        """当 chunk 含 image_refs 时，content 中应包含 type=image 的 ImageContent"""
+        """当 chunk 含 image_refs 且图片在 SQLite 时，content 中应包含 type=image"""
         import base64
-        import json
-        from pathlib import Path
 
-        from src.ingestion.models import Chunk
-        from src.ingestion.storage.bm25_indexer import BM25Indexer
-        from src.ingestion.embedding.sparse_encoder import SparseEncoder
-        from src.libs.embedding.fake_embedding import FakeEmbedding
-        from src.libs.reranker.none_reranker import NoneReranker
-        from src.libs.vector_store.base_vector_store import VectorRecord
-        from src.libs.vector_store.fake_vector_store import FakeVectorStore
         from src.core.query_engine.dense_retriever import DenseRetriever
         from src.core.query_engine.hybrid_search import HybridSearch
         from src.core.query_engine.query_processor import QueryProcessor
         from src.core.query_engine.reranker import RerankerOrchestrator
         from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
         from src.core.query_engine.sparse_retriever import SparseRetriever
-        from src.mcp_server.tools.query_knowledge_hub import query_knowledge_hub, set_pipeline, set_config_path
+        from src.ingestion.models import Chunk
+        from src.libs.embedding.fake_embedding import FakeEmbedding
+        from src.libs.reranker.none_reranker import NoneReranker
+        from src.mcp_server.tools.query_knowledge_hub import (
+            query_knowledge_hub,
+            set_config_path,
+            set_pipeline,
+            set_sqlite_path,
+        )
 
         collection = indexed_fixtures["collection_name"]
-        images_base = tmp_path / "images"
-        coll_dir = images_base / collection
-        coll_dir.mkdir(parents=True)
+        set_sqlite_path(indexed_fixtures["sqlite_path"])
         img_id = "test_doc_page_0_img_0"
-        img_path = coll_dir / f"{img_id}.png"
         img_bytes = b"\x89PNG\r\n\x1a\n"
-        img_path.write_bytes(img_bytes)
-        index_data = {
-            "collection_name": collection,
-            "images": {
-                img_id: {
-                    "image_id": img_id,
-                    "file_path": str(img_path),
-                    "mime_type": "image/png",
-                },
-            },
-        }
-        (coll_dir / "index.json").write_text(json.dumps(index_data), encoding="utf-8")
 
+        # 使用 SQLite 统一存储：chunk + image 同库
+        vs = indexed_fixtures["vector_store"]
         chunk_with_image = Chunk(
             id="chunk_with_img",
             text="Chart showing data science growth [IMAGE: test_doc_page_0_img_0]",
@@ -283,28 +269,28 @@ class TestMCPServerE2:
                 "chunk_index": 0,
                 "page": 1,
                 "image_refs": [img_id],
+                "image_data": {img_id: img_bytes},
+                "image_metadata": [{"image_id": img_id, "mime_type": "image/png"}],
             },
         )
-        encoder = SparseEncoder()
-        sparse = encoder.encode([chunk_with_image])
-        indexer = BM25Indexer(base_path=indexed_fixtures["bm25_path"])
-        indexer.build([chunk_with_image], sparse, collection_name=collection)
-        indexer.save()
-
         embedding = FakeEmbedding(dimension=16)
-        vs = FakeVectorStore(collection_name=collection)
         vecs = embedding.embed([chunk_with_image.text])
-        vs.upsert([
+        from src.libs.vector_store.base_vector_store import VectorRecord
+
+        records = [
             VectorRecord(
                 id=chunk_with_image.id,
                 vector=vecs[0],
                 text=chunk_with_image.text,
-                metadata=chunk_with_image.metadata,
+                metadata={k: v for k, v in chunk_with_image.metadata.items() if k != "image_data"},
             )
-        ])
+        ]
+        vs.upsert(records, collection_name=collection, chunks_for_images=[chunk_with_image])
+
         dense = DenseRetriever(embedding=embedding, vector_store=vs)
         sparse_ret = SparseRetriever(
-            base_path=indexed_fixtures["bm25_path"],
+            vector_store=vs,
+            sqlite_path=indexed_fixtures["sqlite_path"],
             collection_name=collection,
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse_ret)
@@ -313,10 +299,8 @@ class TestMCPServerE2:
             hybrid_search=hybrid,
             reranker=RerankerOrchestrator(backend=NoneReranker()),
         )
-        set_config_path("config/settings.yaml")  # 必须先于 set_pipeline，否则会清空 _pipeline
+        set_config_path("config/settings.yaml")
         set_pipeline(pipeline)
-        from src.mcp_server.tools.query_knowledge_hub import set_images_base_path
-        set_images_base_path(str(images_base))
 
         result = query_knowledge_hub(
             query="chart data science",

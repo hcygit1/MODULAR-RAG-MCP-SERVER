@@ -42,8 +42,10 @@ def _build_pipeline(settings, collection_override: str | None = None):
     coll = collection_override or settings.vector_store.collection_name
 
     dense = DenseRetriever(embedding=embedding, vector_store=vector_store)
+    sqlite_path = getattr(settings.vector_store, "sqlite_path", None)
     sparse = SparseRetriever(
-        base_path=settings.ingestion.bm25_base_path,
+        vector_store=vector_store,
+        sqlite_path=sqlite_path,
         collection_name=coll,
     )
     hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)

@@ -4,7 +4,7 @@ Sparse Encoder 实现
 对 Chunks 建立 BM25 所需统计，生成稀疏向量（Term Weights）：
 - 分词和统计：计算每个 chunk 的 term frequency
 - Term Weights：生成词到权重的映射结构
-- 输出格式：便于后续 bm25_indexer 使用
+- 输出格式：便于后续 FTS5/稀疏索引使用
 """
 from typing import List, Dict, Optional, Any
 from collections import Counter
@@ -18,7 +18,7 @@ class SparseEncoder:
     Sparse Encoder 实现
     
     为 Chunk 列表生成 BM25 所需的 term weights 结构。
-    输出格式可用于后续的 bm25_indexer。
+    输出格式可用于 FTS5/稀疏索引。
     """
     
     def __init__(

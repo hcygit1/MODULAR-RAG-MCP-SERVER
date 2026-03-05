@@ -94,8 +94,17 @@ class VectorUpserter:
             )
             records.append(record)
         
-        # 批量写入向量数据库
-        self._vector_store.upsert(records, trace=trace, collection_name=collection_name)
+        # 批量写入向量数据库。SQLite+write_fts 时传入 chunks 以同期写入 images
+        store = self._vector_store
+        if getattr(store, "_write_fts", False) and hasattr(store, "upsert"):
+            store.upsert(
+                records,
+                trace=trace,
+                collection_name=collection_name,
+                chunks_for_images=chunks,
+            )
+        else:
+            store.upsert(records, trace=trace, collection_name=collection_name)
 
     def delete_chunks(
         self,

@@ -13,6 +13,7 @@ from src.libs.vector_store.fake_vector_store import FakeVectorStore
 
 from src.libs.vector_store.chroma_store import ChromaStore
 from src.libs.vector_store.qdrant_store import QdrantStore
+from src.libs.vector_store.sqlite_store import SQLiteVectorStore
 
 __all__ = [
     "BaseVectorStore",
@@ -22,4 +23,5 @@ __all__ = [
     "FakeVectorStore",
     "ChromaStore",
     "QdrantStore",
+    "SQLiteVectorStore",
 ]

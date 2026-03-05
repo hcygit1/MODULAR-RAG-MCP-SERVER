@@ -45,18 +45,22 @@ embedding:
   local_model_path: ""
   device: "cpu"  # cpu | cuda
 
-# 向量存储配置
+# 向量存储配置（统一存储：按 backend 使用对应配置）
+# 各 backend 在其自身容器内存储 chunk、向量、稀疏索引、图片
 vector_store:
-  backend: qdrant  # chroma | qdrant | pinecone
-  persist_path: "./data/db/qdrant"
+  backend: sqlite  # chroma | qdrant | pinecone | sqlite（推荐 sqlite 统一存储）
+  persist_path: "./data/db/qdrant"  # chroma | qdrant 时生效
   collection_name: "report"
-  # Qdrant 专用（backend=qdrant 时生效）
+  # backend=sqlite 时生效
+  sqlite_path: "./data/db/rag.sqlite"
+  embedding_dim: 1536  # 与 embedding 模型一致，运行 scripts/embedding_dim.py 可查询
+  # backend=qdrant 时生效
   qdrant_url: ""
   qdrant_api_key: ""  # 云服务时从 ${QDRANT_API_KEY} 读取
 
 # 检索配置
 retrieval:
-  sparse_backend: bm25  # bm25 | elasticsearch
+  sparse_backend: fts5  # backend=sqlite 时必须为 fts5（FTS5 与 chunk 同库）
   fusion_algorithm: rrf  # rrf | weighted_sum
   top_k_dense: 20
   top_k_sparse: 20
@@ -100,6 +104,3 @@ ingestion:
   enable_metadata_enrichment: false
   enable_image_captioning: true
   batch_size: 32
-  # 存储路径（与 vector_store 配置保持一致）
-  bm25_base_path: "./data/db/bm25"
-  images_base_path: "./data/images"

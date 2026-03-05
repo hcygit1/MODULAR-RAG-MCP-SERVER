@@ -1,76 +1,89 @@
 """
 list_collections 单元测试
 
-验证对 fixtures 中的目录结构能返回集合名列表。
+验证从 SQLite chunks 表能返回集合名列表。
 """
+import sqlite3
 import tempfile
 from pathlib import Path
 
 import pytest
 
 from src.mcp_server.tools.list_collections import (
+    _list_collections_from_sqlite,
     execute_list_collections,
     set_base_path,
-    _list_collections_from_fs,
 )
 
 
-def test_list_collections_from_fs_empty(tmp_path: Path) -> None:
-    """空目录返回空列表"""
-    assert _list_collections_from_fs(str(tmp_path)) == []
+def test_list_collections_from_sqlite_empty(tmp_path: Path) -> None:
+    """空 SQLite（无 chunks 表）返回空列表"""
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE chunks (id TEXT, collection_name TEXT, text TEXT, metadata_json TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    assert _list_collections_from_sqlite(str(db_path)) == []
 
 
-def test_list_collections_from_fs_returns_subdirs(tmp_path: Path) -> None:
-    """返回子目录名作为集合列表"""
-    (tmp_path / "report").mkdir()
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "hidden").mkdir()
-    (tmp_path / "report" / "file.pdf").touch()
-    result = _list_collections_from_fs(str(tmp_path))
-    assert sorted(result) == ["docs", "hidden", "report"]
+def test_list_collections_from_sqlite_returns_collections(tmp_path: Path) -> None:
+    """返回 chunks 表中的 DISTINCT collection_name"""
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE chunks (id TEXT, collection_name TEXT, text TEXT, metadata_json TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+        ("c1", "report", "text1", None),
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+        ("c2", "knowledge_base", "text2", None),
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+        ("c3", "report", "text3", None),
+    )
+    conn.commit()
+    conn.close()
+    result = _list_collections_from_sqlite(str(db_path))
+    assert sorted(result) == ["knowledge_base", "report"]
 
 
-def test_list_collections_from_fs_ignores_files(tmp_path: Path) -> None:
-    """忽略文件，只返回目录"""
-    (tmp_path / "report").mkdir()
-    (tmp_path / "readme.txt").touch()
-    result = _list_collections_from_fs(str(tmp_path))
-    assert result == ["report"]
+def test_list_collections_from_sqlite_nonexistent() -> None:
+    """路径不存在时返回空列表（异常被捕获）"""
+    result = _list_collections_from_sqlite("/nonexistent/path/xyz.db")
+    assert result == []
 
 
-def test_list_collections_from_fs_ignores_hidden(tmp_path: Path) -> None:
-    """忽略以 . 开头的目录"""
-    (tmp_path / "report").mkdir()
-    (tmp_path / ".git").mkdir()
-    result = _list_collections_from_fs(str(tmp_path))
-    assert result == ["report"]
+def test_execute_list_collections_with_injection(tmp_path: Path) -> None:
+    """测试注入 sqlite_path 时能返回集合列表"""
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE chunks (id TEXT, collection_name TEXT, text TEXT, metadata_json TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+        ("c1", "report", "t", None),
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+        ("c2", "docs", "t", None),
+    )
+    conn.commit()
+    conn.close()
 
-
-def test_list_collections_from_fs_nonexistent() -> None:
-    """路径不存在返回空列表"""
-    assert _list_collections_from_fs("/nonexistent/path/xyz") == []
-
-
-def test_execute_list_collections_with_fixtures(tmp_path: Path) -> None:
-    """对 fixtures 中的目录结构能返回集合名列表"""
-    (tmp_path / "report").mkdir()
-    (tmp_path / "knowledge_base").mkdir()
-
-    set_base_path(str(tmp_path))
+    set_base_path(str(db_path))
     try:
         result = execute_list_collections({})
         assert result["isError"] is False
         assert "collections" in result["structuredContent"]
         collections = result["structuredContent"]["collections"]
-        assert set(collections) == {"report", "knowledge_base"}
+        assert set(collections) == {"report", "docs"}
         assert "report" in result["content"][0]["text"]
     finally:
         set_base_path(None)
-
-
-def test_execute_list_collections_custom_base_path(tmp_path: Path) -> None:
-    """支持通过 arguments 传入 base_path"""
-    (tmp_path / "custom_coll").mkdir()
-    result = execute_list_collections({"base_path": str(tmp_path)})
-    assert result["isError"] is False
-    assert result["structuredContent"]["collections"] == ["custom_coll"]

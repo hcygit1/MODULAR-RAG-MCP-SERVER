@@ -42,6 +42,11 @@ class VectorStoreFactory:
         elif backend == "qdrant":
             from src.libs.vector_store.qdrant_store import QdrantStore
             return QdrantStore(config)
+        elif backend == "sqlite":
+            from src.libs.vector_store.sqlite_store import SQLiteVectorStore
+            sparse_backend = getattr(settings.retrieval, "sparse_backend", "bm25").lower()
+            write_fts = sparse_backend == "fts5"
+            return SQLiteVectorStore(config, write_fts=write_fts)
         elif backend == "pinecone":
             # 未来实现
             raise NotImplementedError(
@@ -51,7 +56,7 @@ class VectorStoreFactory:
         else:
             raise ValueError(
                 f"不支持的 VectorStore backend: {backend}。"
-                f"支持的 backend: chroma, qdrant, pinecone"
+                f"支持的 backend: chroma, qdrant, sqlite, pinecone"
             )
     
     @staticmethod

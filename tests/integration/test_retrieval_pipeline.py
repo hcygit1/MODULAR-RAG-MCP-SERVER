@@ -16,26 +16,6 @@ from src.libs.reranker.none_reranker import NoneReranker
 from src.libs.vector_store.base_vector_store import QueryResult
 
 
-@pytest.fixture
-def retrieval_pipeline(indexed_fixtures):
-    """构建完整 RetrievalPipeline"""
-    fixtures = indexed_fixtures
-    dense = DenseRetriever(
-        embedding=fixtures["embedding"],
-        vector_store=fixtures["vector_store"],
-    )
-    sparse = SparseRetriever(
-        base_path=fixtures["bm25_path"],
-        collection_name=fixtures["collection_name"],
-    )
-    hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
-    reranker = RerankerOrchestrator(backend=NoneReranker())
-
-    return RetrievalPipeline(
-        query_processor=QueryProcessor(),
-        hybrid_search=hybrid,
-        reranker=reranker,
-    )
 
 
 class TestRetrievalPipelineBasic:
@@ -110,13 +90,14 @@ class TestRetrievalPipelineBasic:
             vector_store=fixtures["vector_store"],
         )
         sparse = SparseRetriever(
-            base_path=fixtures["bm25_path"],
+            vector_store=fixtures["vector_store"],
+            sqlite_path=fixtures["sqlite_path"],
             collection_name=fixtures["collection_name"],
         )
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
         reranker = RerankerOrchestrator(backend=NoneReranker())
         retrieval_config = RetrievalConfig(
-            sparse_backend="bm25",
+            sparse_backend="fts5",
             fusion_algorithm="rrf",
             top_k_dense=10,
             top_k_sparse=10,
