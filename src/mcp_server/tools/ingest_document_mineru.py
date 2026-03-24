@@ -13,11 +13,21 @@ from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
+from src.libs.loader.file_integrity import FileIntegrityChecker
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 from src.mcp_server.tools.error_utils import build_error_response
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_force(value: Any) -> bool:
+    """解析 force 参数，兼容 bool/字符串。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return False
 
 
 def _get_mineru_token(settings: Any) -> str:
@@ -61,6 +71,35 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
         collection_name = settings.vector_store.collection_name
     else:
         collection_name = str(collection_name).strip()
+    force = _parse_force(arguments.get("force", False))
+
+    checker = FileIntegrityChecker()
+    try:
+        file_hash = checker.compute_sha256(file_path)
+        should_skip = False if force else checker.should_skip(file_hash)
+    except Exception as e:
+        return build_error_response(
+            "INTERNAL_ERROR",
+            f"完整性检查失败: {e}",
+            structured_content_base={"chunk_count": 0, "skipped": False},
+        )
+
+    if should_skip:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"文件未变更，已跳过 MinerU 入库：{file_path}",
+                }
+            ],
+            "structuredContent": {
+                "chunk_count": 0,
+                "collection_name": collection_name,
+                "skipped": True,
+                "force": force,
+            },
+            "isError": False,
+        }
 
     try:
         settings = load_mcp_settings()
@@ -94,9 +133,15 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
         trace = TraceContext(operation="ingestion")
         try:
             chunk_count = pipeline.process_document(document, collection_name, trace=trace)
+            checker.mark_success(file_hash)
             return {
                 "content": [{"type": "text", "text": f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks 到集合 {collection_name}"}],
-                "structuredContent": {"chunk_count": chunk_count, "collection_name": collection_name},
+                "structuredContent": {
+                    "chunk_count": chunk_count,
+                    "collection_name": collection_name,
+                    "skipped": False,
+                    "force": force,
+                },
                 "isError": False,
             }
         finally:
@@ -133,6 +178,7 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
 def ingest_document_mineru(
     file_path: str,
     collection_name: Optional[str] = None,
+    force: bool = False,
 ) -> CallToolResult:
     """
     使用 MinerU 云端解析 PDF 并入库。适用于复杂排版 PDF（表格多、公式多、扫描件等）。
@@ -140,6 +186,7 @@ def ingest_document_mineru(
     Args:
         file_path: 本地 PDF 文件路径
         collection_name: 目标集合名，不传则使用配置的 vector_store.collection_name
+        force: 是否强制重入库（True 时忽略完整性跳过）
 
     Returns:
         CallToolResult 含 content、structuredContent.chunk_count
@@ -147,4 +194,6 @@ def ingest_document_mineru(
     args: Dict[str, Any] = {"file_path": file_path}
     if collection_name and str(collection_name).strip():
         args["collection_name"] = str(collection_name).strip()
+    if force:
+        args["force"] = True
     return dict_to_call_tool_result(execute_ingest_document_mineru(args))

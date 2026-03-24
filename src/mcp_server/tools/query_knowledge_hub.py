@@ -52,11 +52,23 @@ def _get_pipeline():
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
         reranker = RerankerOrchestrator(backend=reranker_backend)
 
+        # 若配置启用父聚合，构建 ParentAggregator 并注入
+        parent_agg = None
+        if getattr(settings.retrieval, "aggregate_by_parent", False):
+            from src.core.query_engine.parent_aggregator import ParentAggregator
+            parent_agg = ParentAggregator(
+                vector_store=vector_store,
+                parent_id_key=getattr(settings.retrieval, "parent_id_metadata_key", "parent_id"),
+                score_strategy=getattr(settings.retrieval, "parent_score_strategy", "sum"),
+            )
+
         _pipeline = RetrievalPipeline(
             query_processor=QueryProcessor(),
             hybrid_search=hybrid,
             reranker=reranker,
             retrieval_config=settings.retrieval,
+            parent_aggregator=parent_agg,
+            collection_name=settings.vector_store.collection_name,
         )
         return _pipeline
     except Exception as e:

@@ -39,7 +39,7 @@ class SplitterFactory:
         # 注意：当前 IngestionConfig 中没有 splitter_strategy 字段
         # 这里先使用默认策略，后续可以在配置中添加
         if strategy is None:
-            strategy = "recursive"  # 默认策略
+            strategy = getattr(settings.ingestion, "splitter_strategy", "recursive")
         
         strategy = strategy.lower()
         ingestion_config = settings.ingestion
@@ -48,6 +48,9 @@ class SplitterFactory:
             # B7.5 阶段实现
             from src.libs.splitter.recursive_splitter import RecursiveSplitter
             return RecursiveSplitter(ingestion_config)
+        elif strategy == "heading":
+            from src.libs.splitter.heading_splitter import HeadingSplitter
+            return HeadingSplitter(ingestion_config)
         elif strategy == "semantic":
             # 未来实现
             raise NotImplementedError(
@@ -63,7 +66,7 @@ class SplitterFactory:
         else:
             raise ValueError(
                 f"不支持的 Splitter 策略: {strategy}。"
-                f"支持的策略: recursive, semantic, fixed"
+                f"支持的策略: recursive, heading, semantic, fixed"
             )
     
     @staticmethod

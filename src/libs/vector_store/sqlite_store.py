@@ -31,9 +31,6 @@ except ImportError:
 # metadata 中不序列化到 JSON 的字段
 _METADATA_EXCLUDE = ("image_data",)
 
-_FTS5_TABLE = "chunks_fts"
-_IMAGES_TABLE = "images"
-
 
 def _tokenized_text_for_fts(text: str) -> str:
     """对文本分词，用于 FTS5 索引。"""
@@ -103,30 +100,36 @@ class SQLiteVectorStore(BaseVectorStore):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_collection ON chunks(collection_name)")
 
         # vec0: PK, vector, metadata。collection_name 用于 WHERE 过滤
-        dim = self._dim
+        dim = int(self._dim)
+        if dim <= 0 or dim > 32768:
+            raise ValueError(f"非法 embedding_dim: {dim}")
         try:
-            conn.execute(f"""
+            # sqlite-vec 的 float[N] 语法要求把维度写入 DDL，无法使用参数绑定。
+            # 这里的 dim 已做 int 转换与范围校验，不存在外部可控 SQL 注入风险。
+            # 注意：勿在同一行 f""" 后写 # noqa，否则 # 会进入字符串并被 SQLite 当成非法 token。
+            vec0_ddl = f"""
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
                     chunk_rowid INTEGER PRIMARY KEY,
                     embedding float[{dim}] distance_metric=cosine,
                     collection_name TEXT
                 )
-            """)
+                """.strip()
+            conn.execute(vec0_ddl)  # noqa: S608  # nosec B608  # nosemgrep
         except sqlite3.OperationalError as e:
             if "already exists" in str(e).lower():
                 pass
             else:
                 raise
         if self._write_fts:
-            conn.execute(f"""
-                CREATE VIRTUAL TABLE IF NOT EXISTS {_FTS5_TABLE} USING fts5(
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
                     chunk_id UNINDEXED,
                     collection_name UNINDEXED,
                     tokenized_text
                 )
             """)
-            conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS {_IMAGES_TABLE} (
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS images (
                     id TEXT NOT NULL,
                     collection_name TEXT NOT NULL,
                     image_data BLOB NOT NULL,
@@ -136,7 +139,7 @@ class SQLiteVectorStore(BaseVectorStore):
                     PRIMARY KEY (id, collection_name)
                 )
             """)
-            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_images_collection ON {_IMAGES_TABLE}(collection_name)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_images_collection ON images(collection_name)")
         conn.commit()
 
     def upsert(
@@ -181,7 +184,7 @@ class SQLiteVectorStore(BaseVectorStore):
                 )
                 if self._write_fts:
                     conn.execute(
-                        f"DELETE FROM {_FTS5_TABLE} WHERE chunk_id = ? AND collection_name = ?",
+                        "DELETE FROM chunks_fts WHERE chunk_id = ? AND collection_name = ?",
                         (record.id, coll),
                     )
                 conn.execute(
@@ -201,7 +204,7 @@ class SQLiteVectorStore(BaseVectorStore):
                 if self._write_fts:
                     tt = _tokenized_text_for_fts(record.text)
                     conn.execute(
-                        f"INSERT INTO {_FTS5_TABLE} (chunk_id, collection_name, tokenized_text) VALUES (?, ?, ?)",
+                        "INSERT INTO chunks_fts (chunk_id, collection_name, tokenized_text) VALUES (?, ?, ?)",
                         (record.id, coll, tt),
                     )
             if self._write_fts and chunks_for_images:
@@ -244,7 +247,7 @@ class SQLiteVectorStore(BaseVectorStore):
             meta_safe = {k: v for k, v in meta.items() if k != "mime_type" and not isinstance(v, bytes)}
             meta_json = json.dumps(meta_safe, ensure_ascii=False) if meta_safe else None
             conn.execute(
-                f"INSERT OR REPLACE INTO {_IMAGES_TABLE} (id, collection_name, image_data, mime_type, metadata_json) VALUES (?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO images (id, collection_name, image_data, mime_type, metadata_json) VALUES (?, ?, ?, ?, ?)",
                 (img_id, collection_name, img_bytes, mime, meta_json),
             )
 
@@ -324,20 +327,36 @@ class SQLiteVectorStore(BaseVectorStore):
 
         conn = self._get_conn()
         try:
-            placeholders = ",".join("?" * len(ids))
+            ids_json = json.dumps(ids, ensure_ascii=False)
             if self._write_fts:
                 self._delete_orphan_images(conn, ids, coll)
                 conn.execute(
-                    f"DELETE FROM {_FTS5_TABLE} WHERE chunk_id IN ({placeholders}) AND collection_name = ?",
-                    (*ids, coll),
+                    """
+                    DELETE FROM chunks_fts
+                    WHERE collection_name = ?
+                      AND chunk_id IN (SELECT value FROM json_each(?))
+                    """,
+                    (coll, ids_json),
                 )
             conn.execute(
-                f"DELETE FROM chunks_vec WHERE chunk_rowid IN (SELECT rowid FROM chunks WHERE id IN ({placeholders}) AND collection_name = ?)",
-                (*ids, coll),
+                """
+                DELETE FROM chunks_vec
+                WHERE chunk_rowid IN (
+                    SELECT rowid
+                    FROM chunks
+                    WHERE collection_name = ?
+                      AND id IN (SELECT value FROM json_each(?))
+                )
+                """,
+                (coll, ids_json),
             )
             conn.execute(
-                f"DELETE FROM chunks WHERE id IN ({placeholders}) AND collection_name = ?",
-                (*ids, coll),
+                """
+                DELETE FROM chunks
+                WHERE collection_name = ?
+                  AND id IN (SELECT value FROM json_each(?))
+                """,
+                (coll, ids_json),
             )
             conn.commit()
             return len(ids)
@@ -347,6 +366,45 @@ class SQLiteVectorStore(BaseVectorStore):
                 f"SQLite delete 失败 (backend={self._backend}, collection={coll}): {str(e)}"
             ) from e
 
+    def delete_by_source_doc_id(
+        self,
+        collection_name: str,
+        source_doc_id: str,
+        trace: Optional[Any] = None,
+    ) -> int:
+        """
+        按 metadata.source_doc_id 删除文档下所有 chunk。
+
+        Args:
+            collection_name: 集合名称
+            source_doc_id: 文档 id
+            trace: 追踪上下文（可选）
+
+        Returns:
+            int: 实际删除的 chunk 数量
+        """
+        coll = (collection_name or "").strip()
+        if not coll:
+            raise ValueError("collection_name 不能为空")
+        doc_id = (source_doc_id or "").strip()
+        if not doc_id:
+            raise ValueError("source_doc_id 不能为空")
+
+        conn = self._get_conn()
+        rows = conn.execute(
+            """
+            SELECT id
+            FROM chunks
+            WHERE collection_name = ?
+              AND json_extract(metadata_json, '$.source_doc_id') = ?
+            """,
+            (coll, doc_id),
+        ).fetchall()
+        chunk_ids = [str(r["id"]) for r in rows if r["id"]]
+        if not chunk_ids:
+            return 0
+        return self.delete(ids=chunk_ids, trace=trace, collection_name=coll)
+
     def _delete_orphan_images(
         self,
         conn: sqlite3.Connection,
@@ -355,11 +413,15 @@ class SQLiteVectorStore(BaseVectorStore):
     ) -> None:
         """删除仅被已删 chunk 引用的图片。"""
         deleted_refs: set = set()
+        ids_json = json.dumps(deleted_chunk_ids, ensure_ascii=False)
         rows = conn.execute(
-            "SELECT metadata_json FROM chunks WHERE id IN ({}) AND collection_name = ?".format(
-                ",".join("?" * len(deleted_chunk_ids))
-            ),
-            (*deleted_chunk_ids, collection_name),
+            """
+            SELECT metadata_json
+            FROM chunks
+            WHERE collection_name = ?
+              AND id IN (SELECT value FROM json_each(?))
+            """,
+            (collection_name, ids_json),
         ).fetchall()
         for row in rows:
             meta = {}
@@ -373,10 +435,13 @@ class SQLiteVectorStore(BaseVectorStore):
         if not deleted_refs:
             return
         remaining = conn.execute(
-            "SELECT metadata_json FROM chunks WHERE collection_name = ? AND id NOT IN ({})".format(
-                ",".join("?" * len(deleted_chunk_ids))
-            ),
-            (collection_name, *deleted_chunk_ids),
+            """
+            SELECT metadata_json
+            FROM chunks
+            WHERE collection_name = ?
+              AND id NOT IN (SELECT value FROM json_each(?))
+            """,
+            (collection_name, ids_json),
         ).fetchall()
         still_refd: set = set()
         for row in remaining:
@@ -391,7 +456,7 @@ class SQLiteVectorStore(BaseVectorStore):
         to_delete = deleted_refs - still_refd
         for img_id in to_delete:
             conn.execute(
-                f"DELETE FROM {_IMAGES_TABLE} WHERE id = ? AND collection_name = ?",
+                "DELETE FROM images WHERE id = ? AND collection_name = ?",
                 (img_id, collection_name),
             )
 
@@ -425,12 +490,12 @@ class SQLiteVectorStore(BaseVectorStore):
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                f"""
+                """
                 SELECT c.id, c.text, c.metadata_json, fts.rk
                 FROM (
-                    SELECT chunk_id, bm25({_FTS5_TABLE}) AS rk
-                    FROM {_FTS5_TABLE}
-                    WHERE {_FTS5_TABLE} MATCH ? AND collection_name = ?
+                    SELECT chunk_id, bm25(chunks_fts) AS rk
+                    FROM chunks_fts
+                    WHERE chunks_fts MATCH ? AND collection_name = ?
                     ORDER BY rk
                     LIMIT ?
                 ) fts
@@ -471,7 +536,7 @@ class SQLiteVectorStore(BaseVectorStore):
             return False
         conn = self._get_conn()
         row = conn.execute(
-            f"SELECT 1 FROM {_FTS5_TABLE} WHERE collection_name = ? LIMIT 1",
+            "SELECT 1 FROM chunks_fts WHERE collection_name = ? LIMIT 1",
             (collection_name,),
         ).fetchone()
         return row is not None
@@ -483,6 +548,51 @@ class SQLiteVectorStore(BaseVectorStore):
             "SELECT DISTINCT collection_name FROM chunks ORDER BY collection_name"
         ).fetchall()
         return [r[0] for r in rows]
+
+    def get_chunks_by_parent_id(
+        self,
+        collection_name: str,
+        parent_id: str,
+    ) -> List[QueryResult]:
+        """
+        按 parent_id 取出该父下所有子块，按 chunk_index 升序排列。
+
+        Args:
+            collection_name: 集合名称
+            parent_id: 父节点 id
+
+        Returns:
+            List[QueryResult]: 子块列表，按 chunk_index 升序
+        """
+        conn = self._get_conn()
+        rows = conn.execute(
+            """
+            SELECT id, text, metadata_json
+            FROM chunks
+            WHERE collection_name = ?
+              AND json_extract(metadata_json, '$.parent_id') = ?
+            ORDER BY CAST(json_extract(metadata_json, '$.chunk_index') AS INTEGER)
+            """,
+            (collection_name, parent_id),
+        ).fetchall()
+
+        results = []
+        for row in rows:
+            meta: dict = {}
+            if row["metadata_json"]:
+                try:
+                    meta = json.loads(row["metadata_json"])
+                except json.JSONDecodeError:
+                    pass
+            results.append(
+                QueryResult(
+                    id=row["id"],
+                    score=0.0,
+                    text=row["text"] or "",
+                    metadata=meta,
+                )
+            )
+        return results
 
     def get_image(
         self,
@@ -503,7 +613,7 @@ class SQLiteVectorStore(BaseVectorStore):
             return None
         conn = self._get_conn()
         row = conn.execute(
-            f"SELECT image_data, mime_type FROM {_IMAGES_TABLE} WHERE id = ? AND collection_name = ?",
+            "SELECT image_data, mime_type FROM images WHERE id = ? AND collection_name = ?",
             (image_id, collection_name),
         ).fetchone()
         if row:

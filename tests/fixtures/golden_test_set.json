@@ -1,23 +1,791 @@
 [
   {
-    "query": "Python is a programming language",
-    "golden_chunk_ids": ["chunk_1"],
-    "collection": null,
-    "top_k": 5,
-    "description": "基础文本匹配：查找与 Python 编程语言相关的 chunk"
+    "query": "氢能汽车租赁平台有哪些功能？",
+    "golden_chunk_ids": [
+      "doc_d74e182f4bf867a6_chunk_3"
+    ],
+    "collection": "report",
+    "description": "report #1 (doc_d74e182f4bf867a6_chunk_3)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "氢能汽车的普及仍然面临着一定的挑战",
+        "氢能汽车租赁平台应运而生"
+      ]
+    }
   },
   {
-    "query": "machine learning artificial intelligence",
-    "golden_chunk_ids": ["chunk_2"],
-    "collection": null,
-    "top_k": 5,
-    "description": "语义匹配：机器学习与人工智能"
+    "query": "氢能车辆租赁APP的背景与意义是什么",
+    "golden_chunk_ids": [
+      "doc_d74e182f4bf867a6_chunk_0"
+    ],
+    "collection": "report",
+    "description": "report #2 (doc_d74e182f4bf867a6_chunk_0)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "氢能作为一种来源丰富、绿色低碳、应用广泛的二次能源",
+        "氢能车辆租赁 APP 的设计与实现"
+      ]
+    }
   },
   {
-    "query": "RAG retrieval augmented generation",
-    "golden_chunk_ids": ["chunk_3"],
-    "collection": null,
-    "top_k": 5,
-    "description": "专有名词检索：RAG 检索增强生成"
+    "query": "氢能汽车租赁平台面临哪些主要问题",
+    "golden_chunk_ids": [
+      "doc_d74e182f4bf867a6_chunk_8"
+    ],
+    "collection": "report",
+    "description": "report #3 (doc_d74e182f4bf867a6_chunk_8)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "数据隐私与安全问题",
+        "用户数据和支付信息"
+      ]
+    }
+  },
+  {
+    "query": "uni-app 有哪些优点和功能",
+    "golden_chunk_ids": [
+      "doc_d74e182f4bf867a6_chunk_20"
+    ],
+    "collection": "report",
+    "description": "report #4 (doc_d74e182f4bf867a6_chunk_20)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "uni-app 是一个基于 Vue.js 的开源框架",
+        "SpringBoot 是一个用于构建生产级别 Java 应用的框架"
+      ]
+    }
+  },
+  {
+    "query": "氢能车辆租赁系统中，系统管理员有哪些主要职责？",
+    "golden_chunk_ids": [
+      "doc_d74e182f4bf867a6_chunk_16"
+    ],
+    "collection": "report",
+    "description": "report #5 (doc_d74e182f4bf867a6_chunk_16)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": true,
+      "keywords_in_markdown": [
+        "高效、稳定的数据交互"
+      ]
+    }
+  },
+  {
+    "query": "如何选择合适的 Batch Size 以最小化资源消耗",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_26"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #1 (doc_3b869820a8a7de51_chunk_26)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "将 Batch Size 与效果预算进行比较只会涉及到完美缩放的范围",
+        "使用尽可能大的 Batch Size"
+      ]
+    }
+  },
+  {
+    "query": "Adam 的超参数调整应该注意哪些方面",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_22"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #2 (doc_3b869820a8a7de51_chunk_22)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "Batch Size 决定训练速度",
+        "Batch Size 是决定训练时间和计算资源消耗的关键因素"
+      ]
+    }
+  },
+  {
+    "query": "如何为该开源项目提交贡献",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_95"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #3 (doc_3b869820a8a7de51_chunk_95)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "请不要在未通过问题跟踪系统",
+        "请关注我们的仓库"
+      ]
+    }
+  },
+  {
+    "query": "贝叶斯优化在计算资源有限的情况下是否仍具有优势",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_78"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #4 (doc_3b869820a8a7de51_chunk_78)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "Quasi-Random-Search 很简单",
+        "在许多调优试验并行运行时特别高效"
+      ]
+    }
+  },
+  {
+    "query": "如何选择适合项目的模型架构和优化器？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_20"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #5 (doc_3b869820a8a7de51_chunk_20)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "keywords_in_markdown": [
+        "在调优过程中的许多抉择，我们可以在项目开始时一次性做出决定。只有偶尔在情"
+      ]
+    }
+  },
+  {
+    "query": "残差前的归一化有什么作用",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_84"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #6 (doc_3b869820a8a7de51_chunk_84)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "尝试将残差调控因子初始化为 0",
+        "xi+1 = xi + αiF (xi)"
+      ]
+    }
+  },
+  {
+    "query": "哪些超参数在短训练后仍可能适用于更长的训练过程",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_63"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #7 (doc_3b869820a8a7de51_chunk_63)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "This paper说学习率衰减计划也能转移"
+      ]
+    }
+  },
+  {
+    "query": "如何选择合适的 Batch Size 以最小化训练时间",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_4"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #8 (doc_3b869820a8a7de51_chunk_4)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "1.3 选择 BatchSize",
+        "选择合适的 Batch Size 以最小化训练时间"
+      ]
+    }
+  },
+  {
+    "query": "如何选择适合新项目的模型架构",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_3"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #9 (doc_3b869820a8a7de51_chunk_3)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "我们不知道最好的深度学习秘诀"
+      ]
+    }
+  },
+  {
+    "query": "哪些人对本文稿提出了宝贵意见并帮助改进？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_94"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #10 (doc_3b869820a8a7de51_chunk_94)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "我们复用了最初由 Naman Agarwal 为其他联合研究制作的几个分析图的一些实验数据"
+      ]
+    }
+  },
+  {
+    "query": "哪些超参数可能因与其他参数相互影响而成为冗余超参数",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_36"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #11 (doc_3b869820a8a7de51_chunk_36)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "冗余超参数越多，我们没能充分针对每个目标超参数调优冗余超参数的风险就越高",
+        "一个冗余超参数和目标超参数的相互影响越多，固定这个参数所带来的限制就越多"
+      ]
+    }
+  },
+  {
+    "query": "如何区分正则化技术中的目标超参数和冗余超参数？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_38"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #12 (doc_3b869820a8a7de51_chunk_38)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "正则化技术引入的超参数通常是冗余超参数",
+        "dropout 率作为一个冗余超参数"
+      ]
+    }
+  },
+  {
+    "query": "哪些学习率衰减方案被推荐作为默认选择",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_73"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #13 (doc_3b869820a8a7de51_chunk_73)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "linear decay 或 cosine decay"
+      ]
+    }
+  },
+  {
+    "query": "为什么学习率和架构参数被称为元参数而不是超参数",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_90"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #14 (doc_3b869820a8a7de51_chunk_90)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "我们更愿意使用 “元参数” 这个术语来表示学习率、架构参数以及我们在深度学习中调整的所有参数",
+        "超参数这个术语在深度学习社区中已经变得极为通俗"
+      ]
+    }
+  },
+  {
+    "query": "Quasi-Random-Search 需要多少次试验才能获得较好的结果",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_80"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #15 (doc_3b869820a8a7de51_chunk_80)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "Quasi-Random-Search 算法不可用",
+        "试验次数会对结果产生重大影响"
+      ]
+    }
+  },
+  {
+    "query": "如何确定模型层数对验证集错误的影响",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_34"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #16 (doc_3b869820a8a7de51_chunk_34)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "了解特定模型超参数（例如激活函数）的影响",
+        "目标超参数是指，我们希望测量出其对于模型由何种影响的参数"
+      ]
+    }
+  },
+  {
+    "query": "如何签署贡献协议以及代码提交的审核流程是怎样的",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_96"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #17 (doc_3b869820a8a7de51_chunk_96)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "所有的提交（包括来自项目成员的提交）都需要进行审核"
+      ]
+    }
+  },
+  {
+    "query": "如何在训练时间有限的情况下优化模型和超参数？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_62"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #18 (doc_3b869820a8a7de51_chunk_62)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "在短时间和不完整训练中找到的超参数"
+      ]
+    }
+  },
+  {
+    "query": "优化器超参数是否需要单独调整以保证实验公平性",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_37"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #19 (doc_3b869820a8a7de51_chunk_37)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "如果我们的实验目标涉及在两个或多个不同的优化器之间进行公平比较",
+        "通常应该假设优化器超参数必须单独调整"
+      ]
+    }
+  },
+  {
+    "query": "如何优化输入管道性能以减少I/O延迟和数据预处理成本？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_66"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #20 (doc_3b869820a8a7de51_chunk_66)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "CommonLoopUtils(link)",
+        "同步设备和主机之间的"
+      ]
+    }
+  },
+  {
+    "query": "最佳点靠近搜索空间边界意味着什么",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_44"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #21 (doc_3b869820a8a7de51_chunk_44)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "如果研究的最佳点在一维或多维搜索空间的边界附近",
+        "搜索可能不够广泛"
+      ]
+    }
+  },
+  {
+    "query": "如何系统地优化深度学习模型性能",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_0"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #22 (doc_3b869820a8a7de51_chunk_0)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "深度学习调优指南中文版"
+      ]
+    }
+  },
+  {
+    "query": "初始配置选择时如何平衡训练步数和资源消耗？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_29"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #23 (doc_3b869820a8a7de51_chunk_29)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "选择快速且消耗最少资源的初始配置",
+        "例如，从较小的模型开始"
+      ]
+    }
+  },
+  {
+    "query": "流行的优化算法有哪些及其更新规则是什么",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_92"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #24 (doc_3b869820a8a7de51_chunk_92)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "5.11 所有流行的优化算法的更新规则是什么？",
+        "θt+1 = θt − ηt∇↕(θt)"
+      ]
+    }
+  },
+  {
+    "query": "如何判断模型训练中的变化是由超参数调整还是随机因素引起的",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_52"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #25 (doc_3b869820a8a7de51_chunk_52)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "训练程序方差、再训练方差或试验方差",
+        "例如，不同的随机初始化、训练数据的 shuffles"
+      ]
+    }
+  },
+  {
+    "query": "训练时出现误差上升不下降该如何处理",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_82"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #26 (doc_3b869820a8a7de51_chunk_82)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "训练中期突然出现的不稳定",
+        "全损失梯度的 L2 范数"
+      ]
+    }
+  },
+  {
+    "query": "更改 Batch Size 后需要调整哪些超参数",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_28"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #27 (doc_3b869820a8a7de51_chunk_28)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "大多数超参数的最佳值对 Batch Size 敏感",
+        "与 Batch Size 交互最强烈的超参数是优化器超参数"
+      ]
+    }
+  },
+  {
+    "query": "学习率过高会导致模型训练不稳定吗",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_97"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #28 (doc_3b869820a8a7de51_chunk_97)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": true,
+      "keywords_in_markdown": [
+        "peak learning rate and error rate",
+        "optimal hyperparameter search space bounda"
+      ]
+    }
+  },
+  {
+    "query": "如何选择训练期间的最佳模型检查点？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_70"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #29 (doc_3b869820a8a7de51_chunk_70)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "运行固定步长的训练，并回顾性地从中选择最佳检查点",
+        "设置管道以跟踪到目前为止在训练期间看到的 N 个最佳检查点"
+      ]
+    }
+  },
+  {
+    "query": "如何判断模型训练时间是否足够",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_57"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #30 (doc_3b869820a8a7de51_chunk_57)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "max_train_steps"
+      ]
+    }
+  },
+  {
+    "query": "减少训练步数对模型调整有什么影响",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_30"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #31 (doc_3b869820a8a7de51_chunk_30)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "更少步数的训练意味着每次训练运行得更快",
+        "通过减少周期之间的时"
+      ]
+    }
+  },
+  {
+    "query": "如何设置定期评估以监控模型性能",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_13"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #32 (doc_3b869820a8a7de51_chunk_13)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "4.2.2 设置定期评估",
+        "选择样本进行定期评估"
+      ]
+    }
+  },
+  {
+    "query": "如何在计算资源有限的情况下确定训练时长",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_10"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #33 (doc_3b869820a8a7de51_chunk_10)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "3.2 当训练受计算限制时如何决定该训练多久",
+        "4.1 优化输入管道"
+      ]
+    }
+  },
+  {
+    "query": "如何确定每轮实验的目标以提高调整效率？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_33"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #34 (doc_3b869820a8a7de51_chunk_33)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "确定无效的方向并将其删除，从而降低后续实验的复杂度。",
+        "每轮实验都应该有一个明确的目标，并且范围要足够小，这样实验才能真正朝着目标取得进展。"
+      ]
+    }
+  },
+  {
+    "query": "定期评估如何设置才能在训练期间获得可靠信号同时缩短评估时间",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_67"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #35 (doc_3b869820a8a7de51_chunk_67)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "定期评估是最实际和最经济的选择",
+        "我们在定期评估时的目标是在训练期间获得可靠信号"
+      ]
+    }
+  },
+  {
+    "query": "如何在模型调优过程中逐步改进配置并确保每次更新都有依据",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_31"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #36 (doc_3b869820a8a7de51_chunk_31)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "在某些情况下，我们的目标是在固定截止日期",
+        "配置空间可能非常大，目前还没有任何算法"
+      ]
+    }
+  },
+  {
+    "query": "Quasi-Random-Search 为什么在优化探索阶段比贝叶斯优化更适合？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_75"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #37 (doc_3b869820a8a7de51_chunk_75)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "Quasi-Random-Search 的实现",
+        "低差异序列的 Quasi-Random-Search"
+      ]
+    }
+  },
+  {
+    "query": "隐藏层数较多的试验是否容易出现过拟合问题",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_47"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #38 (doc_3b869820a8a7de51_chunk_47)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "使用常见的正则化技术减少过度拟合通常很简单",
+        "例如，dropout、标签平滑化、权重衰减"
+      ]
+    }
+  },
+  {
+    "query": "Batch Size 增大对训练步数有什么影响",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_25"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #39 (doc_3b869820a8a7de51_chunk_25)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "Batch Size 越大，达到某一性能目标所需的步数通常会减少",
+        "完美缩放适用于 Batch Size 在临界值之前"
+      ]
+    }
+  },
+  {
+    "query": "如何减少深度学习训练中的失败情况",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_2"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #40 (doc_3b869820a8a7de51_chunk_2)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "如何调试和如何减少训练失败",
+        "调整超参数方面遇到了困难"
+      ]
+    }
+  },
+  {
+    "query": "如何处理搜索空间中的发散点以提高贝叶斯优化效果",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_55"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #41 (doc_3b869820a8a7de51_chunk_55)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "用贝叶斯优化工具来自动找到最佳超参数配置。",
+        "黑盒优化工具来正确处理发散试验很重要"
+      ]
+    }
+  },
+  {
+    "query": "如何调整预热步数以避免影响基础学习率的训练",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_87"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #42 (doc_3b869820a8a7de51_chunk_87)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "warmup_steps 应该以几个不同的数量级进行扫描",
+        "最大的搜索值不应超过 max_train_steps 的 10%"
+      ]
+    }
+  },
+  {
+    "query": "如何判断研究中的超参数搜索空间是否足够大？",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_43"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #43 (doc_3b869820a8a7de51_chunk_43)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "搜索空间够大吗？",
+        "我们都会总结该研究是否将冗余超参数调整得足够好"
+      ]
+    }
+  },
+  {
+    "query": "如何选择最佳的学习率衰减方案",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_14"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #44 (doc_3b869820a8a7de51_chunk_14)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "4.5 BatchNorm 的实现细节",
+        "4.6 多主机管道的注意事项"
+      ]
+    }
+  },
+  {
+    "query": "如何在计算资源有限的情况下决定训练时长",
+    "golden_chunk_ids": [
+      "doc_3b869820a8a7de51_chunk_65"
+    ],
+    "collection": "cslearning",
+    "description": "cslearning #45 (doc_3b869820a8a7de51_chunk_65)",
+    "expected_content_checks": {
+      "min_citations": 1,
+      "expect_images": false,
+      "keywords_in_markdown": [
+        "训练运行的长度 (从而增加完成研究的总体",
+        "使用适当的性能分析工具来诊性能受限的输入管道"
+      ]
+    }
   }
 ]

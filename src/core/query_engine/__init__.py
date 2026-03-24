@@ -6,6 +6,7 @@
 from src.core.query_engine.dense_retriever import DenseRetriever
 from src.core.query_engine.fusion import fuse_rrf
 from src.core.query_engine.hybrid_search import HybridSearch
+from src.core.query_engine.parent_aggregator import ParentAggregator
 from src.core.query_engine.query_processor import (
     ProcessedQuery,
     QueryProcessor,
@@ -20,6 +21,7 @@ __all__ = [
     "QueryProcessor",
     "SparseRetriever",
     "HybridSearch",
+    "ParentAggregator",
     "RerankerOrchestrator",
     "RetrievalPipeline",
     "fuse_rrf",

@@ -193,3 +193,51 @@ class BaseVectorStore(ABC):
         默认无操作，需要清理的实例（如 QdrantStore）可重写此方法。
         """
         pass
+
+    def get_chunks_by_parent_id(
+        self,
+        collection_name: str,
+        parent_id: str,
+    ) -> List["QueryResult"]:
+        """
+        按 parent_id 取出该父下所有子块，按 chunk_index 升序排列。
+        用于 ParentAggregator 拼合父级完整正文。
+
+        默认抛出 NotImplementedError，支持父子索引的后端需覆盖此方法。
+
+        Args:
+            collection_name: 集合名称
+            parent_id: 父节点 id（存于 metadata 的 parent_id 字段）
+
+        Returns:
+            List[QueryResult]: 该父下的子块列表，按 chunk_index 升序
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} 不支持 get_chunks_by_parent_id，"
+            "请使用 SQLiteVectorStore 或实现该方法。"
+        )
+
+    def delete_by_source_doc_id(
+        self,
+        collection_name: str,
+        source_doc_id: str,
+        trace: Optional[Any] = None,
+    ) -> int:
+        """
+        按 source_doc_id 删除文档下所有 chunk。
+        用于文档重入库前先清理旧块，避免旧数据残留。
+
+        默认抛出 NotImplementedError，支持该能力的后端需覆盖此方法。
+
+        Args:
+            collection_name: 集合名称
+            source_doc_id: 文档 id（存于 metadata 的 source_doc_id 字段）
+            trace: 追踪上下文（可选）
+
+        Returns:
+            int: 实际删除的记录数量
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} 不支持 delete_by_source_doc_id，"
+            "请使用 SQLiteVectorStore 或实现该方法。"
+        )

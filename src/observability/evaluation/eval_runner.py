@@ -31,6 +31,7 @@ class GoldenCase:
     collection: Optional[str] = None
     top_k: int = 10
     description: str = ""
+    expected_content_checks: Optional[Dict[str, Any]] = None  # L2 内容检查（可选）
 
 
 @dataclass
@@ -123,6 +124,7 @@ def load_golden_test_set(path: str) -> List[GoldenCase]:
                 collection=item.get("collection"),
                 top_k=item.get("top_k", 10),
                 description=item.get("description", ""),
+                expected_content_checks=item.get("expected_content_checks"),
             )
         )
 

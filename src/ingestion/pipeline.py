@@ -399,7 +399,26 @@ class IngestionPipeline:
             collection_name: 集合名称
             trace: 追踪上下文（可选）
         """
-        chunk_ids = [c.id for c in chunks]
+        source_doc_id = ""
+        if chunks:
+            source_doc_id = str(chunks[0].metadata.get("source_doc_id", "")).strip()
+
+        if source_doc_id:
+            try:
+                self._vector_upserter.replace_document_chunks(
+                    source_doc_id=source_doc_id,
+                    chunks=chunks,
+                    dense_vectors=dense_vectors,
+                    sparse_vectors=sparse_vectors,
+                    trace=trace,
+                    collection_name=collection_name,
+                )
+                return
+            except NotImplementedError:
+                logger.warning(
+                    "当前 VectorStore 不支持按 source_doc_id 清理，回退到普通 upsert。backend=%s",
+                    self._vector_upserter.get_vector_store().get_backend(),
+                )
 
         self._vector_upserter.upsert_chunks(
             chunks=chunks,
@@ -436,8 +455,10 @@ class IngestionPipeline:
         if not document or not document.text:
             raise ValueError("Document 或 Document.text 不能为空")
         
-        # 使用 Splitter 切分文本
-        text_chunks = self._splitter.split_text(document.text, trace=trace)
+        # 使用 Splitter 切分文本，同时获取每段的结构 metadata（如 parent_id）
+        chunk_tuples = self._splitter.split_with_metadata(
+            document.text, doc_id=document.id, trace=trace
+        )
         
         # 准备阶段：建立图片元数据索引（用于高效查找）
         image_data_dict = document.metadata.get("image_data") or {}
@@ -452,7 +473,7 @@ class IngestionPipeline:
         chunks: List[Chunk] = []
         current_offset = 0
         
-        for idx, chunk_text in enumerate(text_chunks):
+        for idx, (chunk_text, split_meta) in enumerate(chunk_tuples):
             # 生成 Chunk ID（基于文档 ID 和 chunk 索引）
             chunk_id = self._generate_chunk_id(document.id, idx)
             
@@ -468,8 +489,11 @@ class IngestionPipeline:
             chunk_metadata.update({
                 "chunk_index": idx,
                 "source_doc_id": document.id,
-                "total_chunks": len(text_chunks),
+                "total_chunks": len(chunk_tuples),
             })
+            # 合并切分器返回的结构 metadata（如 parent_id、heading_text 等）
+            # recursive 策略下 split_meta 为空字典，此处无副作用
+            chunk_metadata.update(split_meta)
             
             # 提取该 chunk 的图片引用
             image_refs = self._extract_image_refs(chunk_text)

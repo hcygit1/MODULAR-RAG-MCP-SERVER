@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from src.core.response.citation_generator import generate_citations
 
 
-def _results_to_markdown(results: List["QueryResult"], max_chars_per_chunk: int = 500) -> str:
+def _results_to_markdown(results: List["QueryResult"], max_chars_per_chunk: int = 1000) -> str:
     """
     将检索结果拼接为 Markdown 文本。
 
@@ -46,7 +46,7 @@ def _results_to_markdown(results: List["QueryResult"], max_chars_per_chunk: int 
 
 def build_mcp_content(
     results: List["QueryResult"],
-    max_chars_per_chunk: int = 500,
+    max_chars_per_chunk: int = 1000,
     collection_name: Optional[str] = None,
     sqlite_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -85,7 +85,7 @@ def build_mcp_content(
 class ResponseBuilder:
     """响应构建器（类封装）。"""
 
-    def __init__(self, max_chars_per_chunk: int = 500) -> None:
+    def __init__(self, max_chars_per_chunk: int = 1000) -> None:
         self._max_chars = max_chars_per_chunk
 
     def build(self, results: List["QueryResult"]) -> Dict[str, Any]:

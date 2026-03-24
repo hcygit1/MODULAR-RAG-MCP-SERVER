@@ -539,7 +539,7 @@ LlamaIndex 为向量数据库定义了统一的 `VectorStore` 抽象接口，所
 	2. 确保新后端的依赖已安装、凭据已配置。
 	3. 重启服务，工厂函数自动加载新实现，无需修改业务代码。
 
-- **统一存储约束**：任一 backend 需在其自身容器内存储 chunk、向量、稀疏索引、图片，避免跨库一致性问题。推荐 `backend=sqlite` + `sparse_backend=fts5`。参见 `docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md` 与 `docs/FACTORY_AND_BACKENDS.md`。
+- **统一存储约束**：任一 backend 需在其自身容器内存储 chunk、向量、稀疏索引、图片，避免跨库一致性问题。推荐 `backend=sqlite` + `sparse_backend=fts5`。参见 `docs/SQLITE_AND_UNIFIED_STORAGE_PLAN.md`。
 
 ### 3.4 可观测性与追踪设计 (Observability & Tracing Design)
 
@@ -745,7 +745,7 @@ observability:
 
 - **存储原始图片**：
   - 图片由当前 VectorStore 在其容器内存储（如 SQLite 的 images 表、Qdrant 的 payload）。
-  - 不再使用文件系统 `data/images/`；统一存储架构见 `docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md`。
+  - 不再使用文件系统 `data/images/`；统一存储架构见 `docs/SQLITE_AND_UNIFIED_STORAGE_PLAN.md`。
 
 **2. Splitter 阶段：保持图文关联**
 

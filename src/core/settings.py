@@ -76,6 +76,13 @@ class RetrievalConfig:
     top_k_dense: int
     top_k_sparse: int
     top_k_final: int
+    aggregate_by_parent: bool = False
+    parent_id_metadata_key: str = "parent_id"
+    parent_score_strategy: str = "sum"
+    parent_aggregate_top_m: int = 30
+    # 父聚合（heading 子块等）时双路粗召可单独加大；未设则与 top_k_dense/sparse 相同
+    top_k_dense_parent: Optional[int] = None
+    top_k_sparse_parent: Optional[int] = None
 
 
 @dataclass
@@ -135,6 +142,9 @@ class IngestionConfig:
     enable_metadata_enrichment: bool
     enable_image_captioning: bool
     batch_size: int
+    splitter_strategy: str = "recursive"
+    heading_split_level: int = 3
+    heading_parent_level: int = 2
 
 
 @dataclass
@@ -246,6 +256,10 @@ def _parse_config(data: dict) -> Settings:
         top_k_dense=retrieval_data.get("top_k_dense", 20),
         top_k_sparse=retrieval_data.get("top_k_sparse", 20),
         top_k_final=retrieval_data.get("top_k_final", 10),
+        aggregate_by_parent=retrieval_data.get("aggregate_by_parent", False),
+        parent_id_metadata_key=retrieval_data.get("parent_id_metadata_key", "parent_id"),
+        parent_score_strategy=retrieval_data.get("parent_score_strategy", "sum"),
+        parent_aggregate_top_m=retrieval_data.get("parent_aggregate_top_m", 30),
     )
     
     rerank_data = data.get("rerank", {})
@@ -288,6 +302,9 @@ def _parse_config(data: dict) -> Settings:
         enable_metadata_enrichment=ingestion_data.get("enable_metadata_enrichment", True),
         enable_image_captioning=ingestion_data.get("enable_image_captioning", True),
         batch_size=ingestion_data.get("batch_size", 32),
+        splitter_strategy=ingestion_data.get("splitter_strategy", "recursive"),
+        heading_split_level=ingestion_data.get("heading_split_level", 3),
+        heading_parent_level=ingestion_data.get("heading_parent_level", 2),
     )
 
     mineru_data = data.get("mineru", {})
@@ -373,7 +390,7 @@ def validate_settings(settings: Settings) -> None:
     if sparse_backend == "bm25":
         logging.warning(
             "sparse_backend=bm25 为遗留模式，推荐迁移至 backend=sqlite + sparse_backend=fts5 实现统一存储。"
-            "参见 docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md"
+            "参见 docs/SQLITE_AND_UNIFIED_STORAGE_PLAN.md"
         )
 
     # 弃用警告：chroma/qdrant 当前未实现统一存储（chunk+vec+BM25+图片同容器）
@@ -381,7 +398,7 @@ def validate_settings(settings: Settings) -> None:
         logging.warning(
             "backend=%s 当前未满足统一存储约束（BM25/图片在独立容器）。"
             "推荐使用 backend=sqlite + sparse_backend=fts5。"
-            "参见 docs/UNIFIED_STORAGE_IMPLEMENTATION_PLAN.md",
+            "参见 docs/SQLITE_AND_UNIFIED_STORAGE_PLAN.md",
             vs_backend,
         )
     

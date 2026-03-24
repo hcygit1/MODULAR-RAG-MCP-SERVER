@@ -5,7 +5,7 @@ Splitter 抽象接口模块
 都必须遵循此接口。
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class BaseSplitter(ABC):
@@ -67,8 +67,30 @@ class BaseSplitter(ABC):
     def get_chunk_overlap(self) -> int:
         """
         获取当前配置的块重叠大小
-        
+    
         Returns:
             int: 重叠大小（字符数或 token 数）
         """
         pass
+
+    def split_with_metadata(
+        self,
+        text: str,
+        doc_id: str,
+        trace: Optional[Any] = None,
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """
+        切分文本，同时为每段返回 metadata。
+
+        默认实现：调用 split_text，每段 metadata 为空字典。
+        HeadingSplitter 等子类可覆盖此方法以返回 parent_id 等结构信息。
+
+        Args:
+            text: 输入文本
+            doc_id: 文档 ID，供子类生成 parent_id 使用
+            trace: 追踪上下文（可选）
+
+        Returns:
+            List[Tuple[str, Dict[str, Any]]]: (chunk_text, metadata) 列表
+        """
+        return [(chunk, {}) for chunk in self.split_text(text, trace=trace)]

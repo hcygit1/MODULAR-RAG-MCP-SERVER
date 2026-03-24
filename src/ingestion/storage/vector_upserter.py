@@ -68,31 +68,7 @@ class VectorUpserter:
                 f"chunks 数量 ({len(chunks)}) 与 sparse_vectors 数量 ({len(sparse_vectors)}) 不一致"
             )
         
-        # 使用 chunk.id 作为 record id（与 BM25 对齐），组装 VectorRecord
-        records = []
-        for i, chunk in enumerate(chunks):
-            if not chunk.id or not str(chunk.id).strip():
-                raise ValueError(
-                    f"Chunk 缺少有效 id，无法与 BM25 对齐。index={i}"
-                )
-            chunk_id = chunk.id
-            dense_vector = dense_vectors[i]
-            sparse_vector = sparse_vectors[i]
-            
-            # 计算 content_hash 并存入 metadata（用于修改检测）
-            content_hash = self._compute_content_hash(chunk.text)
-            
-            enriched_metadata = chunk.metadata.copy()
-            enriched_metadata["sparse_vector"] = sparse_vector  # 将稀疏向量存入 metadata
-            enriched_metadata["content_hash"] = content_hash  # 用于后续修改检测与增量优化
-            
-            record = VectorRecord(
-                id=chunk_id,
-                vector=dense_vector,
-                text=chunk.text,
-                metadata=enriched_metadata
-            )
-            records.append(record)
+        records = self._build_records(chunks, dense_vectors, sparse_vectors)
         
         # 批量写入向量数据库。SQLite+write_fts 时传入 chunks 以同期写入 images
         store = self._vector_store
@@ -105,6 +81,48 @@ class VectorUpserter:
             )
         else:
             store.upsert(records, trace=trace, collection_name=collection_name)
+
+    def replace_document_chunks(
+        self,
+        source_doc_id: str,
+        chunks: List[Chunk],
+        dense_vectors: List[List[float]],
+        sparse_vectors: List[Dict[str, float]],
+        trace: Optional[Any] = None,
+        collection_name: Optional[str] = None,
+    ) -> int:
+        """
+        文档级替换写入：先删旧块，再写入新块。
+
+        Args:
+            source_doc_id: 文档 id（metadata.source_doc_id）
+            chunks: 新 Chunk 对象列表
+            dense_vectors: 稠密向量列表
+            sparse_vectors: 稀疏向量列表
+            trace: 追踪上下文（可选）
+            collection_name: 集合名称（可选）
+
+        Returns:
+            int: 删除的旧 chunk 数量
+        """
+        doc_id = (source_doc_id or "").strip()
+        if not doc_id:
+            raise ValueError("source_doc_id 不能为空")
+
+        # 先删除旧块，避免文档改短时残留旧 chunk。
+        deleted_count = self._vector_store.delete_by_source_doc_id(
+            collection_name=collection_name or self._vector_store.get_collection_name(),
+            source_doc_id=doc_id,
+            trace=trace,
+        )
+        self.upsert_chunks(
+            chunks=chunks,
+            dense_vectors=dense_vectors,
+            sparse_vectors=sparse_vectors,
+            trace=trace,
+            collection_name=collection_name,
+        )
+        return deleted_count
 
     def delete_chunks(
         self,
@@ -142,6 +160,38 @@ class VectorUpserter:
             str: SHA256 哈希值的十六进制字符串
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def _build_records(
+        self,
+        chunks: List[Chunk],
+        dense_vectors: List[List[float]],
+        sparse_vectors: List[Dict[str, float]],
+    ) -> List[VectorRecord]:
+        """将 Chunk 和向量组装为 VectorRecord 列表。"""
+        records: List[VectorRecord] = []
+        for i, chunk in enumerate(chunks):
+            if not chunk.id or not str(chunk.id).strip():
+                raise ValueError(
+                    f"Chunk 缺少有效 id，无法与 BM25 对齐。index={i}"
+                )
+            chunk_id = chunk.id
+            dense_vector = dense_vectors[i]
+            sparse_vector = sparse_vectors[i]
+
+            content_hash = self._compute_content_hash(chunk.text)
+            enriched_metadata = chunk.metadata.copy()
+            enriched_metadata["sparse_vector"] = sparse_vector
+            enriched_metadata["content_hash"] = content_hash
+
+            records.append(
+                VectorRecord(
+                    id=chunk_id,
+                    vector=dense_vector,
+                    text=chunk.text,
+                    metadata=enriched_metadata,
+                )
+            )
+        return records
     
     def get_vector_store(self) -> BaseVectorStore:
         """

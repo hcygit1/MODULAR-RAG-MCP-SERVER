@@ -50,7 +50,7 @@ embedding:
 vector_store:
   backend: sqlite  # chroma | qdrant | pinecone | sqlite（推荐 sqlite 统一存储）
   persist_path: "./data/db/qdrant"  # chroma | qdrant 时生效
-  collection_name: "report"
+  collection_name: "cslearning"
   # backend=sqlite 时生效
   sqlite_path: "./data/db/rag.sqlite"
   embedding_dim: 1536  # 与 embedding 模型一致，运行 scripts/embedding_dim.py 可查询
@@ -62,16 +62,20 @@ vector_store:
 retrieval:
   sparse_backend: fts5  # backend=sqlite 时必须为 fts5（FTS5 与 chunk 同库）
   fusion_algorithm: rrf  # rrf | weighted_sum
-  top_k_dense: 20
-  top_k_sparse: 20
-  top_k_final: 10
+  top_k_dense: 30
+  top_k_sparse: 30
+  top_k_final: 15
+  aggregate_by_parent: false       # 是否启用父子聚合（heading 切分场景）
+  parent_id_metadata_key: parent_id
+  parent_score_strategy: sum       # sum | count
+  parent_aggregate_top_m: 30       # 交给聚合器前保留的子块候选数
 
 # 重排配置
 rerank:
-  backend: none  # none | cross_encoder | llm
-  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-  top_m: 30
-  timeout_seconds: 5
+  backend: cross_encoder # none | cross_encoder | llm
+  model: "/Users/hcy/Desktop/MODULAR-RAG-MCP-SERVER/model"
+  top_m: 10
+  timeout_seconds: 10
 
 # 评估配置
 evaluation:
@@ -103,4 +107,7 @@ ingestion:
   enable_llm_refinement: false  # 是否启用 LLM 重写 Chunk
   enable_metadata_enrichment: false
   enable_image_captioning: true
-  batch_size: 32
+  batch_size: 25  # DashScope text-embedding 单批上限 25
+  splitter_strategy: recursive    # recursive | heading（heading 用于父子索引场景）
+  heading_split_level: 3        # 在第几级标题处切块（3 = ###）
+  heading_parent_level: 2       # 哪一级标题作为父（2 = ##）
