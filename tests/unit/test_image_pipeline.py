@@ -83,7 +83,7 @@ class TestImageDataPassing:
         
         document = Document(
             id=doc_id,
-            text=f"Some text.\n[IMAGE: {image_id}]\nMore text.",
+            text=f"Some text.\n[IMAGE:{image_id}]\nMore text.",
             metadata={
                 "image_data": {image_id: image_bytes},
                 "images": [{"image_id": image_id, "page": 0, "mime_type": "image/png"}]
@@ -109,7 +109,7 @@ class TestImageDataPassing:
             vector_store=FakeVectorStore()
         )
         
-        text = "Before [IMAGE: id_1] middle [IMAGE: id_2] after"
+        text = "Before [IMAGE:id_1] middle [IMAGE:id_2] after"
         refs = pipeline._extract_image_refs(text)
         assert refs == ["id_1", "id_2"]
 

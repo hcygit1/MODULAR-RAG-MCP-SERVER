@@ -371,7 +371,7 @@ class ImageCaptioner(BaseTransform):
             if image_id in captions:
                 caption = captions[image_id]
                 # 查找图片占位符并追加描述
-                placeholder = f"[IMAGE: {image_id}]"
+                placeholder = f"[IMAGE:{image_id}]"
                 if placeholder in enriched_text:
                     enriched_text = enriched_text.replace(
                         placeholder,

@@ -263,7 +263,7 @@ class TestMCPServerE2:
         vs = indexed_fixtures["vector_store"]
         chunk_with_image = Chunk(
             id="chunk_with_img",
-            text="Chart showing data science growth [IMAGE: test_doc_page_0_img_0]",
+            text="Chart showing data science growth [IMAGE:test_doc_page_0_img_0]",
             metadata={
                 "source_path": "doc.pdf",
                 "chunk_index": 0,

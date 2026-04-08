@@ -145,6 +145,8 @@ class IngestionConfig:
     splitter_strategy: str = "recursive"
     heading_split_level: int = 3
     heading_parent_level: int = 2
+    enable_boundary_repair: bool = False
+    boundary_repair_mode: str = "rule"  # "rule" | "llm"
 
 
 @dataclass
@@ -305,6 +307,8 @@ def _parse_config(data: dict) -> Settings:
         splitter_strategy=ingestion_data.get("splitter_strategy", "recursive"),
         heading_split_level=ingestion_data.get("heading_split_level", 3),
         heading_parent_level=ingestion_data.get("heading_parent_level", 2),
+        enable_boundary_repair=ingestion_data.get("enable_boundary_repair", False),
+        boundary_repair_mode=ingestion_data.get("boundary_repair_mode", "rule"),
     )
 
     mineru_data = data.get("mineru", {})

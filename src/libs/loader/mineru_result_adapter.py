@@ -107,12 +107,12 @@ def _replace_image_refs(markdown_text: str, path_to_id: Dict[str, str]) -> str:
         # 尝试多种匹配：完整 path、含 images/ 前缀、相对路径
         for k, image_id in path_to_id.items():
             if path_norm == k or path_norm.endswith("/" + k) or k in path_norm or path_norm in k:
-                return f"[IMAGE: {image_id}]"
+                return f"[IMAGE:{image_id}]"
         # 若 path 为文件名，尝试匹配 images/xxx 形式
         base = path_norm.split("/")[-1] if "/" in path_norm else path_norm
         for k, image_id in path_to_id.items():
             if k.endswith(base) or base in k:
-                return f"[IMAGE: {image_id}]"
+                return f"[IMAGE:{image_id}]"
         logger.warning("未找到图片映射: %s", path)
         return m.group(0)  # 保留原样
 

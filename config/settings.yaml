@@ -111,3 +111,5 @@ ingestion:
   splitter_strategy: recursive    # recursive | heading（heading 用于父子索引场景）
   heading_split_level: 3        # 在第几级标题处切块（3 = ###）
   heading_parent_level: 2       # 哪一级标题作为父（2 = ##）
+  enable_boundary_repair: false  # 是否启用块边界语义修复
+  boundary_repair_mode: rule     # rule（规则拼接，零成本） | llm（LLM 重写，更准但需 API）

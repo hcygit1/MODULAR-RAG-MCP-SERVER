@@ -51,13 +51,15 @@ class RecursiveSplitter(BaseSplitter):
         self._splitter = RecursiveCharacterTextSplitter(
             chunk_size=self._chunk_size,
             chunk_overlap=self._chunk_overlap,
-            length_function=len,  # 使用字符数作为长度函数
+            length_function=len,
+            is_separator_regex=True,
             separators=[
-                "\n\n",  # 段落分隔符（最高优先级）
-                "\n",    # 换行符
-                ". ",    # 句子分隔符
-                " ",     # 单词分隔符
-                ""       # 字符分隔符（最低优先级，作为最后手段）
+                "\n\n",
+                "\n",
+                r"\. ",
+                r"(?=\[IMAGE:)",  # 零宽前瞻：在占位符前切，不消费字符，保证占位符完整
+                " ",
+                "",
             ]
         )
     

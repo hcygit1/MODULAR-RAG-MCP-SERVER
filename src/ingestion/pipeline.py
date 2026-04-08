@@ -2,7 +2,7 @@
 Ingestion Pipeline 模块
 
 提供文档摄取、处理、存储的完整流程。
-实现 integrity→load→split→transform→encode→store 的完整编排。
+实现 integrity→load→split→transform→boundary_repair→encode→store 的完整编排。
 """
 import logging
 from pathlib import Path
@@ -20,6 +20,7 @@ from src.core.trace.trace_context import TraceContext
 from src.ingestion.transform.chunk_refiner import ChunkRefiner
 from src.ingestion.transform.metadata_enricher import MetadataEnricher
 from src.ingestion.transform.image_captioner import ImageCaptioner
+from src.ingestion.transform.boundary_repairer import BoundaryRepairer
 from src.ingestion.embedding.dense_encoder import DenseEncoder
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
 from src.ingestion.embedding.batch_processor import BatchProcessor
@@ -100,6 +101,14 @@ class IngestionPipeline:
             image_storage=None
         )
         
+        # Boundary Repair 组件（可选，默认关闭）
+        self._boundary_repairer: Optional[BoundaryRepairer] = None
+        if self._ingestion_config.enable_boundary_repair:
+            self._boundary_repairer = BoundaryRepairer(
+                config=self._ingestion_config,
+                llm=llm,
+            )
+
         # Embedding 组件
         if embedding is None:
             embedding = EmbeddingFactory.create(settings)
@@ -216,7 +225,22 @@ class IngestionPipeline:
                 transformed_chunks = self._apply_transforms(chunks, trace=trace)
         except Exception as e:
             raise RuntimeError(f"Chunk 转换失败: {str(e)}") from e
-        
+
+        # 步骤 4.5: Boundary Repair（可选，修复块边界断裂）
+        if self._boundary_repairer is not None:
+            try:
+                if _trace:
+                    with _trace.stage("boundary_repair"):
+                        transformed_chunks = self._boundary_repairer.repair(
+                            transformed_chunks, trace=trace
+                        )
+                else:
+                    transformed_chunks = self._boundary_repairer.repair(
+                        transformed_chunks, trace=trace
+                    )
+            except Exception as e:
+                logger.warning("块边界修复失败，跳过: %s", e)
+
         # 步骤 5: Encode（编码）
         try:
             if _trace:
@@ -316,6 +340,21 @@ class IngestionPipeline:
                 transformed_chunks = self._apply_transforms(chunks, trace=trace)
         except Exception as e:
             raise RuntimeError(f"Chunk 转换失败: {str(e)}") from e
+
+        # 步骤 3.5: Boundary Repair（可选，修复块边界断裂）
+        if self._boundary_repairer is not None:
+            try:
+                if _trace:
+                    with _trace.stage("boundary_repair"):
+                        transformed_chunks = self._boundary_repairer.repair(
+                            transformed_chunks, trace=trace
+                        )
+                else:
+                    transformed_chunks = self._boundary_repairer.repair(
+                        transformed_chunks, trace=trace
+                    )
+            except Exception as e:
+                logger.warning("块边界修复失败，跳过: %s", e)
 
         # 步骤 4: Encode
         try:

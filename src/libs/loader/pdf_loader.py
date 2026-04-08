@@ -462,7 +462,7 @@ class PdfLoader(BaseLoader):
         all_placeholders = []
         for page_num in sorted(page_images.keys()):
             for image_id, _, _, _ in page_images[page_num]:
-                all_placeholders.append(f"[IMAGE: {image_id}]")
+                all_placeholders.append(f"[IMAGE:{image_id}]")
         
         if all_placeholders:
             # 在文档末尾追加所有占位符
@@ -522,7 +522,7 @@ class PdfLoader(BaseLoader):
                 if page_num not in page_to_markdown:
                     # 如果找不到页面映射，在该页的图片使用简单策略（追加到末尾）
                     for image_id, _, _, _ in page_images[page_num]:
-                        insertions.append((len(markdown_lines), f"[IMAGE: {image_id}]"))
+                        insertions.append((len(markdown_lines), f"[IMAGE:{image_id}]"))
                     continue
                 
                 start_line, end_line = page_to_markdown[page_num]
@@ -545,7 +545,7 @@ class PdfLoader(BaseLoader):
                 if page_lines_count <= 0:
                     # 如果该页没有文本行，在末尾插入所有图片
                     for image_id, _, _, _ in images:
-                        insertions.append((end_line, f"[IMAGE: {image_id}]"))
+                        insertions.append((end_line, f"[IMAGE:{image_id}]"))
                     continue
                 
                 # 按 Y 坐标排序图片（从上到下）
@@ -565,7 +565,7 @@ class PdfLoader(BaseLoader):
                     # 确保不超出页面范围
                     target_line = max(start_line, min(target_line, end_line - 1))
                     
-                    insertions.append((target_line, f"[IMAGE: {image_id}]"))
+                    insertions.append((target_line, f"[IMAGE:{image_id}]"))
         
         finally:
             doc.close()

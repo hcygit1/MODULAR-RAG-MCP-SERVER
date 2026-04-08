@@ -288,9 +288,9 @@ def test_split_document_image_refs_extraction():
     # 创建包含图片占位符的文档
     text_with_images = """
     这是第一段。
-    [IMAGE: doc_123_5_1]
+    [IMAGE:doc_123_5_1]
     这是第二段。
-    [IMAGE: doc_123_5_2]
+    [IMAGE:doc_123_5_2]
     这是第三段。
     """
     

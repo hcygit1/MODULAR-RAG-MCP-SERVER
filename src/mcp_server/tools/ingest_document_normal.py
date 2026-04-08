@@ -91,7 +91,7 @@ def _parse_markdown(path: Path) -> "Document":
             "mime_type": mime,
             "source_path": str(img_path),
         })
-        return f"[IMAGE: {image_id}]"
+        return f"[IMAGE:{image_id}]"
 
     replaced_text = _MD_IMAGE_RE.sub(_replace, text)
 

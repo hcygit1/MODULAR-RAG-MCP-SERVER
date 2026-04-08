@@ -77,7 +77,7 @@ def run_test(pdf_path: str) -> None:
         print(f"\n占位符数量: {len(placeholders)} 个")
         if placeholders:
             for ph in placeholders[:5]:
-                print(f"  - [IMAGE: {ph}]")
+                print(f"  - [IMAGE:{ph}]")
             if len(placeholders) > 5:
                 print(f"  ... 及其他 {len(placeholders) - 5} 个")
         

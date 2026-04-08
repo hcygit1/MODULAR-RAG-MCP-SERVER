@@ -162,7 +162,7 @@ class TestImageCaptionerEnabled:
         
         chunk = Chunk(
             id="test_chunk_3",
-            text="这是包含图片的文本。[IMAGE: img_001]",
+            text="这是包含图片的文本。[IMAGE:img_001]",
             metadata={"image_refs": ["img_001"]}
         )
         
@@ -200,7 +200,7 @@ class TestImageCaptionerEnabled:
         
         chunk = Chunk(
             id="test_chunk_4",
-            text="文本内容 [IMAGE: img_001] 更多文本 [IMAGE: img_002]",
+            text="文本内容 [IMAGE:img_001] 更多文本 [IMAGE:img_002]",
             metadata={"image_refs": ["img_001", "img_002"]}
         )
         
@@ -225,7 +225,7 @@ class TestImageCaptionerFallback:
         
         chunk = Chunk(
             id="test_chunk_5",
-            text="这是包含图片的文本。[IMAGE: img_001]",
+            text="这是包含图片的文本。[IMAGE:img_001]",
             metadata={"image_refs": ["img_001"]}
         )
         
@@ -253,7 +253,7 @@ class TestImageCaptionerFallback:
         
         chunk = Chunk(
             id="test_chunk_6",
-            text="这是包含图片的文本。[IMAGE: img_001]",
+            text="这是包含图片的文本。[IMAGE:img_001]",
             metadata={"image_refs": ["img_001"]}
         )
         
@@ -284,7 +284,7 @@ class TestImageCaptionerFallback:
         
         chunk = Chunk(
             id="test_chunk_7",
-            text="这是包含图片的文本。[IMAGE: img_001]",
+            text="这是包含图片的文本。[IMAGE:img_001]",
             metadata={"image_refs": ["img_001"]}
         )
         
@@ -313,7 +313,7 @@ class TestImageCaptionerEdgeCases:
         
         captioner = ImageCaptioner(settings.ingestion, settings.vision_llm)
         
-        original_text = "这是原始文本内容。[IMAGE: img_001]"
+        original_text = "这是原始文本内容。[IMAGE:img_001]"
         chunk = Chunk(
             id="test_chunk_8",
             text=original_text,
@@ -411,7 +411,7 @@ class TestImageCaptionerEdgeCases:
         
         chunk = Chunk(
             id="test_chunk_12",
-            text="文本 [IMAGE: img_001] [IMAGE: img_002] [IMAGE: img_003]",
+            text="文本 [IMAGE:img_001] [IMAGE:img_002] [IMAGE:img_003]",
             metadata={"image_refs": ["img_001", "img_002", "img_003"]}
         )
         
