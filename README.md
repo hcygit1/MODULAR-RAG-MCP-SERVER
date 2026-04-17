@@ -12,37 +12,40 @@
 本项目是一个**企业级智能问答与知识检索系统**，可应用于以下场景：
 
 - **📖 文档问答**：支持 PDF、Markdown、代码文件等多格式文档的智能问答，快速从海量文档中提取精准答案
-- **🔍 语义搜索**：基于混合检索技术，提供比传统关键词搜索更智能的语义理解能力
-- **💡 知识库构建**：将企业内部文档、技术资料转化为可检索的知识库，提升团队协作效率
-- **🤖 AI 助手集成**：通过 MCP (Model Context Protocol) 协议，可无缝对接 Claude、GitHub Copilot 等 AI 助手
+- **🔍 语义搜索**：基于混合检索技术（稠密向量 + BM25/FTS5），提供比传统关键词搜索更智能的语义理解能力
+- **💡 知识库构建**：将企业内部文档、技术资料转化为可检索的知识库；PDF 支持 **本地解析（MarkItDown）** 与 **MinerU 云端精细解析** 两种入库路径
+- **🤖 AI 助手集成**：通过 MCP (Model Context Protocol) 协议，可无缝对接 Claude、GitHub Copilot、Cursor 等支持 MCP 的客户端
 - **🎯 个性化应用**：可扩展为客服机器人、技术文档助手、代码搜索引擎等垂直领域应用
 
-> 💼 **面试利器**：本项目的模块化设计和完整实现，可直接作为简历项目展示，涵盖 RAG 技术栈的核心知识点，是大模型/AI 工程师面试的绝佳项目案例。
+> 💼 **面试与学习**：模块化实现与 `DEV_SPEC.md` 设计文档对齐，适合作为简历项目；`.cursor/skills/` 下提供面试模拟、项目学习、复习与简历等辅助技能。
 
 ---
 
 ## 🎯 项目特点
 
 ### 1️⃣ **可插拔架构 (Pluggable Architecture)**
-- **LLM 后端灵活切换**：支持 Azure OpenAI、OpenAI API、本地模型（Ollama/vLLM）等多种后端，通过配置文件一键切换，零代码修改
-- **模型组件自由替换**：Embedding 模型、Rerank 模型、文档解析器、切分策略等核心组件均采用抽象接口设计，支持"乐高积木式"组合
-- **检索策略可配置**：支持纯向量检索、BM25 关键词检索、混合检索（Hybrid Search）等多种模式动态配置
+- **LLM 后端灵活切换**：支持 Azure OpenAI、OpenAI、Ollama、DeepSeek、DashScope、Qwen 等（见 `config/settings.yaml` 中 `llm.provider`），通过配置切换
+- **模型组件可替换**：Embedding、Reranker、Loader、VectorStore、Splitter 等通过工厂与配置装配
+- **检索策略可配置**：稠密检索、稀疏检索（FTS5/BM25）、混合检索与融合算法（如 RRF）可在配置中调整
 
 ### 2️⃣ **全链路可观测 (Observable)**
-- **结构化日志追踪**：每个模块输出详细的结构化日志，便于问题定位与性能分析
-- **评测指标体系**：集成 Ragas/DeepEval 等 RAG 评测框架，量化检索质量与生成效果
-- **监控与调试友好**：提供完整的请求链路追踪，支持实时性能监控
+- **结构化追踪**：可选将 MCP 调用等写入 `logs/traces.jsonl`（由 `main.py` 与配置驱动）
+- **评估与金标**：支持自定义评估链路（`evaluation.backends`）；**Ragas / DeepEval 在 Evaluator 工厂中仍为占位，当前请使用 `custom` 后端**
+- **Trace Dashboard**：安装 `pip install -e ".[dashboard]"` 后，可运行 `python scripts/start_dashboard.py` 查看 Streamlit 面板
 
 ### 3️⃣ **MCP 协议集成 (Model Context Protocol)**
-- **标准化接口**：完整实现 MCP 协议规范，可无缝对接 Claude Desktop、GitHub Copilot 等支持 MCP 的 AI 助手
-- **开箱即用**：通过 MCP Server 暴露 RAG 能力，让 AI 助手直接调用项目的检索和问答功能，无需额外开发
-- **工具化封装**：将 RAG 流程封装为 MCP Tools，AI 可以自主决策何时调用检索、如何组合多个工具完成复杂任务
-- **上下文增强**：为 AI 对话提供实时的知识库支持，让通用大模型具备领域专业知识
+- **标准化接口**：基于官方 MCP SDK（FastMCP），默认 **Stdio** 传输
+- **当前暴露的工具**（见 `src/mcp_server/server.py`）：
+  - `query_knowledge_hub`：知识库语义检索与问答
+  - `list_collections`：列出已入库集合
+  - `ingest_document_normal`：本地 PDF 解析入库（MarkItDown）
+  - `ingest_document_mineru`：MinerU 云端解析入库（复杂版式 PDF）
+- **上下文增强**：为对话客户端提供可检索的领域知识
 
 ### 4️⃣ **工程化 RAG 实践**
-- **智能分块策略**：语义感知的文档切分，保留完整语义单元
-- **混合检索 (Hybrid Search)**：BM25 + Dense Embedding 融合，平衡查准率与查全率
-- **两段式精排**：粗排召回 → Rerank 精排，在性能与精度间取得最优平衡
+- **多种切分策略**：如递归切分、标题感知切分等（见 `src/libs/splitter/`）
+- **混合检索**：稠密 + 稀疏，适配不同数据分布
+- **重排**：支持 `none`、Cross-Encoder、`llm` 等 rerank 后端（Cross-Encoder 需 `pip install -e ".[reranker]"`）
 
 ---
 
@@ -52,53 +55,40 @@
 
 > **"文档即规范，实现交给 AI"**
 
-本项目采用创新的 **AI 协作开发模式**，让您专注于架构设计与业务逻辑，将代码实现高效委托给 AI：
+本项目采用 **AI 协作开发模式**：架构与接口以 `DEV_SPEC.md` 为主文档，配合 Cursor Skills 完成学习与自动化辅助。
 
 #### ✨ 项目特色
-- **完整的 Skills 体系**：通过精心设计的 Markdown 技能文件（`.cursor/skills/`），AI 可以理解项目规范、遵循最佳实践，自动化完成代码实现
-- **VibeCoding 实践**：掌握最新的 AI 协作开发技巧（VibeCoding），通过自然语言描述需求，让 AI 自动生成符合规范的代码
-- **规范驱动开发**：`DEV_SPEC.md` 作为项目的"宪法"，定义架构、模块设计、技术选型等核心规范，AI 严格遵循文档完成编码
-- **零背景快速上手**：即使您不熟悉 RAG 技术栈，只需理解文档、修改需求描述，AI 会自动将您的想法转化为生产级代码
+- **Cursor Skills**：`.cursor/skills/` 下提供与仓库绑定的能力包，例如：
+  - `interview-prep`：模拟技术面试并生成报告
+  - `project-learner`：分域问答式学习项目
+  - `project-review`：章节化复习与进度记录
+  - `resume-writer`：基于本项目撰写简历项目描述
+  - `skill-creator`：创建或校验新 Skill 的流程与脚本
+- **规范驱动**：`DEV_SPEC.md` 描述架构、模块边界与技术选型，开发与阅读时以代码与 spec 对照为准
 
-#### 🚀 工作流程
+#### 🚀 建议工作流
 
 ```
-1. 📝 理解文档 (DEV_SPEC.md)  → 掌握项目设计理念与技术架构
-2. ✏️ 修改规范文档             → 根据需求调整设计方案或新增模块
-3. 🤖 调用 Skills 交给 AI      → 使用 dev-workflow、implement 等技能让 AI 完成编码
-4. ✅ 验证与迭代               → Review 代码、运行测试，持续优化
+1. 📝 阅读 DEV_SPEC.md     → 理解分层与数据流
+2. ✏️ 调整 config/settings.yaml（或 settings.local.yaml）→ 对齐你的 API 与存储路径
+3. 🤖 按需启用 .cursor/skills 中的技能 → 学习、面试或文档辅助
+4. ✅ 运行测试与端到端验证 → pytest / MCP 客户端联调
 ```
 
 #### 📖 配套资源
 
-本项目提供**三位一体**的学习资源，帮助您快速掌握 AI 协作开发模式：
-
 | 资源类型 | 内容说明 |
 |---------|---------|
-| 📄 **详尽的技术文档** | `DEV_SPEC.md` 提供完整的架构设计、技术选型、模块详解 |
-| 💻 **Skills 工作流** | `.cursor/skills/` 包含 spec-sync、implement、testing 等 AI 技能，指导 AI 完成开发任务 |
-| 🎬 **视频教程** | 从环境搭建到核心模块实现，全程实战演示 |
+| 📄 **设计文档** | `DEV_SPEC.md`：架构、模块、配置约定 |
+| 💻 **Skills** | `.cursor/skills/`：面试、学习、复习、简历等交互式工作流 |
 
-> 💡 **提示**：详细的设计理念、技术选型与模块设计请参考 [DEV_SPEC.md](DEV_SPEC.md)
+> 💡 **提示**：环境变量、向量维度、SQLite 统一存储等细节以 `DEV_SPEC.md` 与 `config/settings.yaml` 为准。
 
 ### 🎁 你将收获什么
 
-通过学习和实践本项目，你将掌握：
-
-#### 🔥 **最新的 AI 协作技能**
-- **Skills 工程化**：学会构建可复用的 AI 技能库，让 AI 成为你的"编程助手"
-- **VibeCoding 技巧**：掌握与 AI 高效协作的开发模式，提升 10 倍开发效率
-- **文档驱动开发**：理解如何通过规范文档指导 AI 完成复杂工程项目
-
-#### 🎯 **RAG 技术全栈能力**
-- **深入每个细节**：从文档解析、智能分块、向量化、混合检索到 Rerank 重排，逐一掌握 RAG 链路的每个环节
-- **工程化实践**：不仅是理论，更有生产级代码实现，理解如何将论文技术落地到实际项目
-- **性能优化**：学习如何平衡检索速度与精度，优化 Embedding 策略，调优 Rerank 模型
-
-#### 💼 **面试竞争力提升**
-- **简历项目加分**：本项目涵盖大模型/AI 工程师岗位的核心技术栈，可直接写入简历作为亮点项目
-- **面试问题应对**：配套的面试题库帮你应对"RAG 如何优化召回率"、"Embedding 模型如何选择"等高频问题
-- **技术深度展示**：模块化设计、可插拔架构等工程实践，展现你的系统设计能力
+- **RAG 全链路**：入库、切分、向量化、混合检索、重排、响应与引用
+- **MCP 集成**：将检索能力以工具形式暴露给 Agent
+- **可维护的工程结构**：`src/core`、`src/ingestion`、`src/libs`、`src/mcp_server` 分层清晰
 
 ---
 
@@ -106,35 +96,43 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/Modular-RAG-MCP-Server.git
-cd Modular-RAG-MCP-Server
+git clone https://github.com/hcygit1/MODULAR-RAG-MCP-SERVER.git
+cd MODULAR-RAG-MCP-SERVER
 
-# 安装依赖（推荐使用 pyproject.toml 安装）
+# 安装依赖（推荐使用 pyproject.toml）
 pip install -e .
 
-# 可选：启用 Rerank 精排（需 sentence-transformers）
+# 可选：Cross-Encoder 重排
 pip install -e ".[reranker]"
 
-# 可选：启用可观测性 Dashboard（需 Streamlit）
+# 可选：可观测性 Dashboard（Streamlit）
 pip install -e ".[dashboard]"
 
 # 配置文件：config/settings.yaml
-# 可复制为 config/settings.local.yaml 并覆盖本地配置
+# 可复制为 config/settings.local.yaml 覆盖本地配置
 # API Keys 可通过环境变量设置，或在配置中使用 ${VAR_NAME} 语法
 
-# 运行 MCP Server（Stdio，供 Copilot/Claude 对接）
+# 运行 MCP Server（Stdio，供 Copilot / Claude / Cursor 对接）
 python main.py
 # 或：python -m src.mcp_server.server
 ```
 
+### 命令行脚本（节选）
+
+- **入库**：`python scripts/ingest.py`、`python scripts/ingest_mineru.py`
+- **检索调试**：`python scripts/retrieve.py`
+- **评估**：`python scripts/evaluate.py`（需正确配置 `evaluation` 与金标数据）
+- **Dashboard**：`python scripts/start_dashboard.py`
+
 ### 配置说明
 
-- **主配置**：`config/settings.yaml`，支持 `MODULAR_RAG_CONFIG_PATH` 环境变量指定配置路径
-- **本地覆盖**：创建 `config/settings.local.yaml` 覆盖部分配置（如 API 密钥、LLM/Embedding 提供商等）
-- **统一存储（推荐）**：`backend=sqlite` + `sparse_backend=fts5` 将 chunk、向量、FTS5、图片存入同一 SQLite 文件。参见 `docs/SQLITE_AND_UNIFIED_STORAGE_PLAN.md`
-- **Reranker 后端**：`rerank.backend` 支持 `none`（默认）、`cross_encoder`、`llm`；使用 `cross_encoder` 需安装 `pip install -e ".[reranker]"`
+- **主配置**：`config/settings.yaml`，支持环境变量 `MODULAR_RAG_CONFIG_PATH` 指定路径
+- **本地覆盖**：创建 `config/settings.local.yaml` 覆盖密钥、模型提供商、路径等
+- **统一存储（推荐）**：`vector_store.backend: sqlite` 且 `retrieval.sparse_backend: fts5`，chunk、向量、FTS5、图片等同库管理；详见 `DEV_SPEC.md` 中 SQLite / 统一存储相关章节
+- **评估后端**：`evaluation.backends` 当前 **`custom` 可用**；`ragas` / `deepeval` 在 `EvaluatorFactory` 中尚未实现，选用会触发 `NotImplementedError`
+- **Reranker**：`rerank.backend` 支持 `none`、`cross_encoder`、`llm`；`cross_encoder` 需安装 `pip install -e ".[reranker]"`
 
-详细的环境配置、部署指南与使用示例请参考 [DEV_SPEC.md](DEV_SPEC.md)。
+更多说明见 [DEV_SPEC.md](DEV_SPEC.md)。
 
 ---
 
@@ -142,35 +140,32 @@ python main.py
 
 ```
 .
-├── DEV_SPEC.md              # 核心设计文档（项目"宪法"）
+├── DEV_SPEC.md              # 核心设计文档
 ├── config/
-│   └── settings.yaml        # 主配置文件
+│   └── settings.yaml        # 主配置文件（可配合 settings.local.yaml）
 ├── .cursor/
-│   └── skills/              # AI 协作开发技能库
-│       ├── spec-sync/       # 规范同步
-│       ├── implement/       # 代码实现
-│       ├── testing-stage/   # 测试验证
-│       ├── progress-tracker/
-│       ├── dev-workflow/
-│       └── checkpoint/
+│   └── skills/              # Cursor Skills（面试、学习、复习、简历等）
+├── main.py                  # MCP Server 启动入口
+├── scripts/                 # 入库、检索、评估、Dashboard 等脚本
 ├── src/                     # 源代码
-│   ├── core/                # 核心模块（配置、Query Engine、Trace）
-│   ├── ingestion/           # 文档解析、切分、Embedding、存储管道
-│   ├── libs/                # 可插拔组件（Loader、Embedding、Reranker、VectorStore 等）
-│   ├── mcp_server/          # MCP Server 与工具（query_knowledge_hub、list_collections）
-│   └── observability/       # 可观测性（Dashboard、评测）
-├── tests/                   # 测试用例
-└── docs/                    # 补充文档
+│   ├── core/                # 配置、Query Engine、Trace、Response
+│   ├── ingestion/           # 解析、切分、Embedding、存储管道
+│   ├── libs/                # Loader、Embedding、Reranker、VectorStore、Evaluator 等
+│   ├── mcp_server/          # FastMCP Server 与 MCP 工具
+│   └── observability/       # 日志、Dashboard、评测辅助
+├── tests/                   # 单元 / 集成 / 端到端测试
+└── docs/                    # 预留或补充文档目录（以 DEV_SPEC 为主）
 ```
 
 ---
 
 ## 🤝 贡献指南
 
-欢迎提交 Issue 和 Pull Request！在贡献代码前，请：
-1. 阅读 [DEV_SPEC.md](DEV_SPEC.md) 了解项目架构与设计理念
-2. 遵循项目的代码规范（见 `DEV_SPEC.md` 中的"开发规范"章节）
-3. 确保测试通过（`pytest tests/`）
+欢迎提交 Issue 和 Pull Request。在贡献代码前，请：
+
+1. 阅读 [DEV_SPEC.md](DEV_SPEC.md) 了解架构与约定
+2. 保持与现有代码风格一致（可参考 `pyproject.toml` 中的 black/ruff 配置）
+3. 运行测试：`pytest tests/`
 
 ---
 
