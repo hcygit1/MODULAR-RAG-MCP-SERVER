@@ -53,6 +53,9 @@ dashboard = [
 reranker = [
     "sentence-transformers>=2.2.0",  # B7.8: Cross-Encoder Reranker
 ]
+docling = [
+    "docling>=2.0.0",  # Structured document parsing and HybridChunker
+]
 
 [tool.setuptools]
 packages = ["src"]

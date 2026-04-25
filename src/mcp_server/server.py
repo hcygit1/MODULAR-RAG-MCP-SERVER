@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from src.mcp_server.tools.list_collections import list_collections
 from src.mcp_server.tools.query_knowledge_hub import query_knowledge_hub
 from src.mcp_server.tools.ingest_document_normal import ingest_document_normal
+from src.mcp_server.tools.ingest_document_docling import ingest_document_docling
 from src.mcp_server.tools.ingest_document_mineru import ingest_document_mineru
 
 mcp = FastMCP("modular-rag-mcp-server")
@@ -27,6 +28,11 @@ mcp.tool(description=(
     "使用本地 PdfLoader（MarkItDown）解析 PDF 并写入向量库，适用于简单排版 PDF，无需云端。"
     "参数: file_path(必填), collection_name(可选)。"
 ))(ingest_document_normal)
+mcp.tool(description=(
+    "当用户要把文档加入知识库、且文档包含较复杂表格、标题层级、图片混排，但仍是文本型文档时调用。"
+    "使用 Docling 做结构化解析和 HybridChunker 切块，并写入向量库。"
+    "参数: file_path(必填), collection_name(可选)。"
+))(ingest_document_docling)
 mcp.tool(description=(
     "当用户要把 PDF 加入知识库、或要求用 MinerU 精细解析/入库时调用。"
     "使用 MinerU 云端 API 解析 PDF 并写入向量库，适用于表格多、公式多、扫描件等复杂排版。"

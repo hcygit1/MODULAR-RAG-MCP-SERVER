@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 class IngestionPipeline:
     """
     Ingestion Pipeline 类
-    
+
     负责将文档通过完整的流程处理：
     integrity → load → split → transform → encode → store
-    
+
     串行执行各个步骤，并对失败步骤做清晰异常处理。
     """
-    
+
     def __init__(
         self,
         settings: Settings,
@@ -50,7 +50,7 @@ class IngestionPipeline:
     ):
         """
         初始化 Ingestion Pipeline
-        
+
         Args:
             settings: 配置对象，包含所有组件的配置
             splitter_strategy: Splitter 策略（可选），如果不提供则使用默认策略
@@ -61,11 +61,11 @@ class IngestionPipeline:
         """
         self._settings = settings
         self._ingestion_config = settings.ingestion
-        
+
         # 初始化各个组件
         self._integrity_checker = FileIntegrityChecker()
         self._splitter = SplitterFactory.create(settings, strategy=splitter_strategy)
-        
+
         # Text LLM：仅在未传入且 (enable_llm_refinement 或 enable_metadata_enrichment) 时创建
         if llm is None and (
             self._ingestion_config.enable_llm_refinement
@@ -76,7 +76,7 @@ class IngestionPipeline:
                 llm = LLMFactory.create(config=settings.llm)
             except (ValueError, NotImplementedError):
                 llm = None
-        
+
         # Transform 组件
         self._chunk_refiner = ChunkRefiner(
             config=self._ingestion_config,
@@ -86,21 +86,21 @@ class IngestionPipeline:
             config=self._ingestion_config,
             llm=llm
         )
-        
+
         # 统一存储：图片经 VectorStore 写入，不再使用 ImageStorage 文件写入
         # ImageCaptioner 从 chunk metadata 的 image_data 获取图片（回退路径）
         # Vision LLM：仅在未传入且 enable_image_captioning 时创建
         if vision_llm is None and self._ingestion_config.enable_image_captioning:
             from src.libs.llm.llm_factory import LLMFactory
             vision_llm = LLMFactory.create_vision_llm(settings)
-        
+
         self._image_captioner = ImageCaptioner(
             config=self._ingestion_config,
             vision_llm_config=settings.vision_llm,
             vision_llm=vision_llm,
             image_storage=None
         )
-        
+
         # Boundary Repair 组件（可选，默认关闭）
         self._boundary_repairer: Optional[BoundaryRepairer] = None
         if self._ingestion_config.enable_boundary_repair:
@@ -122,7 +122,7 @@ class IngestionPipeline:
             sparse_encoder=self._sparse_encoder,
             batch_size=self._ingestion_config.batch_size
         )
-        
+
         # Storage 组件（统一存储：chunk+vec+sparse 由 VectorStore 完成，不再使用独立 BM25Indexer）
         if vector_store is None:
             vector_store = VectorStoreFactory.create(settings)
@@ -157,14 +157,14 @@ class IngestionPipeline:
         """
         if not file_path:
             raise ValueError("file_path 不能为空")
-        
+
         if not collection_name:
             raise ValueError("collection_name 不能为空")
-        
+
         file_path_obj = Path(file_path)
         if not file_path_obj.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        
+
         if trace is None:
             trace = TraceContext(operation="ingestion")
         _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
@@ -188,7 +188,7 @@ class IngestionPipeline:
                 return
         except Exception as e:
             raise RuntimeError(f"文件完整性检查失败: {str(e)}") from e
-        
+
         # 步骤 2: Load（加载文档）
         try:
             if _trace:
@@ -200,83 +200,15 @@ class IngestionPipeline:
                 document = loader.load(file_path, trace=trace)
         except Exception as e:
             raise RuntimeError(f"文档加载失败: {str(e)}") from e
-        
-        # 步骤 3: Split（切分文档）
-        try:
-            if _trace:
-                with _trace.stage("split"):
-                    chunks = self.split_document(document, trace=trace)
-                _trace.set_metric("chunk_count", len(chunks))
-            else:
-                chunks = self.split_document(document, trace=trace)
-            if not chunks:
-                raise RuntimeError("文档切分后未产生任何 chunks")
-        except Exception as e:
-            raise RuntimeError(f"文档切分失败: {str(e)}") from e
-        
-        # 统一存储：图片在 store 阶段经 VectorStore 写入 images 表，不再写入文件
 
-        # 步骤 4: Transform（转换和增强）
-        try:
-            if _trace:
-                with _trace.stage("transform"):
-                    transformed_chunks = self._apply_transforms(chunks, trace=trace)
-            else:
-                transformed_chunks = self._apply_transforms(chunks, trace=trace)
-        except Exception as e:
-            raise RuntimeError(f"Chunk 转换失败: {str(e)}") from e
+        self.process_document(document, collection_name, trace=trace)
 
-        # 步骤 4.5: Boundary Repair（可选，修复块边界断裂）
-        if self._boundary_repairer is not None:
-            try:
-                if _trace:
-                    with _trace.stage("boundary_repair"):
-                        transformed_chunks = self._boundary_repairer.repair(
-                            transformed_chunks, trace=trace
-                        )
-                else:
-                    transformed_chunks = self._boundary_repairer.repair(
-                        transformed_chunks, trace=trace
-                    )
-            except Exception as e:
-                logger.warning("块边界修复失败，跳过: %s", e)
-
-        # 步骤 5: Encode（编码）
-        try:
-            if _trace:
-                with _trace.stage("encode"):
-                    dense_vectors, sparse_vectors = self._batch_processor.process(
-                        transformed_chunks, trace=trace
-                    )
-            else:
-                dense_vectors, sparse_vectors = self._batch_processor.process(
-                    transformed_chunks, trace=trace
-                )
-        except Exception as e:
-            raise RuntimeError(f"向量编码失败: {str(e)}") from e
-        
-        # 步骤 6: Store（存储）
-        try:
-            if _trace:
-                with _trace.stage("store"):
-                    self._store_results(
-                        transformed_chunks, dense_vectors, sparse_vectors,
-                        collection_name, trace=trace,
-                    )
-            else:
-                self._store_results(
-                    transformed_chunks, dense_vectors, sparse_vectors,
-                    collection_name, trace=trace,
-                )
-        except Exception as e:
-            raise RuntimeError(f"存储失败: {str(e)}") from e
-        
         # 标记处理成功（失败不影响主流程，但需记录日志避免重复处理未被发现）
         try:
             self._integrity_checker.mark_success(file_hash)
         except Exception as e:
             logger.warning("标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s", file_hash[:16] if file_hash else "?", e)
-        
+
         if _trace:
             _trace.set_metric("skipped", False)
 
@@ -329,7 +261,43 @@ class IngestionPipeline:
         except Exception as e:
             raise RuntimeError(f"文档切分失败: {str(e)}") from e
 
-        # 统一存储：图片在 store 阶段经 VectorStore 写入 images 表，不再写入文件
+        return self.process_chunks(chunks, collection_name, trace=trace)
+
+    def process_chunks(
+        self,
+        chunks: List[Chunk],
+        collection_name: str,
+        trace: Optional[Any] = None,
+    ) -> int:
+        """
+        从已有 Chunk 执行 Transform → Encode → Store（跳过 load 和 split）。
+
+        用于 Docling / MinerU 这类已经完成结构化切块的入口，避免表格和图片
+        block 被普通 splitter 再次切坏。
+
+        Args:
+            chunks: 已切好的 Chunk 列表
+            collection_name: 集合名称
+            trace: 追踪上下文（可选）
+
+        Returns:
+            int: 写入的 chunk 数量
+        """
+        if not chunks:
+            raise ValueError("chunks 不能为空")
+        if not collection_name or not str(collection_name).strip():
+            raise ValueError("collection_name 不能为空")
+
+        if trace is None:
+            trace = TraceContext(operation="ingestion")
+        _trace: Optional[TraceContext] = trace if isinstance(trace, TraceContext) else None
+
+        if _trace:
+            _trace.set_metric("collection_name", collection_name)
+            _trace.set_metric("chunk_count", len(chunks))
+            source_doc_id = str(chunks[0].metadata.get("source_doc_id", "")).strip()
+            if source_doc_id:
+                _trace.set_metric("doc_id", source_doc_id)
 
         # 步骤 3: Transform
         try:
@@ -387,7 +355,7 @@ class IngestionPipeline:
             raise RuntimeError(f"存储失败: {str(e)}") from e
 
         return len(transformed_chunks)
-    
+
     def _apply_transforms(
         self,
         chunks: List[Chunk],
@@ -395,31 +363,31 @@ class IngestionPipeline:
     ) -> List[Chunk]:
         """
         应用所有 Transform 组件
-        
+
         Args:
             chunks: 输入的 Chunk 列表
             trace: 追踪上下文（可选）
-        
+
         Returns:
             List[Chunk]: 转换后的 Chunk 列表
         """
         transformed_chunks = []
-        
+
         for chunk in chunks:
             # 依次应用 Transform
             # 1. ChunkRefiner（文本清理和优化）
             chunk = self._chunk_refiner.transform(chunk, trace=trace)
-            
+
             # 2. MetadataEnricher（元数据增强）
             chunk = self._metadata_enricher.transform(chunk, trace=trace)
-            
+
             # 3. ImageCaptioner（图片描述生成）
             chunk = self._image_captioner.transform(chunk, trace=trace)
-            
+
             transformed_chunks.append(chunk)
-        
+
         return transformed_chunks
-    
+
     def _store_results(
         self,
         chunks: List[Chunk],
@@ -466,7 +434,7 @@ class IngestionPipeline:
             trace=trace,
             collection_name=collection_name,
         )
-    
+
     def split_document(
         self,
         document: Document,
@@ -474,31 +442,31 @@ class IngestionPipeline:
     ) -> List[Chunk]:
         """
         将 Document 切分为多个 Chunk
-        
+
         使用配置的 Splitter 将文档文本切分为多个片段，每个片段包含：
         - 文本内容
         - 元数据（继承自 Document，并添加 chunk 特定信息）
         - 位置信息（start_offset, end_offset）
-        
+
         Args:
             document: 要切分的 Document 对象
             trace: 追踪上下文（可选），用于记录性能指标和调试信息
-        
+
         Returns:
             List[Chunk]: 切分后的 Chunk 列表
-        
+
         Raises:
             ValueError: 当 Document 无效时
             RuntimeError: 当切分过程失败时
         """
         if not document or not document.text:
             raise ValueError("Document 或 Document.text 不能为空")
-        
+
         # 使用 Splitter 切分文本，同时获取每段的结构 metadata（如 parent_id）
         chunk_tuples = self._splitter.split_with_metadata(
             document.text, doc_id=document.id, trace=trace
         )
-        
+
         # 准备阶段：建立图片元数据索引（用于高效查找）
         image_data_dict = document.metadata.get("image_data") or {}
         images_list = document.metadata.get("images") or []
@@ -507,19 +475,19 @@ class IngestionPipeline:
             img_id = img_meta.get("image_id")
             if img_id:
                 image_metadata_index[img_id] = img_meta
-        
+
         # 将文本片段转换为 Chunk 对象
         chunks: List[Chunk] = []
         current_offset = 0
-        
+
         for idx, (chunk_text, split_meta) in enumerate(chunk_tuples):
             # 生成 Chunk ID（基于文档 ID 和 chunk 索引）
             chunk_id = self._generate_chunk_id(document.id, idx)
-            
+
             # 计算位置偏移量
             start_offset = current_offset
             end_offset = current_offset + len(chunk_text)
-            
+
             # 构建 Chunk 元数据（继承 Document 的元数据，排除图片数据，只传递 chunk 相关的）
             chunk_metadata = {
                 k: v for k, v in document.metadata.items()
@@ -533,10 +501,10 @@ class IngestionPipeline:
             # 合并切分器返回的结构 metadata（如 parent_id、heading_text 等）
             # recursive 策略下 split_meta 为空字典，此处无副作用
             chunk_metadata.update(split_meta)
-            
+
             # 提取该 chunk 的图片引用
             image_refs = self._extract_image_refs(chunk_text)
-            
+
             # 只传递该 chunk 相关的图片数据和元数据
             if image_refs:
                 chunk_metadata["image_refs"] = image_refs
@@ -551,7 +519,7 @@ class IngestionPipeline:
                     chunk_metadata["image_data"] = chunk_image_data
                 if chunk_image_metadata:
                     chunk_metadata["image_metadata"] = chunk_image_metadata
-            
+
             # 创建 Chunk 对象
             chunk = Chunk(
                 id=chunk_id,
@@ -560,35 +528,35 @@ class IngestionPipeline:
                 start_offset=start_offset,
                 end_offset=end_offset
             )
-            
+
             chunks.append(chunk)
             current_offset = end_offset
-        
+
         return chunks
-    
+
     def _generate_chunk_id(self, doc_id: str, chunk_index: int) -> str:
         """
         生成 Chunk 唯一标识符
-        
+
         Args:
             doc_id: 文档 ID
             chunk_index: Chunk 索引
-        
+
         Returns:
             str: Chunk ID
         """
         # 格式：{doc_id}_chunk_{index}
         return f"{doc_id}_chunk_{chunk_index}"
-    
+
     def _extract_image_refs(self, text: str) -> List[str]:
         """
         从文本中提取图片引用（占位符）
-        
+
         提取格式为 [IMAGE: {image_id}] 的占位符。
-        
+
         Args:
             text: 文本内容
-        
+
         Returns:
             List[str]: 图片 ID 列表
         """
@@ -597,29 +565,29 @@ class IngestionPipeline:
         pattern = r'\[IMAGE:\s*([^\]]+)\]'
         matches = re.findall(pattern, text)
         return matches
-    
+
     def get_splitter_strategy(self) -> str:
         """
         获取当前使用的 Splitter 策略
-        
+
         Returns:
             str: 策略名称
         """
         return self._splitter.get_strategy()
-    
+
     def get_chunk_size(self) -> int:
         """
         获取当前配置的块大小
-        
+
         Returns:
             int: 块大小
         """
         return self._splitter.get_chunk_size()
-    
+
     def get_chunk_overlap(self) -> int:
         """
         获取当前配置的块重叠大小
-        
+
         Returns:
             int: 重叠大小
         """

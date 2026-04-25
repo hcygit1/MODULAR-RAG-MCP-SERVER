@@ -23,6 +23,7 @@ from src.libs.loader.file_integrity import FileIntegrityChecker
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 from src.mcp_server.tools.error_utils import build_error_response
+from src.mcp_server.tools.ingest_utils import parse_force
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +36,6 @@ _IMAGE_MIME: Dict[str, str] = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 }
-
-
-def _parse_force(value: Any) -> bool:
-    """解析 force 参数，兼容 bool/字符串。"""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
-    return False
-
 
 def _parse_markdown(path: Path) -> "Document":
     """
@@ -178,7 +169,7 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
         collection_name = settings.vector_store.collection_name
     else:
         collection_name = str(collection_name).strip()
-    force = _parse_force(arguments.get("force", False))
+    force = parse_force(arguments.get("force", False))
 
     # 与 CLI 行为对齐：默认开启完整性跳过，force=True 时强制重入库。
     checker = FileIntegrityChecker()
