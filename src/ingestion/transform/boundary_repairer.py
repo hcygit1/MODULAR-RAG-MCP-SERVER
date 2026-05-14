@@ -71,6 +71,9 @@ class BoundaryRepairer:
         repair_count = 0
 
         for i in range(len(repaired)):
+            if self._should_skip_repair(repaired[i]):
+                continue
+
             prev_chunk = repaired[i - 1] if i > 0 else None
             next_chunk = repaired[i + 1] if i < len(repaired) - 1 else None
 
@@ -105,6 +108,21 @@ class BoundaryRepairer:
     # ------------------------------------------------------------------
     # 检测
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _should_skip_repair(chunk: Chunk) -> bool:
+        """跳过不适合拼接邻近上下文的结构化 chunk。"""
+        metadata = chunk.metadata or {}
+        if metadata.get("block_type") == "table":
+            return True
+
+        block_types = metadata.get("block_types") or []
+        if isinstance(block_types, str):
+            block_types = [block_types]
+        if "table" in block_types:
+            return True
+
+        return bool(metadata.get("raw_table_html") or metadata.get("row_range"))
 
     @staticmethod
     def _needs_repair(
