@@ -9,9 +9,6 @@ description = "A modular, pluggable RAG (Retrieval-Augmented Generation) service
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [
-    {name = "Your Name", email = "your.email@example.com"}
-]
 keywords = ["rag", "mcp", "llm", "retrieval", "embedding"]
 classifiers = [
     "Development Status :: 3 - Alpha",

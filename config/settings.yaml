@@ -73,7 +73,7 @@ retrieval:
 # 重排配置
 rerank:
   backend: cross_encoder # none | cross_encoder | llm
-  model: "/Users/hcy/Desktop/MODULAR-RAG-MCP-SERVER/model"
+  model: "./model"
   top_m: 10
   timeout_seconds: 10
 
