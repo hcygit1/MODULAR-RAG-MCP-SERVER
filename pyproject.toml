@@ -54,8 +54,9 @@ docling = [
     "docling>=2.0.0",  # Structured document parsing and HybridChunker
 ]
 
-[tool.setuptools]
-packages = ["src"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src", "src.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
