@@ -80,7 +80,8 @@ def test_execute_success(
     mock_loader.load.assert_called_once_with(str(pdf_path))
     mock_pipeline.process_document.assert_called_once_with(mock_doc, "report", trace=ANY)
     mock_pipeline.close.assert_called_once()
-    mock_integrity.mark_success.assert_called_once_with("hash_123")
+    mock_integrity.should_skip.assert_called_once_with("hash_123", "report")
+    mock_integrity.mark_success.assert_called_once_with("hash_123", "report")
 
 
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
@@ -117,7 +118,8 @@ def test_execute_uses_default_collection(
     mock_pipeline_cls.return_value.process_document.assert_called_once_with(
         mock_doc, "default_coll", trace=ANY
     )
-    mock_integrity.mark_success.assert_called_once_with("hash_456")
+    mock_integrity.should_skip.assert_called_once_with("hash_456", "default_coll")
+    mock_integrity.mark_success.assert_called_once_with("hash_456", "default_coll")
 
 
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
@@ -145,4 +147,5 @@ def test_execute_skip_when_unchanged(
     assert result["isError"] is False
     assert result["structuredContent"]["skipped"] is True
     assert result["structuredContent"]["chunk_count"] == 0
+    mock_integrity.should_skip.assert_called_once_with("hash_skip", "report")
     mock_integrity.mark_success.assert_not_called()

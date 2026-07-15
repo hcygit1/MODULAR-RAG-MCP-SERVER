@@ -53,7 +53,7 @@ def execute_ingest_document_docling(arguments: Dict[str, Any]) -> Dict[str, Any]
     checker = FileIntegrityChecker()
     try:
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash)
+        should_skip = False if force else checker.should_skip(file_hash, collection_name)
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -93,7 +93,7 @@ def execute_ingest_document_docling(arguments: Dict[str, Any]) -> Dict[str, Any]
         trace = TraceContext(operation="ingestion")
         try:
             chunk_count = pipeline.process_chunks(chunks, collection_name, trace=trace)
-            checker.mark_success(file_hash)
+            checker.mark_success(file_hash, collection_name)
             return {
                 "content": [
                     {

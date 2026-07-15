@@ -67,7 +67,7 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
     checker = FileIntegrityChecker()
     try:
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash)
+        should_skip = False if force else checker.should_skip(file_hash, collection_name)
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -136,7 +136,7 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
                 document = to_document(raw)
                 chunk_count = pipeline.process_document(document, collection_name, trace=trace)
                 parser_mode = "mineru_markdown_fallback"
-            checker.mark_success(file_hash)
+            checker.mark_success(file_hash, collection_name)
             return {
                 "content": [{"type": "text", "text": f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks 到集合 {collection_name}"}],
                 "structuredContent": {

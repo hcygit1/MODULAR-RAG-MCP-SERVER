@@ -135,7 +135,7 @@ def main():
         if not args.force:
             try:
                 file_hash = integrity_checker.compute_sha256(str(file_path))
-                if integrity_checker.should_skip(file_hash):
+                if integrity_checker.should_skip(file_hash, args.collection):
                     skip_count += 1
                     logger.info(f"⏭️  文件跳过（未变更）: {file_path}")
                     continue

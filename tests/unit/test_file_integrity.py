@@ -5,6 +5,7 @@
 """
 import tempfile
 import os
+import sqlite3
 import pytest
 from pathlib import Path
 
@@ -135,6 +136,61 @@ class TestFileIntegrityChecker:
         checker.mark_failed(test_hash)
         # 失败的文件不应跳过（只有 success 状态才跳过）
         assert checker.should_skip(test_hash) is False
+
+    def test_success_is_scoped_by_collection(self, tmp_path: Path):
+        """同一文件只在已成功入库的集合中跳过。"""
+        checker = FileIntegrityChecker(db_path=tmp_path / "integrity.db")
+        test_hash = "shared_file_hash"
+
+        checker.mark_success(test_hash, collection_name="collection_a")
+
+        assert checker.should_skip(test_hash, collection_name="collection_a") is True
+        assert checker.should_skip(test_hash, collection_name="collection_b") is False
+
+    def test_legacy_schema_is_migrated(self, tmp_path: Path):
+        """旧版单主键表自动迁移，历史记录保留在兼容作用域。"""
+        db_path = tmp_path / "legacy_integrity.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE ingestion_history (
+                    file_hash TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO ingestion_history (file_hash, status) VALUES (?, 'success')",
+                ("legacy_hash",),
+            )
+
+        checker = FileIntegrityChecker(db_path=db_path)
+
+        assert checker.should_skip("legacy_hash") is True
+        assert checker.should_skip("legacy_hash", collection_name="collection_a") is False
+
+        with sqlite3.connect(db_path) as conn:
+            columns = conn.execute("PRAGMA table_info(ingestion_history)").fetchall()
+        assert [column[1] for column in columns] == [
+            "file_hash",
+            "collection_name",
+            "status",
+            "processed_at",
+        ]
+        assert [column[5] for column in columns[:2]] == [1, 2]
+
+    def test_clear_history_can_target_one_collection(self, tmp_path: Path):
+        """清除指定集合记录时不影响其他集合。"""
+        checker = FileIntegrityChecker(db_path=tmp_path / "integrity.db")
+        test_hash = "shared_file_hash"
+        checker.mark_success(test_hash, collection_name="collection_a")
+        checker.mark_success(test_hash, collection_name="collection_b")
+
+        checker.clear_history(file_hash=test_hash, collection_name="collection_a")
+
+        assert checker.should_skip(test_hash, collection_name="collection_a") is False
+        assert checker.should_skip(test_hash, collection_name="collection_b") is True
 
 
 class TestConvenienceFunctions:

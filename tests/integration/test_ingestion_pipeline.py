@@ -293,7 +293,8 @@ class TestIngestionPipelineWithFixtures:
         # 运行完整 pipeline
         pipeline.process(
             file_path=sample_pdf_path,
-            collection_name="test_collection"
+            collection_name="test_collection",
+            force=True,
         )
         
         # 验证向量已写入（FakeVectorStore 使用内存）
@@ -313,7 +314,8 @@ class TestIngestionPipelineWithFixtures:
         # 运行 pipeline
         pipeline.process(
             file_path=sample_pdf_path,
-            collection_name="test_collection"
+            collection_name="test_collection",
+            force=True,
         )
         
         # 验收标准：向量已存储

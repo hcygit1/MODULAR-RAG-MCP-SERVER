@@ -178,10 +178,18 @@ class IngestionPipeline:
             if _trace:
                 with _trace.stage("integrity_check"):
                     file_hash = self._integrity_checker.compute_sha256(file_path)
-                    should_skip = False if force else self._integrity_checker.should_skip(file_hash)
+                    should_skip = (
+                        False
+                        if force
+                        else self._integrity_checker.should_skip(file_hash, collection_name)
+                    )
             else:
                 file_hash = self._integrity_checker.compute_sha256(file_path)
-                should_skip = False if force else self._integrity_checker.should_skip(file_hash)
+                should_skip = (
+                    False
+                    if force
+                    else self._integrity_checker.should_skip(file_hash, collection_name)
+                )
             if should_skip:
                 if _trace:
                     _trace.set_metric("skipped", True)
@@ -205,7 +213,7 @@ class IngestionPipeline:
 
         # 标记处理成功（失败不影响主流程，但需记录日志避免重复处理未被发现）
         try:
-            self._integrity_checker.mark_success(file_hash)
+            self._integrity_checker.mark_success(file_hash, collection_name)
         except Exception as e:
             logger.warning("标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s", file_hash[:16] if file_hash else "?", e)
 

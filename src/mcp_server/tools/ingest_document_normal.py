@@ -175,7 +175,7 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
     checker = FileIntegrityChecker()
     try:
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash)
+        should_skip = False if force else checker.should_skip(file_hash, collection_name)
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -219,7 +219,7 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
         trace = TraceContext(operation="ingestion")
         try:
             chunk_count = pipeline.process_document(document, collection_name, trace=trace)
-            checker.mark_success(file_hash)
+            checker.mark_success(file_hash, collection_name)
             doc_type = document.metadata.get("doc_type", "unknown")
             return {
                 "content": [
