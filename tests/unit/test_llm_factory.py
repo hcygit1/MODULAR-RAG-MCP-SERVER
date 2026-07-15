@@ -11,8 +11,12 @@ from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
 from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
 from src.core.settings import LoggingConfig, DashboardConfig
 from src.libs.llm.base_llm import BaseLLM
+from src.libs.llm.azure_llm import AzureLLM
+from src.libs.llm.deepseek_llm import DeepSeekLLM
 from src.libs.llm.llm_factory import LLMFactory
 from src.libs.llm.fake_llm import FakeLLM
+from src.libs.llm.ollama_llm import OllamaLLM
+from src.libs.llm.openai_llm import OpenAILLM
 
 
 def test_factory_creates_fake_llm():
@@ -99,176 +103,54 @@ def test_factory_unsupported_provider():
         LLMFactory.create(settings)
 
 
-def test_factory_not_implemented_providers():
-    """测试尚未实现的 provider 抛出 NotImplementedError"""
-    # 测试 azure
-    llm_config_azure = LLMConfig(provider="azure", model="gpt-4o")
-    settings_azure = Settings(
-        llm=llm_config_azure,
-        vision_llm=VisionLLMConfig(provider="azure", model="gpt-4o"),
-        embedding=EmbeddingConfig(provider="openai", model="text-embedding-3-small"),
-        vector_store=VectorStoreConfig(
-            backend="chroma", persist_path="./data/db/chroma", collection_name="test"
+@pytest.mark.parametrize(
+    ("config", "expected_type"),
+    [
+        (
+            LLMConfig(
+                provider="azure",
+                model="gpt-4o",
+                azure_endpoint="https://example.openai.azure.com",
+                azure_api_key="test-key",
+                deployment_name="test-deployment",
+            ),
+            AzureLLM,
         ),
-        retrieval=RetrievalConfig(
-            sparse_backend="bm25", fusion_algorithm="rrf",
-            top_k_dense=20, top_k_sparse=20, top_k_final=10
+        (
+            LLMConfig(
+                provider="openai",
+                model="gpt-4o",
+                openai_api_key="test-key",
+            ),
+            OpenAILLM,
         ),
-        rerank=RerankConfig(backend="none", model="", top_m=30, timeout_seconds=5),
-        evaluation=EvaluationConfig(
-            backends=["custom"], golden_test_set="./tests/fixtures/golden_test_set.json"
+        (
+            LLMConfig(provider="ollama", model="llama-3-8b"),
+            OllamaLLM,
         ),
-        observability=ObservabilityConfig(
-            enabled=True,
-            logging=LoggingConfig(log_file="./logs/traces.jsonl", log_level="INFO"),
-            detail_level="standard",
-            dashboard=DashboardConfig(enabled=True, port=8501)
+        (
+            LLMConfig(
+                provider="deepseek",
+                model="deepseek-chat",
+                deepseek_api_key="test-key",
+            ),
+            DeepSeekLLM,
         ),
-        ingestion=IngestionConfig(
-            chunk_size=512, chunk_overlap=50,
-            enable_llm_refinement=False, enable_metadata_enrichment=True,
-            enable_image_captioning=True, batch_size=32
-        )
-    )
-    
-    with pytest.raises(NotImplementedError, match="Azure LLM 实现将在 B7.1"):
-        LLMFactory.create(settings_azure)
-    
-    # 测试 openai
-    llm_config_openai = LLMConfig(provider="openai", model="gpt-4o")
-    settings_openai = Settings(
-        llm=llm_config_openai,
-        vision_llm=VisionLLMConfig(provider="azure", model="gpt-4o"),
-        embedding=EmbeddingConfig(provider="openai", model="text-embedding-3-small"),
-        vector_store=VectorStoreConfig(
-            backend="chroma", persist_path="./data/db/chroma", collection_name="test"
-        ),
-        retrieval=RetrievalConfig(
-            sparse_backend="bm25", fusion_algorithm="rrf",
-            top_k_dense=20, top_k_sparse=20, top_k_final=10
-        ),
-        rerank=RerankConfig(backend="none", model="", top_m=30, timeout_seconds=5),
-        evaluation=EvaluationConfig(
-            backends=["custom"], golden_test_set="./tests/fixtures/golden_test_set.json"
-        ),
-        observability=ObservabilityConfig(
-            enabled=True,
-            logging=LoggingConfig(log_file="./logs/traces.jsonl", log_level="INFO"),
-            detail_level="standard",
-            dashboard=DashboardConfig(enabled=True, port=8501)
-        ),
-        ingestion=IngestionConfig(
-            chunk_size=512, chunk_overlap=50,
-            enable_llm_refinement=False, enable_metadata_enrichment=True,
-            enable_image_captioning=True, batch_size=32
-        )
-    )
-    
-    with pytest.raises(NotImplementedError, match="OpenAI LLM 实现将在 B7.1"):
-        LLMFactory.create(settings_openai)
-    
-    # 测试 ollama
-    llm_config_ollama = LLMConfig(provider="ollama", model="llama-3-8b")
-    settings_ollama = Settings(
-        llm=llm_config_ollama,
-        vision_llm=VisionLLMConfig(provider="azure", model="gpt-4o"),
-        embedding=EmbeddingConfig(provider="openai", model="text-embedding-3-small"),
-        vector_store=VectorStoreConfig(
-            backend="chroma", persist_path="./data/db/chroma", collection_name="test"
-        ),
-        retrieval=RetrievalConfig(
-            sparse_backend="bm25", fusion_algorithm="rrf",
-            top_k_dense=20, top_k_sparse=20, top_k_final=10
-        ),
-        rerank=RerankConfig(backend="none", model="", top_m=30, timeout_seconds=5),
-        evaluation=EvaluationConfig(
-            backends=["custom"], golden_test_set="./tests/fixtures/golden_test_set.json"
-        ),
-        observability=ObservabilityConfig(
-            enabled=True,
-            logging=LoggingConfig(log_file="./logs/traces.jsonl", log_level="INFO"),
-            detail_level="standard",
-            dashboard=DashboardConfig(enabled=True, port=8501)
-        ),
-        ingestion=IngestionConfig(
-            chunk_size=512, chunk_overlap=50,
-            enable_llm_refinement=False, enable_metadata_enrichment=True,
-            enable_image_captioning=True, batch_size=32
-        )
-    )
-    
-    with pytest.raises(NotImplementedError, match="Ollama LLM 实现将在 B7.2"):
-        LLMFactory.create(settings_ollama)
-    
-    # 测试 deepseek
-    llm_config_deepseek = LLMConfig(provider="deepseek", model="deepseek-chat")
-    settings_deepseek = Settings(
-        llm=llm_config_deepseek,
-        vision_llm=VisionLLMConfig(provider="azure", model="gpt-4o"),
-        embedding=EmbeddingConfig(provider="openai", model="text-embedding-3-small"),
-        vector_store=VectorStoreConfig(
-            backend="chroma", persist_path="./data/db/chroma", collection_name="test"
-        ),
-        retrieval=RetrievalConfig(
-            sparse_backend="bm25", fusion_algorithm="rrf",
-            top_k_dense=20, top_k_sparse=20, top_k_final=10
-        ),
-        rerank=RerankConfig(backend="none", model="", top_m=30, timeout_seconds=5),
-        evaluation=EvaluationConfig(
-            backends=["custom"], golden_test_set="./tests/fixtures/golden_test_set.json"
-        ),
-        observability=ObservabilityConfig(
-            enabled=True,
-            logging=LoggingConfig(log_file="./logs/traces.jsonl", log_level="INFO"),
-            detail_level="standard",
-            dashboard=DashboardConfig(enabled=True, port=8501)
-        ),
-        ingestion=IngestionConfig(
-            chunk_size=512, chunk_overlap=50,
-            enable_llm_refinement=False, enable_metadata_enrichment=True,
-            enable_image_captioning=True, batch_size=32
-        )
-    )
-    
-    with pytest.raises(NotImplementedError, match="DeepSeek LLM 实现将在 B7.1"):
-        LLMFactory.create(settings_deepseek)
+    ],
+)
+def test_factory_creates_implemented_providers(config, expected_type):
+    """测试已实现 provider 能被工厂正确路由。"""
+    assert isinstance(LLMFactory.create(config=config), expected_type)
 
 
 def test_factory_provider_case_insensitive():
     """测试 provider 名称大小写不敏感"""
-    # 测试大写
-    llm_config_upper = LLMConfig(provider="AZURE", model="gpt-4o")
-    settings_upper = Settings(
-        llm=llm_config_upper,
-        vision_llm=VisionLLMConfig(provider="azure", model="gpt-4o"),
-        embedding=EmbeddingConfig(provider="openai", model="text-embedding-3-small"),
-        vector_store=VectorStoreConfig(
-            backend="chroma", persist_path="./data/db/chroma", collection_name="test"
-        ),
-        retrieval=RetrievalConfig(
-            sparse_backend="bm25", fusion_algorithm="rrf",
-            top_k_dense=20, top_k_sparse=20, top_k_final=10
-        ),
-        rerank=RerankConfig(backend="none", model="", top_m=30, timeout_seconds=5),
-        evaluation=EvaluationConfig(
-            backends=["custom"], golden_test_set="./tests/fixtures/golden_test_set.json"
-        ),
-        observability=ObservabilityConfig(
-            enabled=True,
-            logging=LoggingConfig(log_file="./logs/traces.jsonl", log_level="INFO"),
-            detail_level="standard",
-            dashboard=DashboardConfig(enabled=True, port=8501)
-        ),
-        ingestion=IngestionConfig(
-            chunk_size=512, chunk_overlap=50,
-            enable_llm_refinement=False, enable_metadata_enrichment=True,
-            enable_image_captioning=True, batch_size=32
-        )
-    )
+    config = LLMConfig(provider="OLLAMA", model="llama-3-8b")
     
-    # 应该能识别（虽然会抛出 NotImplementedError，但错误信息应该正确）
-    with pytest.raises(NotImplementedError, match="Azure LLM"):
-        LLMFactory.create(settings_upper)
+    llm = LLMFactory.create(config=config)
+
+    assert isinstance(llm, OllamaLLM)
+    assert llm.get_provider() == "ollama"
 
 
 def test_base_llm_interface():

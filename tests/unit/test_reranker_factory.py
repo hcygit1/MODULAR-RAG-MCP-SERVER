@@ -118,9 +118,23 @@ def test_factory_unsupported_backend():
         RerankerFactory.create(settings)
 
 
-def test_factory_not_implemented_backends():
-    """测试尚未实现的 backend 抛出 NotImplementedError"""
-    # 测试 cross_encoder
+def test_factory_routes_implemented_backends(monkeypatch):
+    """测试已实现 backend 的工厂路由，不加载真实模型或调用 LLM。"""
+    from src.libs.reranker import cross_encoder_reranker, llm_reranker
+
+    cross_encoder = object()
+    llm = object()
+    monkeypatch.setattr(
+        cross_encoder_reranker,
+        "CrossEncoderReranker",
+        lambda config: cross_encoder,
+    )
+    monkeypatch.setattr(
+        llm_reranker,
+        "LLMReranker",
+        lambda settings: llm,
+    )
+
     rerank_config_cross_encoder = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
@@ -128,11 +142,8 @@ def test_factory_not_implemented_backends():
         timeout_seconds=5
     )
     settings_cross_encoder = _create_test_settings(rerank_config_cross_encoder)
+    assert RerankerFactory.create(settings_cross_encoder) is cross_encoder
     
-    with pytest.raises(NotImplementedError, match="CrossEncoder Reranker 实现将在 B7.8"):
-        RerankerFactory.create(settings_cross_encoder)
-    
-    # 测试 llm
     rerank_config_llm = RerankConfig(
         backend="llm",
         model="gpt-4o",
@@ -140,12 +151,10 @@ def test_factory_not_implemented_backends():
         timeout_seconds=5
     )
     settings_llm = _create_test_settings(rerank_config_llm)
-    
-    with pytest.raises(NotImplementedError, match="LLM Reranker 实现将在 B7.7"):
-        RerankerFactory.create(settings_llm)
+    assert RerankerFactory.create(settings_llm) is llm
 
 
-def test_factory_backend_case_insensitive():
+def test_factory_backend_case_insensitive(monkeypatch):
     """测试 backend 名称大小写不敏感"""
     # 测试大写
     rerank_config_upper = RerankConfig(
@@ -159,7 +168,15 @@ def test_factory_backend_case_insensitive():
     reranker = RerankerFactory.create(settings_upper)
     assert isinstance(reranker, NoneReranker)
     
-    # 测试混合大小写
+    from src.libs.reranker import cross_encoder_reranker
+
+    cross_encoder = object()
+    monkeypatch.setattr(
+        cross_encoder_reranker,
+        "CrossEncoderReranker",
+        lambda config: cross_encoder,
+    )
+
     rerank_config_mixed = RerankConfig(
         backend="Cross_Encoder",
         model="test",
@@ -168,8 +185,7 @@ def test_factory_backend_case_insensitive():
     )
     settings_mixed = _create_test_settings(rerank_config_mixed)
     
-    with pytest.raises(NotImplementedError, match="CrossEncoder Reranker"):
-        RerankerFactory.create(settings_mixed)
+    assert RerankerFactory.create(settings_mixed) is cross_encoder
 
 
 def test_base_reranker_interface():

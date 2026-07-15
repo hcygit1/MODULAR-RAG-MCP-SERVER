@@ -46,7 +46,8 @@ class IngestionPipeline:
         llm: Optional[Any] = None,
         vision_llm: Optional[Any] = None,
         embedding: Optional[Any] = None,
-        vector_store: Optional[Any] = None
+        vector_store: Optional[Any] = None,
+        integrity_checker: Optional[FileIntegrityChecker] = None,
     ):
         """
         初始化 Ingestion Pipeline
@@ -58,12 +59,17 @@ class IngestionPipeline:
             vision_llm: Vision LLM 实例（可选），用于图片描述生成
             embedding: Embedding 实例（可选），如果不提供则从 settings 创建
             vector_store: VectorStore 实例（可选），如果不提供则从 settings 创建
+            integrity_checker: 文件完整性检查器（可选），如果不提供则使用默认数据库
         """
         self._settings = settings
         self._ingestion_config = settings.ingestion
 
         # 初始化各个组件
-        self._integrity_checker = FileIntegrityChecker()
+        self._integrity_checker = (
+            integrity_checker
+            if integrity_checker is not None
+            else FileIntegrityChecker()
+        )
         self._splitter = SplitterFactory.create(settings, strategy=splitter_strategy)
 
         # Text LLM：仅在未传入且 (enable_llm_refinement 或 enable_metadata_enrichment) 时创建

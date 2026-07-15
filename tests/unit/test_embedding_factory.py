@@ -12,6 +12,8 @@ from src.core.settings import LoggingConfig, DashboardConfig
 from src.libs.embedding.base_embedding import BaseEmbedding
 from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.embedding.fake_embedding import FakeEmbedding
+from src.libs.embedding.local_embedding import LocalEmbedding
+from src.libs.embedding.openai_embedding import OpenAIEmbedding
 
 
 def test_factory_creates_fake_embedding():
@@ -90,30 +92,24 @@ def test_factory_unsupported_provider():
         EmbeddingFactory.create(settings)
 
 
-def test_factory_not_implemented_providers():
-    """测试尚未实现的 provider 抛出 NotImplementedError"""
-    # 测试 openai
+def test_factory_routes_implemented_and_pending_providers():
+    """测试已实现 provider 正确路由，未实现 provider 保持清晰错误。"""
     embedding_config_openai = EmbeddingConfig(
         provider="openai",
-        model="text-embedding-3-small"
+        model="text-embedding-3-small",
+        openai_api_key="test-key",
     )
     settings_openai = _create_test_settings(embedding_config_openai)
+    assert isinstance(EmbeddingFactory.create(settings_openai), OpenAIEmbedding)
     
-    with pytest.raises(NotImplementedError, match="OpenAI Embedding 实现将在 B7.3"):
-        EmbeddingFactory.create(settings_openai)
-    
-    # 测试 local
     embedding_config_local = EmbeddingConfig(
         provider="local",
         model="bge-large-zh-v1.5",
         local_model_path="./models/bge"
     )
     settings_local = _create_test_settings(embedding_config_local)
+    assert isinstance(EmbeddingFactory.create(settings_local), LocalEmbedding)
     
-    with pytest.raises(NotImplementedError, match="Local Embedding 实现将在 B7.4"):
-        EmbeddingFactory.create(settings_local)
-    
-    # 测试 ollama
     embedding_config_ollama = EmbeddingConfig(
         provider="ollama",
         model="nomic-embed-text"
@@ -127,14 +123,15 @@ def test_factory_not_implemented_providers():
 def test_factory_provider_case_insensitive():
     """测试 provider 名称大小写不敏感"""
     embedding_config_upper = EmbeddingConfig(
-        provider="OPENAI",
-        model="text-embedding-3-small"
+        provider="LOCAL",
+        model="bge-base-zh-v1.5",
     )
     settings_upper = _create_test_settings(embedding_config_upper)
     
-    # 应该能识别（虽然会抛出 NotImplementedError，但错误信息应该正确）
-    with pytest.raises(NotImplementedError, match="OpenAI Embedding"):
-        EmbeddingFactory.create(settings_upper)
+    embedding = EmbeddingFactory.create(settings_upper)
+
+    assert isinstance(embedding, LocalEmbedding)
+    assert embedding.get_provider() == "local"
 
 
 def test_base_embedding_interface():

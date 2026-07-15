@@ -12,6 +12,7 @@ from src.core.settings import LoggingConfig, DashboardConfig
 from src.libs.splitter.base_splitter import BaseSplitter
 from src.libs.splitter.splitter_factory import SplitterFactory
 from src.libs.splitter.fake_splitter import FakeSplitter
+from src.libs.splitter.recursive_splitter import RecursiveSplitter
 
 
 def test_factory_creates_fake_splitter():
@@ -106,18 +107,17 @@ def test_factory_unsupported_strategy():
 
 
 def test_factory_not_implemented_strategies():
-    """测试尚未实现的策略抛出 NotImplementedError"""
+    """测试已实现和待实现策略的路由状态。"""
     settings = _create_test_settings()
     
-    # 测试 recursive
-    with pytest.raises(NotImplementedError, match="Recursive Splitter 实现将在 B7.5"):
-        SplitterFactory.create(settings, strategy="recursive")
+    assert isinstance(
+        SplitterFactory.create(settings, strategy="recursive"),
+        RecursiveSplitter,
+    )
     
-    # 测试 semantic
     with pytest.raises(NotImplementedError, match="Semantic Splitter 实现尚未完成"):
         SplitterFactory.create(settings, strategy="semantic")
     
-    # 测试 fixed
     with pytest.raises(NotImplementedError, match="Fixed Splitter 实现尚未完成"):
         SplitterFactory.create(settings, strategy="fixed")
 
@@ -126,13 +126,14 @@ def test_factory_strategy_case_insensitive():
     """测试策略名称大小写不敏感"""
     settings = _create_test_settings()
     
-    # 测试大写
-    with pytest.raises(NotImplementedError, match="Recursive Splitter"):
-        SplitterFactory.create(settings, strategy="RECURSIVE")
-    
-    # 测试混合大小写
-    with pytest.raises(NotImplementedError, match="Recursive Splitter"):
-        SplitterFactory.create(settings, strategy="ReCuRsIvE")
+    assert isinstance(
+        SplitterFactory.create(settings, strategy="RECURSIVE"),
+        RecursiveSplitter,
+    )
+    assert isinstance(
+        SplitterFactory.create(settings, strategy="ReCuRsIvE"),
+        RecursiveSplitter,
+    )
 
 
 def test_base_splitter_interface():

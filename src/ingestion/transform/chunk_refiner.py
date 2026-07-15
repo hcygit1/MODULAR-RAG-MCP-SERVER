@@ -49,7 +49,12 @@ class ChunkRefiner(BaseTransform):
         self._config = config
         self._enable_llm = config.enable_llm_refinement
         self._llm = llm
-        self._prompt_template = prompt_template or self._load_prompt_template()
+        if prompt_template is not None:
+            self._prompt_template = prompt_template
+        elif self._enable_llm and self._llm is not None:
+            self._prompt_template = self._load_prompt_template()
+        else:
+            self._prompt_template = None
     
     def _load_prompt_template(self) -> str:
         """

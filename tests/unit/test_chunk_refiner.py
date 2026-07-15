@@ -115,6 +115,16 @@ class TestBaseTransform:
 
 class TestChunkRefinerRuleBased:
     """ChunkRefiner 规则去噪测试"""
+
+    def test_disabled_refiner_does_not_require_prompt_file(self, tmp_path, monkeypatch):
+        """关闭 LLM 重写时不应依赖当前工作目录中的 Prompt 文件。"""
+        settings = _create_test_settings(enable_llm_refinement=False)
+        monkeypatch.chdir(tmp_path)
+
+        refiner = ChunkRefiner(settings.ingestion)
+        chunk = Chunk(id="test_chunk_no_prompt", text="测试内容", metadata={})
+
+        assert refiner.transform(chunk).text == "测试内容"
     
     def test_chunk_refiner_initialization(self):
         """测试 ChunkRefiner 可以初始化"""
@@ -408,9 +418,9 @@ class TestChunkRefinerEdgeCases:
             refiner.transform(None)
     
     def test_prompt_template_loading(self):
-        """测试 Prompt 模板加载"""
-        settings = _create_test_settings()
-        refiner = ChunkRefiner(settings.ingestion)
+        """启用 LLM 重写且 LLM 可用时加载 Prompt 模板。"""
+        settings = _create_test_settings(enable_llm_refinement=True)
+        refiner = ChunkRefiner(settings.ingestion, llm=MagicMock())
         
         # 验证 Prompt 模板已加载
         assert refiner._prompt_template is not None

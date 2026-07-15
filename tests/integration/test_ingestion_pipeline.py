@@ -13,6 +13,7 @@ from pathlib import Path
 from src.ingestion.pipeline import IngestionPipeline
 from src.core.settings import Settings, IngestionConfig, LLMConfig, VisionLLMConfig, EmbeddingConfig, VectorStoreConfig, RetrievalConfig, RerankConfig, EvaluationConfig, ObservabilityConfig, LoggingConfig, DashboardConfig
 from src.libs.embedding.fake_embedding import FakeEmbedding
+from src.libs.loader.file_integrity import FileIntegrityChecker
 from src.libs.vector_store.fake_vector_store import FakeVectorStore
 from src.ingestion.embedding.dense_encoder import DenseEncoder
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
@@ -284,21 +285,26 @@ class TestIngestionPipelineWithFixtures:
         # 使用 Fake Embedding 和 VectorStore 进行测试
         fake_embedding = FakeEmbedding(dimension=128)
         fake_vector_store = FakeVectorStore()
+        integrity_checker = FileIntegrityChecker(
+            db_path=Path(temp_dir) / "file_integrity.db"
+        )
         pipeline = IngestionPipeline(
             test_settings,
             embedding=fake_embedding,
-            vector_store=fake_vector_store
+            vector_store=fake_vector_store,
+            integrity_checker=integrity_checker,
         )
         
         # 运行完整 pipeline
         pipeline.process(
             file_path=sample_pdf_path,
             collection_name="test_collection",
-            force=True,
         )
         
         # 验证向量已写入（FakeVectorStore 使用内存）
         assert len(fake_vector_store._records) > 0, "向量应已写入"
+        file_hash = integrity_checker.compute_sha256(sample_pdf_path)
+        assert integrity_checker.should_skip(file_hash, "test_collection") is True
     
     def test_pipeline_outputs_vectors_and_index(self, temp_dir, test_settings, sample_pdf_path):
         """测试 Pipeline 输出向量（验收标准，统一存储：无独立 BM25）"""
@@ -315,7 +321,6 @@ class TestIngestionPipelineWithFixtures:
         pipeline.process(
             file_path=sample_pdf_path,
             collection_name="test_collection",
-            force=True,
         )
         
         # 验收标准：向量已存储
