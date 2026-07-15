@@ -105,6 +105,57 @@ class TestQdrantStoreBasic:
         meta = results[0].metadata
         assert "image_captions" in meta
         assert meta["image_captions"] == {"img_1": "图片描述1", "img_2": "图片描述2"}
+
+    def test_replace_document_removes_stale_chunks(self, store):
+        """文档重入库成功后必须清除同文档不再存在的旧 chunk。"""
+        store.upsert([
+            VectorRecord(
+                id="doc_1_chunk_0",
+                vector=[0.1] * 4,
+                text="old zero",
+                metadata={"source_doc_id": "doc_1"},
+            ),
+            VectorRecord(
+                id="doc_1_chunk_1",
+                vector=[0.2] * 4,
+                text="stale one",
+                metadata={"source_doc_id": "doc_1"},
+            ),
+            VectorRecord(
+                id="doc_2_chunk_0",
+                vector=[0.3] * 4,
+                text="other document",
+                metadata={"source_doc_id": "doc_2"},
+            ),
+        ])
+
+        deleted = store.replace_document_records(
+            source_doc_id="doc_1",
+            records=[
+                VectorRecord(
+                    id="doc_1_chunk_0",
+                    vector=[0.4] * 4,
+                    text="new zero",
+                    metadata={"source_doc_id": "doc_1"},
+                ),
+            ],
+            collection_name="test_unit",
+        )
+
+        points, _ = store._client.scroll(
+            collection_name="test_unit",
+            limit=10,
+            with_payload=True,
+        )
+        documents = {
+            point.payload["_original_id"]: point.payload["text"]
+            for point in points
+        }
+        assert deleted == 2
+        assert documents == {
+            "doc_1_chunk_0": "new zero",
+            "doc_2_chunk_0": "other document",
+        }
     
     def test_get_backend_and_collection(self, store):
         """测试 get_backend 和 get_collection_name"""

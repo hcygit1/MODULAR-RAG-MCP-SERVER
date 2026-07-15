@@ -229,6 +229,63 @@ def test_chroma_store_idempotent_upsert():
 
 @pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB 未安装")
 @pytest.mark.integration
+def test_chroma_store_replace_document_removes_stale_chunks():
+    """文档重入库成功后必须清除同文档不再存在的旧 chunk。"""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        store = ChromaStore(VectorStoreConfig(
+            backend="chroma",
+            persist_path=temp_dir,
+            collection_name="replace_document",
+        ))
+        store.upsert([
+            VectorRecord(
+                id="doc_1_chunk_0",
+                vector=[0.1] * 16,
+                text="old zero",
+                metadata={"source_doc_id": "doc_1"},
+            ),
+            VectorRecord(
+                id="doc_1_chunk_1",
+                vector=[0.2] * 16,
+                text="stale one",
+                metadata={"source_doc_id": "doc_1"},
+            ),
+            VectorRecord(
+                id="doc_2_chunk_0",
+                vector=[0.3] * 16,
+                text="other document",
+                metadata={"source_doc_id": "doc_2"},
+            ),
+        ])
+
+        deleted = store.replace_document_records(
+            source_doc_id="doc_1",
+            records=[
+                VectorRecord(
+                    id="doc_1_chunk_0",
+                    vector=[0.4] * 16,
+                    text="new zero",
+                    metadata={"source_doc_id": "doc_1"},
+                ),
+            ],
+            collection_name="replace_document",
+        )
+
+        collection = store._client.get_collection("replace_document")
+        rows = collection.get(include=["documents"])
+        documents = dict(zip(rows["ids"], rows["documents"]))
+        assert deleted == 2
+        assert documents == {
+            "doc_1_chunk_0": "new zero",
+            "doc_2_chunk_0": "other document",
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB 未安装")
+@pytest.mark.integration
 def test_chroma_store_query_with_filters():
     """测试 Chroma Store 带过滤条件的查询"""
     temp_dir = tempfile.mkdtemp()

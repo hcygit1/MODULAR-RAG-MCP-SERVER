@@ -19,7 +19,10 @@ if TYPE_CHECKING:
 
 from mcp.types import CallToolResult
 
-from src.libs.loader.file_integrity import FileIntegrityChecker
+from src.libs.loader.file_integrity import (
+    FileIntegrityChecker,
+    build_processing_profile,
+)
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 from src.mcp_server.tools.error_utils import build_error_response
@@ -28,6 +31,11 @@ from src.mcp_server.tools.ingest_utils import parse_force
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_SUFFIXES = {".pdf", ".md", ".txt"}
+_LOADER_NAME_BY_SUFFIX = {
+    ".pdf": "pdf",
+    ".md": "markdown",
+    ".txt": "text",
+}
 _MD_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
 _IMAGE_MIME: Dict[str, str] = {
     ".png": "image/png",
@@ -163,9 +171,9 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
             structured_content_base={"chunk_count": 0},
         )
 
+    settings = load_mcp_settings()
     collection_name = arguments.get("collection_name")
     if not collection_name or not str(collection_name).strip():
-        settings = load_mcp_settings()
         collection_name = settings.vector_store.collection_name
     else:
         collection_name = str(collection_name).strip()
@@ -174,8 +182,20 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
     # 与 CLI 行为对齐：默认开启完整性跳过，force=True 时强制重入库。
     checker = FileIntegrityChecker()
     try:
+        processing_profile = build_processing_profile(
+            settings,
+            loader_name=_LOADER_NAME_BY_SUFFIX[path.suffix.lower()],
+        )
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash, collection_name)
+        should_skip = (
+            False
+            if force
+            else checker.should_skip(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
+        )
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -207,7 +227,6 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
-        settings = load_mcp_settings()
         from src.ingestion.pipeline import IngestionPipeline
 
         document = _load_document(file_path)
@@ -219,7 +238,11 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
         trace = TraceContext(operation="ingestion")
         try:
             chunk_count = pipeline.process_document(document, collection_name, trace=trace)
-            checker.mark_success(file_hash, collection_name)
+            checker.mark_success(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
             doc_type = document.metadata.get("doc_type", "unknown")
             return {
                 "content": [

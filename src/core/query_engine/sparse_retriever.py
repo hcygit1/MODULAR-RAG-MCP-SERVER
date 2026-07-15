@@ -197,6 +197,11 @@ class SparseRetriever:
         for key, value in filters.items():
             if key not in metadata:
                 return False
-            if metadata[key] != value:
+            if isinstance(value, dict):
+                if set(value) != {"$in"} or not isinstance(value["$in"], list):
+                    return False
+                if metadata[key] not in value["$in"]:
+                    return False
+            elif metadata[key] != value:
                 return False
         return True

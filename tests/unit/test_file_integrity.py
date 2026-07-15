@@ -8,9 +8,11 @@ import os
 import sqlite3
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 
 from src.libs.loader.file_integrity import (
     FileIntegrityChecker,
+    build_processing_profile,
     compute_sha256,
     should_skip,
     mark_success
@@ -147,6 +149,28 @@ class TestFileIntegrityChecker:
         assert checker.should_skip(test_hash, collection_name="collection_a") is True
         assert checker.should_skip(test_hash, collection_name="collection_b") is False
 
+    def test_success_is_scoped_by_processing_profile(self, tmp_path: Path):
+        """同一文件和集合在处理配置变化后必须重新入库。"""
+        checker = FileIntegrityChecker(db_path=tmp_path / "integrity.db")
+        test_hash = "shared_file_hash"
+
+        checker.mark_success(
+            test_hash,
+            collection_name="collection_a",
+            processing_profile="profile_a",
+        )
+
+        assert checker.should_skip(
+            test_hash,
+            collection_name="collection_a",
+            processing_profile="profile_a",
+        ) is True
+        assert checker.should_skip(
+            test_hash,
+            collection_name="collection_a",
+            processing_profile="profile_b",
+        ) is False
+
     def test_legacy_schema_is_migrated(self, tmp_path: Path):
         """旧版单主键表自动迁移，历史记录保留在兼容作用域。"""
         db_path = tmp_path / "legacy_integrity.db"
@@ -175,10 +199,47 @@ class TestFileIntegrityChecker:
         assert [column[1] for column in columns] == [
             "file_hash",
             "collection_name",
+            "processing_profile",
             "status",
             "processed_at",
         ]
-        assert [column[5] for column in columns[:2]] == [1, 2]
+        assert [column[5] for column in columns[:3]] == [1, 2, 3]
+
+    def test_collection_schema_is_migrated_with_legacy_profile(self, tmp_path: Path):
+        """已有 collection 级历史迁移后仍兼容未传 profile 的旧调用。"""
+        db_path = tmp_path / "collection_integrity.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE ingestion_history (
+                    file_hash TEXT NOT NULL,
+                    collection_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_hash, collection_name)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO ingestion_history (
+                    file_hash,
+                    collection_name,
+                    status
+                )
+                VALUES (?, ?, 'success')
+                """,
+                ("legacy_hash", "docs"),
+            )
+
+        checker = FileIntegrityChecker(db_path=db_path)
+
+        assert checker.should_skip("legacy_hash", "docs") is True
+        assert checker.should_skip(
+            "legacy_hash",
+            "docs",
+            processing_profile="new_profile",
+        ) is False
 
     def test_clear_history_can_target_one_collection(self, tmp_path: Path):
         """清除指定集合记录时不影响其他集合。"""
@@ -227,6 +288,86 @@ class TestConvenienceFunctions:
         assert should_skip(test_hash) is False
         mark_success(test_hash)
         assert should_skip(test_hash) is True
+
+
+def test_processing_profile_changes_with_loader_and_embedding() -> None:
+    """影响处理结果的配置变化必须产生不同 profile。"""
+    settings = SimpleNamespace(
+        embedding=SimpleNamespace(provider="fake", model="embedding-a"),
+        vector_store=SimpleNamespace(embedding_dim=16),
+        ingestion=SimpleNamespace(
+            chunk_size=512,
+            chunk_overlap=50,
+            splitter_strategy="recursive",
+            heading_split_level=3,
+            heading_parent_level=2,
+            enable_llm_refinement=False,
+            enable_metadata_enrichment=True,
+            enable_image_captioning=True,
+            enable_boundary_repair=False,
+            boundary_repair_mode="rule",
+        ),
+        llm=SimpleNamespace(provider="fake", model="llm-a"),
+        vision_llm=SimpleNamespace(provider="fake", model="vision-a"),
+        mineru=SimpleNamespace(model_version="vlm"),
+    )
+
+    normal = build_processing_profile(settings, loader_name="normal")
+    docling = build_processing_profile(settings, loader_name="docling")
+    settings.embedding.model = "embedding-b"
+    changed_embedding = build_processing_profile(settings, loader_name="normal")
+    settings.embedding.model = "embedding-a"
+    settings.llm.model = "llm-b"
+    changed_llm = build_processing_profile(settings, loader_name="normal")
+    settings.llm.model = "llm-a"
+    settings.vision_llm.model = "vision-b"
+    changed_vision = build_processing_profile(settings, loader_name="normal")
+
+    assert normal.startswith("v1:")
+    assert normal != docling
+    assert normal != changed_embedding
+    assert normal != changed_llm
+    assert normal != changed_vision
+
+
+def test_processing_profile_changes_with_azure_deployment() -> None:
+    """Azure 实际 deployment 变化时必须重新入库。"""
+    settings = SimpleNamespace(
+        embedding=SimpleNamespace(
+            provider="fake",
+            model="embedding",
+            local_model_path="",
+            dashscope_base_url="",
+        ),
+        vector_store=SimpleNamespace(embedding_dim=16),
+        ingestion=SimpleNamespace(
+            chunk_size=512,
+            chunk_overlap=50,
+            splitter_strategy="recursive",
+            heading_split_level=3,
+            heading_parent_level=2,
+            enable_llm_refinement=True,
+            enable_metadata_enrichment=False,
+            enable_image_captioning=False,
+            enable_boundary_repair=False,
+            boundary_repair_mode="rule",
+        ),
+        llm=SimpleNamespace(
+            provider="azure",
+            model="gpt-4o",
+            deployment_name="deployment-a",
+            azure_endpoint="https://example.openai.azure.com",
+            azure_api_version="2024-02-15-preview",
+        ),
+        vision_llm=SimpleNamespace(provider="fake", model="vision"),
+        mineru=SimpleNamespace(model_version="vlm"),
+    )
+
+    first = build_processing_profile(settings, loader_name="pdf")
+    settings.llm.deployment_name = "deployment-b"
+    second = build_processing_profile(settings, loader_name="pdf")
+
+    assert first != second
 
 
 class TestIntegration:

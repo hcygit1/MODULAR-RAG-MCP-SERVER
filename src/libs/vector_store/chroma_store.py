@@ -261,6 +261,62 @@ class ChromaStore(BaseVectorStore):
                 f"ChromaDB delete 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
 
+    def replace_document_records(
+        self,
+        source_doc_id: str,
+        records: List[VectorRecord],
+        collection_name: str,
+        trace: Optional[Any] = None,
+        chunks_for_images: Optional[List[Any]] = None,
+    ) -> int:
+        """先写新版本，再清除同文档不再存在的旧记录。"""
+        doc_id = (source_doc_id or "").strip()
+        if not doc_id:
+            raise ValueError("source_doc_id 不能为空")
+        if not records:
+            raise ValueError("记录列表不能为空")
+        eff_name = (collection_name or self._collection_name or "").strip()
+        if not eff_name:
+            raise ValueError("collection_name 不能为空")
+
+        try:
+            coll = self._client.get_or_create_collection(name=eff_name)
+            existing = coll.get(
+                where={"source_doc_id": doc_id},
+                include=[],
+            )
+            old_ids = [str(record_id) for record_id in existing.get("ids", [])]
+
+            self.upsert(
+                records,
+                trace=trace,
+                collection_name=eff_name,
+            )
+            new_ids = {record.id for record in records}
+            stale_ids = [record_id for record_id in old_ids if record_id not in new_ids]
+            if stale_ids:
+                coll.delete(ids=stale_ids)
+            return len(old_ids)
+        except Exception as e:
+            if isinstance(e, (ValueError, RuntimeError)):
+                raise
+            raise RuntimeError(
+                f"ChromaDB 文档替换失败 "
+                f"(backend={self._backend}, collection={eff_name}): {e}"
+            ) from e
+
+    def list_collections(self) -> List[str]:
+        """列出 Chroma 客户端中的集合名称。"""
+        try:
+            collections = self._client.list_collections()
+            names = [
+                item.name if hasattr(item, "name") else str(item)
+                for item in collections
+            ]
+            return sorted(names)
+        except Exception as e:
+            raise RuntimeError(f"ChromaDB list_collections 失败: {e}") from e
+
     def get_backend(self) -> str:
         """获取后端名称"""
         return self._backend

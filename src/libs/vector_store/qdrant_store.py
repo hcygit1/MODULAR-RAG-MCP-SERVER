@@ -298,6 +298,79 @@ class QdrantStore(BaseVectorStore):
                 f"Qdrant delete 失败 (backend={self._backend}, collection={eff_name}): {str(e)}"
             ) from e
 
+    def replace_document_records(
+        self,
+        source_doc_id: str,
+        records: List[VectorRecord],
+        collection_name: str,
+        trace: Optional[Any] = None,
+        chunks_for_images: Optional[List[Any]] = None,
+    ) -> int:
+        """先写新版本，再清除同文档不再存在的旧 points。"""
+        doc_id = (source_doc_id or "").strip()
+        if not doc_id:
+            raise ValueError("source_doc_id 不能为空")
+        if not records:
+            raise ValueError("记录列表不能为空")
+        eff_name = (collection_name or self._collection_name or "").strip()
+        if not eff_name:
+            raise ValueError("collection_name 不能为空")
+
+        try:
+            self._ensure_collection(
+                len(records[0].vector),
+                collection_name=eff_name,
+            )
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="source_doc_id",
+                        match=MatchValue(value=doc_id),
+                    )
+                ]
+            )
+            old_points = []
+            offset = None
+            while True:
+                points, offset = self._client.scroll(
+                    collection_name=eff_name,
+                    scroll_filter=query_filter,
+                    limit=256,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                old_points.extend(points)
+                if offset is None:
+                    break
+
+            self.upsert(
+                records,
+                trace=trace,
+                collection_name=eff_name,
+            )
+            new_ids = {record.id for record in records}
+            stale_point_ids = [
+                point.id
+                for point in old_points
+                if str((point.payload or {}).get("_original_id", point.id))
+                not in new_ids
+            ]
+            if stale_point_ids:
+                self._client.delete(
+                    collection_name=eff_name,
+                    points_selector=PointIdsList(points=stale_point_ids),
+                    wait=True,
+                )
+            return len(old_points)
+        except Exception as e:
+            if isinstance(e, (ValueError, RuntimeError)):
+                raise
+            raise RuntimeError(
+                f"Qdrant 文档替换失败 "
+                f"(backend={self._backend}, collection={eff_name}): {e}"
+            ) from e
+
     def close(self) -> None:
         """关闭 Qdrant 客户端，避免进程退出时 __del__ 报错"""
         if hasattr(self, "_client") and self._client is not None:
@@ -310,6 +383,14 @@ class QdrantStore(BaseVectorStore):
     def get_backend(self) -> str:
         """获取后端名称"""
         return self._backend
+
+    def list_collections(self) -> List[str]:
+        """列出 Qdrant 服务中的集合名称。"""
+        try:
+            response = self._client.get_collections()
+            return sorted(item.name for item in response.collections)
+        except Exception as e:
+            raise RuntimeError(f"Qdrant list_collections 失败: {e}") from e
 
     def get_collection_name(self) -> str:
         """获取集合名称"""

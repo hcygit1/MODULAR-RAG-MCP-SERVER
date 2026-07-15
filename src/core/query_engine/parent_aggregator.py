@@ -99,6 +99,7 @@ class ParentAggregator:
             child_chunks = self._store.get_chunks_by_parent_id(
                 collection_name=collection_name,
                 parent_id=parent_id,
+                metadata_key=self._parent_id_key,
             )
             if not child_chunks:
                 continue
@@ -133,7 +134,7 @@ class ParentAggregator:
                 base_meta["image_metadata"] = all_image_metadata
 
             base_meta.update({
-                "parent_id": parent_id,
+                self._parent_id_key: parent_id,
                 "aggregated": True,
                 "child_count": len(child_chunks),
                 "child_chunk_ids": [c.id for c in child_chunks],

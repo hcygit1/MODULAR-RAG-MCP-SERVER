@@ -61,6 +61,43 @@ def test_sqlite_store_upsert_and_query(sqlite_store):
     assert results[1].id == "c2"
 
 
+def test_sqlite_store_query_applies_metadata_filters(sqlite_store):
+    """SQLite query 必须执行公开契约中的 metadata filters。"""
+    sqlite_store.upsert(
+        [
+            VectorRecord(
+                id="a",
+                vector=[1.0, 0.0, 0.0, 0.0],
+                text="category A",
+                metadata={"category": "A", "rank": 1},
+            ),
+            VectorRecord(
+                id="b",
+                vector=[0.9, 0.1, 0.0, 0.0],
+                text="category B",
+                metadata={"category": "B", "rank": 2},
+            ),
+        ],
+        collection_name="test_coll",
+    )
+
+    equality = sqlite_store.query(
+        vector=[1.0, 0.0, 0.0, 0.0],
+        top_k=5,
+        filters={"category": "B"},
+        collection_name="test_coll",
+    )
+    membership = sqlite_store.query(
+        vector=[1.0, 0.0, 0.0, 0.0],
+        top_k=5,
+        filters={"rank": {"$in": [2]}},
+        collection_name="test_coll",
+    )
+
+    assert [result.id for result in equality] == ["b"]
+    assert [result.id for result in membership] == ["b"]
+
+
 def test_sqlite_store_delete(sqlite_store):
     records = [
         VectorRecord(id="c1", vector=[1.0, 0.0, 0.0, 0.0], text="doc 1", metadata={}),

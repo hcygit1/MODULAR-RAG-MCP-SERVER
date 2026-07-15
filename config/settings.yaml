@@ -69,6 +69,8 @@ retrieval:
   parent_id_metadata_key: parent_id
   parent_score_strategy: sum       # sum | count
   parent_aggregate_top_m: 30       # 交给聚合器前保留的子块候选数
+  top_k_dense_parent: 60           # 父聚合时向量粗召候选数
+  top_k_sparse_parent: 60          # 父聚合时稀疏粗召候选数
 
 # 重排配置
 rerank:

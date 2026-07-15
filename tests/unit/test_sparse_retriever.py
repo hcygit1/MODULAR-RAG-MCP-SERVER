@@ -123,6 +123,21 @@ class TestSparseRetrieverBasic:
 
         assert len(results) >= 1
 
+    def test_retrieve_supports_in_metadata_filter(self, indexed_collection) -> None:
+        """Sparse 路径的 `$in` 语义必须与 dense 路径一致。"""
+        retriever = SparseRetriever(
+            sqlite_path=indexed_collection,
+            collection_name="test_collection",
+        )
+
+        results = retriever.retrieve(
+            ["python"],
+            top_k=5,
+            filters={"source_path": {"$in": ["/path/to/doc2.pdf"]}},
+        )
+
+        assert [result.id for result in results] == ["chunk_3"]
+
     def test_retrieve_empty_keywords_returns_empty(self, indexed_collection) -> None:
         """空关键词返回空列表"""
         retriever = SparseRetriever(

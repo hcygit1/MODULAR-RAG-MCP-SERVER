@@ -50,13 +50,18 @@ def execute_list_collections(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         settings = load_mcp_settings()
-        sqlite_path = _inject_sqlite_path or getattr(
-            settings.vector_store, "sqlite_path", None
-        )
-        if sqlite_path:
-            collections = _list_collections_from_sqlite(sqlite_path)
-        else:
-            collections = []
+        store = None
+        try:
+            if _inject_sqlite_path:
+                collections = _list_collections_from_sqlite(_inject_sqlite_path)
+            else:
+                from src.libs.vector_store.vector_store_factory import VectorStoreFactory
+
+                store = VectorStoreFactory.create(settings)
+                collections = store.list_collections()
+        finally:
+            if store is not None:
+                store.close()
 
         text = ", ".join(collections) if collections else "（暂无集合）"
         return {

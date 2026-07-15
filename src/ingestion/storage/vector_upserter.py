@@ -80,7 +80,7 @@ class VectorUpserter:
         collection_name: Optional[str] = None,
     ) -> int:
         """
-        文档级替换写入：先删旧块，再写入新块。
+        文档级替换写入，由后端保证不产生先删后写的数据丢失窗口。
 
         Args:
             source_doc_id: 文档 id（metadata.source_doc_id）

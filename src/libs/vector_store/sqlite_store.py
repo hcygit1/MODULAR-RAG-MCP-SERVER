@@ -365,10 +365,18 @@ class SQLiteVectorStore(BaseVectorStore):
 
         conn = self._get_conn()
         vec_blob = serialize_float32(vector)
+        filter_sql, filter_params = self._build_filter_sql(filters)
+        candidate_k = top_k
+        if filter_sql:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM chunks WHERE collection_name = ?",
+                (coll,),
+            ).fetchone()
+            candidate_k = max(top_k, int(row[0] if row else 0))
 
         try:
             rows = conn.execute(
-                """
+                f"""
                 SELECT c.id, c.text, c.metadata_json, v.distance
                 FROM (
                     SELECT chunk_rowid, distance
@@ -376,10 +384,11 @@ class SQLiteVectorStore(BaseVectorStore):
                     WHERE embedding MATCH ? AND k = ? AND collection_name = ?
                 ) v
                 JOIN chunks c ON c.rowid = v.chunk_rowid
+                {filter_sql}
                 ORDER BY v.distance
                 LIMIT ?
                 """,
-                (vec_blob, top_k, coll, top_k),
+                (vec_blob, candidate_k, coll, *filter_params, top_k),
             ).fetchall()
         except sqlite3.OperationalError as e:
             raise RuntimeError(
@@ -404,6 +413,37 @@ class SQLiteVectorStore(BaseVectorStore):
                 )
             )
         return results
+
+    @staticmethod
+    def _build_filter_sql(
+        filters: Optional[Dict[str, Any]],
+    ) -> tuple[str, List[Any]]:
+        """将 equality / `$in` metadata filters 转换为参数化 SQL。"""
+        if not filters:
+            return "", []
+
+        clauses: List[str] = []
+        params: List[Any] = []
+        for raw_key, value in filters.items():
+            key = str(raw_key or "").strip()
+            if not key or '"' in key:
+                raise ValueError(f"非法 metadata filter key: {raw_key!r}")
+            json_path = f"$.{key}"
+            if isinstance(value, dict):
+                if set(value) != {"$in"} or not isinstance(value["$in"], list):
+                    raise ValueError(
+                        f"SQLite metadata filter 仅支持 equality 和 $in: {key}"
+                    )
+                clauses.append(
+                    "json_extract(c.metadata_json, ?) "
+                    "IN (SELECT value FROM json_each(?))"
+                )
+                params.extend([json_path, json.dumps(value["$in"], ensure_ascii=False)])
+            else:
+                clauses.append("json_extract(c.metadata_json, ?) = ?")
+                params.extend([json_path, value])
+
+        return "WHERE " + " AND ".join(clauses), params
 
     def delete(
         self,
@@ -670,6 +710,7 @@ class SQLiteVectorStore(BaseVectorStore):
         self,
         collection_name: str,
         parent_id: str,
+        metadata_key: str = "parent_id",
     ) -> List[QueryResult]:
         """
         按 parent_id 取出该父下所有子块，按 chunk_index 升序排列。
@@ -677,20 +718,24 @@ class SQLiteVectorStore(BaseVectorStore):
         Args:
             collection_name: 集合名称
             parent_id: 父节点 id
+            metadata_key: metadata 中的父节点字段名
 
         Returns:
             List[QueryResult]: 子块列表，按 chunk_index 升序
         """
+        key = str(metadata_key or "").strip()
+        if not key or '"' in key:
+            raise ValueError(f"非法 parent metadata key: {metadata_key!r}")
         conn = self._get_conn()
         rows = conn.execute(
             """
             SELECT id, text, metadata_json
             FROM chunks
             WHERE collection_name = ?
-              AND json_extract(metadata_json, '$.parent_id') = ?
+              AND json_extract(metadata_json, ?) = ?
             ORDER BY CAST(json_extract(metadata_json, '$.chunk_index') AS INTEGER)
             """,
-            (collection_name, parent_id),
+            (collection_name, f"$.{key}", parent_id),
         ).fetchall()
 
         results = []

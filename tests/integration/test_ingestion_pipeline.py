@@ -13,7 +13,10 @@ from pathlib import Path
 from src.ingestion.pipeline import IngestionPipeline
 from src.core.settings import Settings, IngestionConfig, LLMConfig, VisionLLMConfig, EmbeddingConfig, VectorStoreConfig, RetrievalConfig, RerankConfig, EvaluationConfig, ObservabilityConfig, LoggingConfig, DashboardConfig
 from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.loader.file_integrity import FileIntegrityChecker
+from src.libs.loader.file_integrity import (
+    FileIntegrityChecker,
+    build_processing_profile,
+)
 from src.libs.vector_store.fake_vector_store import FakeVectorStore
 from src.ingestion.embedding.dense_encoder import DenseEncoder
 from src.ingestion.embedding.sparse_encoder import SparseEncoder
@@ -304,7 +307,15 @@ class TestIngestionPipelineWithFixtures:
         # 验证向量已写入（FakeVectorStore 使用内存）
         assert len(fake_vector_store._records) > 0, "向量应已写入"
         file_hash = integrity_checker.compute_sha256(sample_pdf_path)
-        assert integrity_checker.should_skip(file_hash, "test_collection") is True
+        processing_profile = build_processing_profile(
+            test_settings,
+            loader_name="pdf",
+        )
+        assert integrity_checker.should_skip(
+            file_hash,
+            "test_collection",
+            processing_profile,
+        ) is True
     
     def test_pipeline_outputs_vectors_and_index(self, temp_dir, test_settings, sample_pdf_path):
         """测试 Pipeline 输出向量（验收标准，统一存储：无独立 BM25）"""

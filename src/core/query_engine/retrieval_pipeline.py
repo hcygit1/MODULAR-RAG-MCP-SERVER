@@ -107,8 +107,18 @@ class RetrievalPipeline:
             "trace": trace,
         }
         if cfg is not None:
-            search_kwargs["top_k_dense"] = cfg.top_k_dense
-            search_kwargs["top_k_sparse"] = cfg.top_k_sparse
+            dense_parent = getattr(cfg, "top_k_dense_parent", None)
+            sparse_parent = getattr(cfg, "top_k_sparse_parent", None)
+            search_kwargs["top_k_dense"] = (
+                dense_parent
+                if use_parent and dense_parent is not None
+                else cfg.top_k_dense
+            )
+            search_kwargs["top_k_sparse"] = (
+                sparse_parent
+                if use_parent and sparse_parent is not None
+                else cfg.top_k_sparse
+            )
             search_kwargs["top_k_final"] = child_top_k
 
         hybrid_results = self._hybrid_search.search(**search_kwargs)

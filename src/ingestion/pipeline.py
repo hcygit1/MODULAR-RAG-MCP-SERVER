@@ -10,7 +10,10 @@ from typing import List, Optional, Any, Dict
 
 from src.ingestion.models import Document, Chunk
 from src.libs.splitter.splitter_factory import SplitterFactory
-from src.libs.loader.file_integrity import FileIntegrityChecker
+from src.libs.loader.file_integrity import (
+    FileIntegrityChecker,
+    build_processing_profile,
+)
 from src.libs.loader.pdf_loader import PdfLoader
 from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.vector_store.vector_store_factory import VectorStoreFactory
@@ -181,20 +184,32 @@ class IngestionPipeline:
 
         # 步骤 1: Integrity Check（文件完整性检查，force 时跳过）
         try:
+            processing_profile = build_processing_profile(
+                self._settings,
+                loader_name="pdf",
+            )
             if _trace:
                 with _trace.stage("integrity_check"):
                     file_hash = self._integrity_checker.compute_sha256(file_path)
                     should_skip = (
                         False
                         if force
-                        else self._integrity_checker.should_skip(file_hash, collection_name)
+                        else self._integrity_checker.should_skip(
+                            file_hash,
+                            collection_name,
+                            processing_profile,
+                        )
                     )
             else:
                 file_hash = self._integrity_checker.compute_sha256(file_path)
                 should_skip = (
                     False
                     if force
-                    else self._integrity_checker.should_skip(file_hash, collection_name)
+                    else self._integrity_checker.should_skip(
+                        file_hash,
+                        collection_name,
+                        processing_profile,
+                    )
                 )
             if should_skip:
                 if _trace:
@@ -219,7 +234,11 @@ class IngestionPipeline:
 
         # 标记处理成功（失败不影响主流程，但需记录日志避免重复处理未被发现）
         try:
-            self._integrity_checker.mark_success(file_hash, collection_name)
+            self._integrity_checker.mark_success(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
         except Exception as e:
             logger.warning("标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s", file_hash[:16] if file_hash else "?", e)
 

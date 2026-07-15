@@ -6,6 +6,7 @@ list_collections 单元测试
 import sqlite3
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -87,3 +88,39 @@ def test_execute_list_collections_with_injection(tmp_path: Path) -> None:
         assert "report" in result["content"][0]["text"]
     finally:
         set_base_path(None)
+
+
+@patch("src.libs.vector_store.vector_store_factory.VectorStoreFactory.create")
+@patch("src.mcp_server.tools.list_collections.load_mcp_settings")
+def test_execute_list_collections_routes_to_configured_backend(
+    mock_load_settings: MagicMock,
+    mock_create: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """未注入测试路径时必须调用当前配置的 VectorStore 后端。"""
+    stale_db = tmp_path / "stale.sqlite"
+    conn = sqlite3.connect(str(stale_db))
+    conn.execute(
+        "CREATE TABLE chunks (id TEXT, collection_name TEXT, text TEXT, metadata_json TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO chunks (id, collection_name, text) VALUES (?, ?, ?)",
+        ("stale", "stale_sqlite", "old"),
+    )
+    conn.commit()
+    conn.close()
+
+    settings = MagicMock()
+    settings.vector_store.backend = "qdrant"
+    settings.vector_store.sqlite_path = str(stale_db)
+    mock_load_settings.return_value = settings
+    store = MagicMock()
+    store.list_collections.return_value = ["remote_qdrant"]
+    mock_create.return_value = store
+
+    result = execute_list_collections({})
+
+    assert result["structuredContent"]["collections"] == ["remote_qdrant"]
+    mock_create.assert_called_once_with(settings)
+    store.list_collections.assert_called_once_with()
+    store.close.assert_called_once_with()

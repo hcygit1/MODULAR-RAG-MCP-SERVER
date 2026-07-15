@@ -20,8 +20,15 @@ class MockStore:
     def __init__(self, db: dict):
         # db: {parent_id: [QueryResult, ...]}（已按 chunk_index 排好序）
         self._db = db
+        self.calls = []
 
-    def get_chunks_by_parent_id(self, collection_name, parent_id):
+    def get_chunks_by_parent_id(
+        self,
+        collection_name,
+        parent_id,
+        metadata_key="parent_id",
+    ):
+        self.calls.append((collection_name, parent_id, metadata_key))
         return self._db.get(parent_id, [])
 
 
@@ -163,3 +170,40 @@ def test_empty_input_returns_empty():
     agg = ParentAggregator(MockStore(STORE_DB), score_strategy="sum")
     results = agg.aggregate([], top_k=5, collection_name="col")
     assert results == []
+
+
+def test_custom_parent_metadata_key_is_used_for_grouping_and_store_lookup():
+    """聚合器必须把自定义 parent key 传给存储层并保留到结果 metadata。"""
+    store = MockStore(
+        {
+            "section_1": [
+                QueryResult(
+                    "c1",
+                    0.0,
+                    "正文",
+                    {"section_parent": "section_1", "chunk_index": 0},
+                )
+            ]
+        }
+    )
+    aggregator = ParentAggregator(
+        store,
+        parent_id_key="section_parent",
+    )
+
+    results = aggregator.aggregate(
+        [
+            QueryResult(
+                "c1",
+                0.9,
+                "正文",
+                {"section_parent": "section_1", "chunk_index": 0},
+            )
+        ],
+        top_k=1,
+        collection_name="docs",
+    )
+
+    assert store.calls == [("docs", "section_1", "section_parent")]
+    assert results[0].metadata["section_parent"] == "section_1"
+    assert "parent_id" not in results[0].metadata

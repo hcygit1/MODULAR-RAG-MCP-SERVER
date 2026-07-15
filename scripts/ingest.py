@@ -125,8 +125,15 @@ def main():
     error_count = 0
     
     # 导入 FileIntegrityChecker 用于检查文件是否会被跳过
-    from src.libs.loader.file_integrity import FileIntegrityChecker
+    from src.libs.loader.file_integrity import (
+        FileIntegrityChecker,
+        build_processing_profile,
+    )
     integrity_checker = FileIntegrityChecker()
+    processing_profile = build_processing_profile(
+        settings,
+        loader_name="pdf",
+    )
     
     for file_path in files_to_process:
         logger.info(f"处理文件: {file_path}")
@@ -135,7 +142,11 @@ def main():
         if not args.force:
             try:
                 file_hash = integrity_checker.compute_sha256(str(file_path))
-                if integrity_checker.should_skip(file_hash, args.collection):
+                if integrity_checker.should_skip(
+                    file_hash,
+                    args.collection,
+                    processing_profile,
+                ):
                     skip_count += 1
                     logger.info(f"⏭️  文件跳过（未变更）: {file_path}")
                     continue

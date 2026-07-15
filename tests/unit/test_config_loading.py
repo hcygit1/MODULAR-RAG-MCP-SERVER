@@ -203,6 +203,18 @@ def test_validate_settings_sqlite_requires_fts5():
     assert "fts5" in str(exc_info.value)
 
 
+def test_validate_settings_parent_aggregation_requires_enough_rerank_candidates():
+    """父聚合不能在 rerank 阶段提前丢失子块候选。"""
+    settings = load_settings("config/settings.yaml")
+    settings.retrieval.aggregate_by_parent = True
+    settings.retrieval.parent_aggregate_top_m = 30
+    settings.rerank.backend = "cross_encoder"
+    settings.rerank.top_m = 10
+
+    with pytest.raises(ValueError, match="rerank.top_m"):
+        validate_settings(settings)
+
+
 def test_load_settings_local_override():
     """测试 settings.local.yaml 覆盖敏感项"""
     with tempfile.TemporaryDirectory() as tmpdir:

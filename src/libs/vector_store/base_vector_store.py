@@ -198,6 +198,7 @@ class BaseVectorStore(ABC):
         self,
         collection_name: str,
         parent_id: str,
+        metadata_key: str = "parent_id",
     ) -> List["QueryResult"]:
         """
         按 parent_id 取出该父下所有子块，按 chunk_index 升序排列。
@@ -208,6 +209,7 @@ class BaseVectorStore(ABC):
         Args:
             collection_name: 集合名称
             parent_id: 父节点 id（存于 metadata 的 parent_id 字段）
+            metadata_key: metadata 中的父节点字段名
 
         Returns:
             List[QueryResult]: 该父下的子块列表，按 chunk_index 升序
@@ -215,6 +217,12 @@ class BaseVectorStore(ABC):
         raise NotImplementedError(
             f"{self.__class__.__name__} 不支持 get_chunks_by_parent_id，"
             "请使用 SQLiteVectorStore 或实现该方法。"
+        )
+
+    def list_collections(self) -> List[str]:
+        """列出当前后端中已有数据集合。"""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} 不支持 list_collections。"
         )
 
     def delete_by_source_doc_id(
@@ -251,10 +259,10 @@ class BaseVectorStore(ABC):
         chunks_for_images: Optional[List[Any]] = None,
     ) -> int:
         """
-        原子替换指定文档的全部向量记录。
+        无数据丢失窗口地替换指定文档的全部向量记录。
 
-        不具备事务或等价原子能力的后端应保留默认实现，调用方会回退到普通 upsert，
-        避免通过“先删后写”制造数据丢失窗口。
+        SQLite 可使用单事务；远程后端可先写新版本，再清理 stale 记录。
+        不具备安全替换能力的后端应保留默认实现，调用方会回退普通 upsert。
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} 不支持原子文档替换。"

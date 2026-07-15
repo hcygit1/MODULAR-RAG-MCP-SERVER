@@ -56,6 +56,11 @@ def test_markdown_image_ids_are_scoped_to_document(tmp_path: Path) -> None:
     assert second_id.startswith(f"{second.id}_image_")
 
 
+@patch(
+    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    return_value="profile-normal",
+    create=True,
+)
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
 @patch("src.ingestion.pipeline.IngestionPipeline")
 @patch("src.libs.loader.pdf_loader.PdfLoader")
@@ -65,6 +70,7 @@ def test_execute_success(
     mock_loader_cls: MagicMock,
     mock_pipeline_cls: MagicMock,
     mock_load_settings: MagicMock,
+    mock_build_profile: MagicMock,
     tmp_path: Path,
 ) -> None:
     """成功流程：PdfLoader.load → process_document → 返回 chunk_count"""
@@ -103,10 +109,24 @@ def test_execute_success(
     mock_loader.load.assert_called_once_with(str(pdf_path))
     mock_pipeline.process_document.assert_called_once_with(mock_doc, "report", trace=ANY)
     mock_pipeline.close.assert_called_once()
-    mock_integrity.should_skip.assert_called_once_with("hash_123", "report")
-    mock_integrity.mark_success.assert_called_once_with("hash_123", "report")
+    mock_build_profile.assert_called_once_with(mock_settings, loader_name="pdf")
+    mock_integrity.should_skip.assert_called_once_with(
+        "hash_123",
+        "report",
+        "profile-normal",
+    )
+    mock_integrity.mark_success.assert_called_once_with(
+        "hash_123",
+        "report",
+        "profile-normal",
+    )
 
 
+@patch(
+    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    return_value="profile-normal",
+    create=True,
+)
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
 @patch("src.ingestion.pipeline.IngestionPipeline")
 @patch("src.libs.loader.pdf_loader.PdfLoader")
@@ -116,6 +136,7 @@ def test_execute_uses_default_collection(
     mock_loader_cls: MagicMock,
     mock_pipeline_cls: MagicMock,
     mock_load_settings: MagicMock,
+    mock_build_profile: MagicMock,
     tmp_path: Path,
 ) -> None:
     """不传 collection_name 时使用配置默认值"""
@@ -141,15 +162,30 @@ def test_execute_uses_default_collection(
     mock_pipeline_cls.return_value.process_document.assert_called_once_with(
         mock_doc, "default_coll", trace=ANY
     )
-    mock_integrity.should_skip.assert_called_once_with("hash_456", "default_coll")
-    mock_integrity.mark_success.assert_called_once_with("hash_456", "default_coll")
+    mock_build_profile.assert_called_once_with(mock_settings, loader_name="pdf")
+    mock_integrity.should_skip.assert_called_once_with(
+        "hash_456",
+        "default_coll",
+        "profile-normal",
+    )
+    mock_integrity.mark_success.assert_called_once_with(
+        "hash_456",
+        "default_coll",
+        "profile-normal",
+    )
 
 
+@patch(
+    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    return_value="profile-normal",
+    create=True,
+)
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
 @patch("src.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
 def test_execute_skip_when_unchanged(
     mock_integrity_cls: MagicMock,
     mock_load_settings: MagicMock,
+    mock_build_profile: MagicMock,
     tmp_path: Path,
 ) -> None:
     """文件未变更时直接跳过，不触发入库。"""
@@ -170,5 +206,10 @@ def test_execute_skip_when_unchanged(
     assert result["isError"] is False
     assert result["structuredContent"]["skipped"] is True
     assert result["structuredContent"]["chunk_count"] == 0
-    mock_integrity.should_skip.assert_called_once_with("hash_skip", "report")
+    mock_build_profile.assert_called_once_with(mock_settings, loader_name="pdf")
+    mock_integrity.should_skip.assert_called_once_with(
+        "hash_skip",
+        "report",
+        "profile-normal",
+    )
     mock_integrity.mark_success.assert_not_called()

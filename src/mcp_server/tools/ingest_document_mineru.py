@@ -13,7 +13,10 @@ from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
-from src.libs.loader.file_integrity import FileIntegrityChecker
+from src.libs.loader.file_integrity import (
+    FileIntegrityChecker,
+    build_processing_profile,
+)
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
 from src.mcp_server.tools.error_utils import build_error_response
@@ -56,9 +59,9 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
             structured_content_base={"chunk_count": 0},
         )
 
+    settings = load_mcp_settings()
     collection_name = arguments.get("collection_name")
     if not collection_name or not str(collection_name).strip():
-        settings = load_mcp_settings()
         collection_name = settings.vector_store.collection_name
     else:
         collection_name = str(collection_name).strip()
@@ -66,8 +69,20 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
 
     checker = FileIntegrityChecker()
     try:
+        processing_profile = build_processing_profile(
+            settings,
+            loader_name="mineru",
+        )
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash, collection_name)
+        should_skip = (
+            False
+            if force
+            else checker.should_skip(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
+        )
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -93,7 +108,6 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
-        settings = load_mcp_settings()
         token = _get_mineru_token(settings)
         if not token:
             return build_error_response(
@@ -136,7 +150,11 @@ def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
                 document = to_document(raw)
                 chunk_count = pipeline.process_document(document, collection_name, trace=trace)
                 parser_mode = "mineru_markdown_fallback"
-            checker.mark_success(file_hash, collection_name)
+            checker.mark_success(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
             return {
                 "content": [{"type": "text", "text": f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks 到集合 {collection_name}"}],
                 "structuredContent": {

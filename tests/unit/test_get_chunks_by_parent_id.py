@@ -103,6 +103,32 @@ def test_metadata_preserved(store):
     assert result[0].metadata.get("source") == "test"
 
 
+def test_supports_custom_parent_metadata_key(store):
+    """自定义 parent metadata key 必须用于 SQLite 查询。"""
+    store.upsert(
+        [
+            VectorRecord(
+                id="custom_0",
+                vector=[0.1] * 4,
+                text="自定义父字段",
+                metadata={
+                    "section_parent": "section_1",
+                    "chunk_index": 0,
+                },
+            )
+        ],
+        collection_name="recipes",
+    )
+
+    result = store.get_chunks_by_parent_id(
+        "recipes",
+        "section_1",
+        metadata_key="section_parent",
+    )
+
+    assert [item.id for item in result] == ["custom_0"]
+
+
 def test_score_is_zero(store):
     """get_chunks_by_parent_id 返回的 QueryResult.score 应为 0.0。"""
     _insert(store, [_record("c0", "doc_s1", 0, "内容")])

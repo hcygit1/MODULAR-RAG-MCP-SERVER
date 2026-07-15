@@ -262,6 +262,8 @@ def _parse_config(data: dict) -> Settings:
         parent_id_metadata_key=retrieval_data.get("parent_id_metadata_key", "parent_id"),
         parent_score_strategy=retrieval_data.get("parent_score_strategy", "sum"),
         parent_aggregate_top_m=retrieval_data.get("parent_aggregate_top_m", 30),
+        top_k_dense_parent=retrieval_data.get("top_k_dense_parent"),
+        top_k_sparse_parent=retrieval_data.get("top_k_sparse_parent"),
     )
     
     rerank_data = data.get("rerank", {})
@@ -411,6 +413,15 @@ def validate_settings(settings: Settings) -> None:
         errors.append("rerank.backend")
     if settings.rerank.backend != "none" and not settings.rerank.model:
         errors.append("rerank.model")
+    if (
+        settings.retrieval.aggregate_by_parent
+        and settings.rerank.backend != "none"
+        and settings.rerank.top_m < settings.retrieval.parent_aggregate_top_m
+    ):
+        errors.append(
+            "rerank.top_m: 父聚合模式下不能小于 "
+            "retrieval.parent_aggregate_top_m"
+        )
     
     # 校验 Evaluation 配置
     if not settings.evaluation.backends:

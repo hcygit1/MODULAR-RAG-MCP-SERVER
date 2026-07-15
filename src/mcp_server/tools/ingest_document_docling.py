@@ -7,7 +7,10 @@ from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
-from src.libs.loader.file_integrity import FileIntegrityChecker
+from src.libs.loader.file_integrity import (
+    FileIntegrityChecker,
+    build_processing_profile,
+)
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.error_utils import build_error_response
 from src.mcp_server.tools.ingest_utils import parse_force
@@ -52,8 +55,20 @@ def execute_ingest_document_docling(arguments: Dict[str, Any]) -> Dict[str, Any]
 
     checker = FileIntegrityChecker()
     try:
+        processing_profile = build_processing_profile(
+            settings,
+            loader_name="docling",
+        )
         file_hash = checker.compute_sha256(file_path)
-        should_skip = False if force else checker.should_skip(file_hash, collection_name)
+        should_skip = (
+            False
+            if force
+            else checker.should_skip(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
+        )
     except Exception as e:
         return build_error_response(
             "INTERNAL_ERROR",
@@ -93,7 +108,11 @@ def execute_ingest_document_docling(arguments: Dict[str, Any]) -> Dict[str, Any]
         trace = TraceContext(operation="ingestion")
         try:
             chunk_count = pipeline.process_chunks(chunks, collection_name, trace=trace)
-            checker.mark_success(file_hash, collection_name)
+            checker.mark_success(
+                file_hash,
+                collection_name,
+                processing_profile,
+            )
             return {
                 "content": [
                     {
