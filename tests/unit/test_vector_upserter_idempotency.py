@@ -21,6 +21,7 @@ class MockVectorStore(BaseVectorStore):
     def __init__(self):
         self._records = {}  # id -> VectorRecord
         self._upsert_calls = []  # 记录所有 upsert 调用
+        self._replace_calls = []
     
     def upsert(self, records, trace=None, collection_name=None):
         """存储记录"""
@@ -41,6 +42,27 @@ class MockVectorStore(BaseVectorStore):
                 deleted += 1
         return deleted
 
+    def replace_document_records(
+        self,
+        source_doc_id,
+        records,
+        collection_name,
+        trace=None,
+        chunks_for_images=None,
+    ):
+        """记录文档级替换调用。"""
+        self._replace_calls.append(
+            {
+                "source_doc_id": source_doc_id,
+                "records": records,
+                "collection_name": collection_name,
+                "chunks_for_images": chunks_for_images,
+            }
+        )
+        for record in records:
+            self._records[record.id] = record
+        return 2
+
     def get_backend(self) -> str:
         return "mock"
     
@@ -54,6 +76,10 @@ class MockVectorStore(BaseVectorStore):
     def get_upsert_calls(self) -> list:
         """获取所有 upsert 调用（用于测试）"""
         return self._upsert_calls
+
+    def get_replace_calls(self) -> list:
+        """获取所有文档级替换调用。"""
+        return self._replace_calls
 
 
 class TestVectorUpserterIdempotency:
@@ -224,9 +250,57 @@ class TestVectorUpserterBasic:
         record = records[0]
         assert record.text == "Test chunk"
         assert record.vector == dense_vector
-        assert record.metadata["sparse_vector"] == sparse_vector
+        assert "sparse_vector" not in record.metadata
         assert "source_path" in record.metadata
         assert "content_hash" in record.metadata
+
+    def test_replace_document_chunks_delegates_atomic_store_operation(self):
+        """文档替换必须由后端在单个原子操作中完成。"""
+        mock_store = MockVectorStore()
+        upserter = VectorUpserter(mock_store)
+        chunk = Chunk(
+            id="doc_abc_chunk_0",
+            text="replacement",
+            metadata={"source_doc_id": "doc_abc", "chunk_index": 0},
+        )
+
+        deleted = upserter.replace_document_chunks(
+            source_doc_id="doc_abc",
+            chunks=[chunk],
+            dense_vectors=[[1.0, 0.0]],
+            sparse_vectors=[{"replacement": 1.0}],
+            collection_name="docs",
+        )
+
+        assert deleted == 2
+        assert mock_store.get_upsert_calls() == []
+        assert len(mock_store.get_replace_calls()) == 1
+        call = mock_store.get_replace_calls()[0]
+        assert call["source_doc_id"] == "doc_abc"
+        assert call["collection_name"] == "docs"
+        assert call["chunks_for_images"] == [chunk]
+        assert call["records"][0].id == "doc_abc_chunk_0"
+
+    def test_replace_document_chunks_validates_vector_lengths_before_store(self):
+        """替换写入也必须在调用存储前验证向量数量。"""
+        mock_store = MockVectorStore()
+        upserter = VectorUpserter(mock_store)
+        chunk = Chunk(
+            id="doc_abc_chunk_0",
+            text="replacement",
+            metadata={"source_doc_id": "doc_abc"},
+        )
+
+        with pytest.raises(ValueError, match="dense_vectors 数量"):
+            upserter.replace_document_chunks(
+                source_doc_id="doc_abc",
+                chunks=[chunk],
+                dense_vectors=[],
+                sparse_vectors=[{}],
+                collection_name="docs",
+            )
+
+        assert mock_store.get_replace_calls() == []
     
     def test_content_hash_stored_in_metadata(self):
         """测试 content_hash 写入 metadata"""

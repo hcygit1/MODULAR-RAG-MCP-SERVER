@@ -2,6 +2,7 @@
 SQLite VectorStore 单元测试
 """
 import tempfile
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -84,6 +85,21 @@ def test_sqlite_store_delete(sqlite_store):
     assert len(results) == 0
 
 
+def test_sqlite_store_delete_returns_actual_count(sqlite_store):
+    """删除不存在的 ID 时返回实际删除数，而不是请求数量。"""
+    sqlite_store.upsert(
+        [VectorRecord(id="exists", vector=[1.0, 0.0, 0.0, 0.0], text="doc", metadata={})],
+        collection_name="test_coll",
+    )
+
+    deleted = sqlite_store.delete(
+        ["exists", "missing"],
+        collection_name="test_coll",
+    )
+
+    assert deleted == 1
+
+
 def test_sqlite_store_upsert_idempotent(sqlite_store):
     records = [
         VectorRecord(id="c1", vector=[1.0, 0.0, 0.0, 0.0], text="v1", metadata={}),
@@ -100,6 +116,123 @@ def test_sqlite_store_upsert_idempotent(sqlite_store):
     )
     assert len(results) == 1
     assert results[0].text == "v2"
+
+
+def test_sqlite_store_allows_same_id_in_different_collections(sqlite_store):
+    """记录身份由 id 和 collection_name 共同组成。"""
+    sqlite_store.upsert(
+        [VectorRecord(id="shared", vector=[1.0, 0.0, 0.0, 0.0], text="A", metadata={})],
+        collection_name="collection_a",
+    )
+    sqlite_store.upsert(
+        [VectorRecord(id="shared", vector=[0.0, 1.0, 0.0, 0.0], text="B", metadata={})],
+        collection_name="collection_b",
+    )
+
+    result_a = sqlite_store.query(
+        vector=[1.0, 0.0, 0.0, 0.0],
+        top_k=1,
+        collection_name="collection_a",
+    )
+    result_b = sqlite_store.query(
+        vector=[0.0, 1.0, 0.0, 0.0],
+        top_k=1,
+        collection_name="collection_b",
+    )
+
+    assert [result.text for result in result_a] == ["A"]
+    assert [result.text for result in result_b] == ["B"]
+
+
+def test_sqlite_document_replace_rolls_back_when_new_write_fails(sqlite_store):
+    """替换新版本失败时，旧文档必须完整保留。"""
+    sqlite_store.upsert(
+        [
+            VectorRecord(
+                id="doc_1_chunk_0",
+                vector=[1.0, 0.0, 0.0, 0.0],
+                text="old version",
+                metadata={"source_doc_id": "doc_1"},
+            )
+        ],
+        collection_name="test_coll",
+    )
+    invalid_record = VectorRecord(
+        id="doc_1_chunk_0",
+        vector=[0.0, 1.0, 0.0, 0.0],
+        text="new version",
+        metadata={"source_doc_id": "doc_1", "invalid": object()},
+    )
+
+    with pytest.raises(RuntimeError, match="SQLite 文档替换失败"):
+        sqlite_store.replace_document_records(
+            source_doc_id="doc_1",
+            records=[invalid_record],
+            collection_name="test_coll",
+        )
+
+    results = sqlite_store.query(
+        vector=[1.0, 0.0, 0.0, 0.0],
+        top_k=1,
+        collection_name="test_coll",
+    )
+    assert len(results) == 1
+    assert results[0].id == "doc_1_chunk_0"
+    assert results[0].text == "old version"
+
+
+def test_sqlite_store_migrates_legacy_primary_key_and_preserves_rowid(tmp_path):
+    """旧版全局 id 主键升级为联合主键时保留已有 rowid。"""
+    db_path = tmp_path / "rag.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE chunks (
+            id TEXT PRIMARY KEY,
+            collection_name TEXT NOT NULL,
+            text TEXT NOT NULL,
+            metadata_json TEXT,
+            created_at INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO chunks (
+            rowid,
+            id,
+            collection_name,
+            text,
+            metadata_json,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (42, "legacy", "legacy_collection", "legacy text", "{}", 1),
+    )
+    conn.commit()
+    conn.close()
+
+    store = SQLiteVectorStore(_make_config(tmp_path, dim=4))
+    try:
+        migrated = store._get_conn()
+        primary_key = [
+            row["name"]
+            for row in sorted(
+                migrated.execute("PRAGMA table_info(chunks)").fetchall(),
+                key=lambda item: int(item["pk"]),
+            )
+            if int(row["pk"]) > 0
+        ]
+        row = migrated.execute(
+            "SELECT rowid, id, collection_name FROM chunks WHERE id = ?",
+            ("legacy",),
+        ).fetchone()
+
+        assert primary_key == ["id", "collection_name"]
+        assert tuple(row) == (42, "legacy", "legacy_collection")
+    finally:
+        store.close()
 
 
 def test_sqlite_store_write_fts_upsert_and_delete(tmp_path):

@@ -5,6 +5,7 @@ Chroma VectorStore 实现
 支持本地持久化目录，无需额外数据库服务。
 """
 from typing import List, Dict, Any, Optional
+import json
 import os
 
 from src.libs.vector_store.base_vector_store import (
@@ -20,6 +21,40 @@ try:
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
+
+
+_JSON_METADATA_PREFIX = "__modular_rag_json__:"
+
+
+def _encode_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """将 Chroma 不支持的复合值编码为带类型标记的 JSON 字符串。"""
+    encoded: Dict[str, Any] = {}
+    for key, value in metadata.items():
+        if isinstance(value, bytes):
+            continue
+        if value is None or isinstance(value, (str, int, float, bool)):
+            encoded[key] = value
+            continue
+        encoded[key] = _JSON_METADATA_PREFIX + json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+    return encoded
+
+
+def _decode_metadata(metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """恢复由 `_encode_metadata` 编码的复合 metadata。"""
+    decoded: Dict[str, Any] = {}
+    for key, value in (metadata or {}).items():
+        if isinstance(value, str) and value.startswith(_JSON_METADATA_PREFIX):
+            try:
+                decoded[key] = json.loads(value[len(_JSON_METADATA_PREFIX):])
+                continue
+            except json.JSONDecodeError:
+                pass
+        decoded[key] = value
+    return decoded
 
 
 class ChromaStore(BaseVectorStore):
@@ -104,7 +139,7 @@ class ChromaStore(BaseVectorStore):
             ids = [record.id for record in records]
             embeddings = [record.vector for record in records]
             documents = [record.text for record in records]
-            metadatas = [record.metadata for record in records]
+            metadatas = [_encode_metadata(record.metadata) for record in records]
             coll.upsert(
                 ids=ids,
                 embeddings=embeddings,
@@ -186,7 +221,9 @@ class ChromaStore(BaseVectorStore):
                     score = 1.0 / (1.0 + distance) if distance >= 0 else 1.0
                     
                     document = documents[i] if i < len(documents) else ""
-                    metadata = metadatas[i] if i < len(metadatas) else {}
+                    metadata = _decode_metadata(
+                        metadatas[i] if i < len(metadatas) else {}
+                    )
                     
                     query_results.append(
                         QueryResult(

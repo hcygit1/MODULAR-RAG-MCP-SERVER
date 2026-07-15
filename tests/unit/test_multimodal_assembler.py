@@ -12,7 +12,6 @@ import pytest
 from src.core.response.multimodal_assembler import (
     assemble_content,
     _image_refs_to_content_items,
-    _infer_collection_from_sqlite,
 )
 from src.core.response.response_builder import build_mcp_content
 
@@ -48,32 +47,6 @@ def test_image_refs_to_content_items_sqlite(tmp_path: Path) -> None:
     assert items[0]["type"] == "image"
     assert items[0]["mimeType"] == "image/png"
     assert base64.b64decode(items[0]["data"]) == img_bytes
-
-
-def test_infer_collection_from_sqlite(tmp_path: Path) -> None:
-    """从 images 表推断 collection_name"""
-    db_path = tmp_path / "rag.sqlite"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("""
-        CREATE TABLE images (
-            id TEXT PRIMARY KEY,
-            collection_name TEXT NOT NULL,
-            image_data BLOB NOT NULL,
-            mime_type TEXT DEFAULT 'image/png',
-            metadata_json TEXT,
-            created_at INTEGER DEFAULT (strftime('%s','now'))
-        )
-    """)
-    conn.execute(
-        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
-        ("img_x", "my_coll", b"\x89PNG", "image/png"),
-    )
-    conn.commit()
-    conn.close()
-
-    coll = _infer_collection_from_sqlite(str(db_path), "img_x")
-    assert coll == "my_coll"
-    assert _infer_collection_from_sqlite(str(db_path), "nonexistent") is None
 
 
 def test_assemble_content_no_images() -> None:
@@ -137,37 +110,39 @@ def test_assemble_content_sqlite(tmp_path: Path) -> None:
     assert base64.b64decode(content[1]["data"]) == img_bytes
 
 
-def test_assemble_content_infer_collection(tmp_path: Path) -> None:
-    """collection 不在 metadata 时从 images 表推断"""
+def test_assemble_content_does_not_guess_collection(tmp_path: Path) -> None:
+    """collection 缺失时不得仅按 image id 加载任意集合的图片。"""
     from src.libs.vector_store.base_vector_store import QueryResult
 
     db_path = tmp_path / "rag.sqlite"
     conn = sqlite3.connect(str(db_path))
     conn.execute("""
         CREATE TABLE images (
-            id TEXT PRIMARY KEY,
+            id TEXT NOT NULL,
             collection_name TEXT NOT NULL,
             image_data BLOB NOT NULL,
             mime_type TEXT DEFAULT 'image/png',
             metadata_json TEXT,
-            created_at INTEGER DEFAULT (strftime('%s','now'))
+            created_at INTEGER DEFAULT (strftime('%s','now')),
+            PRIMARY KEY (id, collection_name)
         )
     """)
-    img_bytes = b"\x89PNG"
     conn.execute(
         "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
-        ("img_infer", "inferred_coll", img_bytes, "image/png"),
+        ("shared_image", "collection_a", b"A", "image/png"),
+    )
+    conn.execute(
+        "INSERT INTO images (id, collection_name, image_data, mime_type) VALUES (?, ?, ?, ?)",
+        ("shared_image", "collection_b", b"B", "image/png"),
     )
     conn.commit()
     conn.close()
 
     results = [
-        QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["img_infer"]}),
+        QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["shared_image"]}),
     ]
     content = assemble_content(results, "markdown", None, sqlite_path=str(db_path))
-    assert len(content) >= 2
-    assert content[1]["type"] == "image"
-    assert base64.b64decode(content[1]["data"]) == img_bytes
+    assert content == [{"type": "text", "text": "markdown"}]
 
 
 def test_build_mcp_content_empty() -> None:

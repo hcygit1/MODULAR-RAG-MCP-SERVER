@@ -40,20 +40,6 @@ def _load_image_from_sqlite(
     return None
 
 
-def _infer_collection_from_sqlite(sqlite_path: str, image_id: str) -> Optional[str]:
-    """从 images 表推断 image_id 所属的 collection_name。"""
-    try:
-        conn = sqlite3.connect(str(sqlite_path))
-        row = conn.execute(
-            "SELECT collection_name FROM images WHERE id = ? LIMIT 1",
-            (image_id,),
-        ).fetchone()
-        conn.close()
-        return row[0] if row else None
-    except Exception:
-        return None
-
-
 def _image_refs_to_content_items(
     image_refs: List[str],
     collection_name: str,
@@ -100,7 +86,7 @@ def assemble_content(
     Args:
         results: 检索结果
         text_content: 已有的 Markdown 文本（作为第一个 content 项）
-        collection_name: 集合名称；若 None 且 sqlite_path 非空则按 image_id 从 images 表推断
+        collection_name: 集合名称；缺失时不加载图片，避免跨集合误读
         sqlite_path: SQLite 路径，非空时从 images 表加载图片
 
     Returns:
@@ -122,8 +108,6 @@ def assemble_content(
             if not image_id or image_id in seen_ids:
                 continue
             seen_ids.add(image_id)
-            if not coll:
-                coll = _infer_collection_from_sqlite(sqlite_path, image_id)
             if not coll:
                 continue
             items = _image_refs_to_content_items([image_id], coll, sqlite_path)

@@ -88,15 +88,7 @@ class SQLiteVectorStore(BaseVectorStore):
         conn = self._conn
         if conn is None:
             return
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS chunks (
-                id TEXT PRIMARY KEY,
-                collection_name TEXT NOT NULL,
-                text TEXT NOT NULL,
-                metadata_json TEXT,
-                created_at INTEGER DEFAULT (strftime('%s','now'))
-            )
-        """)
+        self._ensure_chunks_table(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_collection ON chunks(collection_name)")
 
         # vec0: PK, vector, metadata。collection_name 用于 WHERE 过滤
@@ -142,6 +134,61 @@ class SQLiteVectorStore(BaseVectorStore):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_images_collection ON images(collection_name)")
         conn.commit()
 
+    @staticmethod
+    def _create_chunks_table(conn: sqlite3.Connection, table_name: str = "chunks") -> None:
+        """创建以 `(id, collection_name)` 为记录身份的 chunks 表。"""
+        conn.execute(
+            f"""
+            CREATE TABLE {table_name} (
+                id TEXT NOT NULL,
+                collection_name TEXT NOT NULL,
+                text TEXT NOT NULL,
+                metadata_json TEXT,
+                created_at INTEGER DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (id, collection_name)
+            )
+            """
+        )
+
+    def _ensure_chunks_table(self, conn: sqlite3.Connection) -> None:
+        """创建新表，或将旧版全局 id 主键表原地迁移为联合主键。"""
+        columns = conn.execute("PRAGMA table_info(chunks)").fetchall()
+        if not columns:
+            self._create_chunks_table(conn)
+            return
+
+        primary_key = [
+            row["name"]
+            for row in sorted(columns, key=lambda item: int(item["pk"]))
+            if int(row["pk"]) > 0
+        ]
+        if primary_key == ["id", "collection_name"]:
+            return
+
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._create_chunks_table(conn, "chunks_migrated")
+            conn.execute(
+                """
+                INSERT INTO chunks_migrated (
+                    rowid,
+                    id,
+                    collection_name,
+                    text,
+                    metadata_json,
+                    created_at
+                )
+                SELECT rowid, id, collection_name, text, metadata_json, created_at
+                FROM chunks
+                """
+            )
+            conn.execute("DROP TABLE chunks")
+            conn.execute("ALTER TABLE chunks_migrated RENAME TO chunks")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
     def upsert(
         self,
         records: List[VectorRecord],
@@ -155,13 +202,20 @@ class SQLiteVectorStore(BaseVectorStore):
         if not coll:
             raise ValueError("collection_name 不能为空")
 
+        self._validate_records(records)
         conn = self._get_conn()
-        vec_blob = serialize_float32(records[0].vector)
-        if len(vec_blob) // 4 != self._dim:
-            raise ValueError(
-                f"向量维度与配置不一致: 期望 {self._dim}, 实际 {len(vec_blob) // 4}"
-            )
 
+        try:
+            self._write_records(conn, records, coll, chunks_for_images)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise RuntimeError(
+                f"SQLite upsert 失败 (backend={self._backend}, collection={coll}): {str(e)}"
+            ) from e
+
+    def _validate_records(self, records: List[VectorRecord]) -> None:
+        """验证记录结构和向量维度，不执行数据库写入。"""
         for i, record in enumerate(records):
             if not isinstance(record, VectorRecord):
                 raise ValueError(f"记录 {i} 必须是 VectorRecord 类型")
@@ -176,44 +230,82 @@ class SQLiteVectorStore(BaseVectorStore):
                     f"记录 {i} 向量维度 {len(record.vector)} 与配置 {self._dim} 不一致"
                 )
 
+    def _write_records(
+        self,
+        conn: sqlite3.Connection,
+        records: List[VectorRecord],
+        collection_name: str,
+        chunks_for_images: Optional[List[Any]] = None,
+    ) -> None:
+        """在调用方事务内写入 chunks、vec、FTS 和图片。"""
+        for record in records:
+            self._delete_records(conn, [record.id], collection_name)
+            conn.execute(
+                "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
+                (
+                    record.id,
+                    collection_name,
+                    record.text,
+                    _prepare_metadata(record.metadata),
+                ),
+            )
+            rowid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO chunks_vec (chunk_rowid, collection_name, embedding) VALUES (?, ?, ?)",
+                (rowid, collection_name, serialize_float32(record.vector)),
+            )
+            if self._write_fts:
+                conn.execute(
+                    "INSERT INTO chunks_fts (chunk_id, collection_name, tokenized_text) VALUES (?, ?, ?)",
+                    (
+                        record.id,
+                        collection_name,
+                        _tokenized_text_for_fts(record.text),
+                    ),
+                )
+        if self._write_fts and chunks_for_images:
+            self._upsert_images(conn, chunks_for_images, collection_name)
+
+    def replace_document_records(
+        self,
+        source_doc_id: str,
+        records: List[VectorRecord],
+        collection_name: str,
+        trace: Optional[Any] = None,
+        chunks_for_images: Optional[List[Any]] = None,
+    ) -> int:
+        """在单个 SQLite 事务中删除旧文档并写入新版本。"""
+        coll = (collection_name or "").strip()
+        if not coll:
+            raise ValueError("collection_name 不能为空")
+        doc_id = (source_doc_id or "").strip()
+        if not doc_id:
+            raise ValueError("source_doc_id 不能为空")
+        if not records:
+            raise ValueError("记录列表不能为空")
+        self._validate_records(records)
+
+        conn = self._get_conn()
         try:
-            for record in records:
-                conn.execute(
-                    "DELETE FROM chunks_vec WHERE chunk_rowid IN (SELECT rowid FROM chunks WHERE id = ? AND collection_name = ?)",
-                    (record.id, coll),
-                )
-                if self._write_fts:
-                    conn.execute(
-                        "DELETE FROM chunks_fts WHERE chunk_id = ? AND collection_name = ?",
-                        (record.id, coll),
-                    )
-                conn.execute(
-                    "DELETE FROM chunks WHERE id = ? AND collection_name = ?",
-                    (record.id, coll),
-                )
-                conn.execute(
-                    "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
-                    (record.id, coll, record.text, _prepare_metadata(record.metadata)),
-                )
-                rowid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                vec_blob = serialize_float32(record.vector)
-                conn.execute(
-                    "INSERT INTO chunks_vec (chunk_rowid, collection_name, embedding) VALUES (?, ?, ?)",
-                    (rowid, coll, vec_blob),
-                )
-                if self._write_fts:
-                    tt = _tokenized_text_for_fts(record.text)
-                    conn.execute(
-                        "INSERT INTO chunks_fts (chunk_id, collection_name, tokenized_text) VALUES (?, ?, ?)",
-                        (record.id, coll, tt),
-                    )
-            if self._write_fts and chunks_for_images:
-                self._upsert_images(conn, chunks_for_images, coll)
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                """
+                SELECT id
+                FROM chunks
+                WHERE collection_name = ?
+                  AND json_extract(metadata_json, '$.source_doc_id') = ?
+                """,
+                (coll, doc_id),
+            ).fetchall()
+            old_ids = [str(row["id"]) for row in rows if row["id"]]
+            self._delete_records(conn, old_ids, coll)
+            self._write_records(conn, records, coll, chunks_for_images)
             conn.commit()
+            return len(old_ids)
         except Exception as e:
             conn.rollback()
             raise RuntimeError(
-                f"SQLite upsert 失败 (backend={self._backend}, collection={coll}): {str(e)}"
+                f"SQLite 文档替换失败 (backend={self._backend}, collection={coll}): {str(e)}"
             ) from e
 
     def _upsert_images(
@@ -327,44 +419,69 @@ class SQLiteVectorStore(BaseVectorStore):
 
         conn = self._get_conn()
         try:
-            ids_json = json.dumps(ids, ensure_ascii=False)
-            if self._write_fts:
-                self._delete_orphan_images(conn, ids, coll)
-                conn.execute(
-                    """
-                    DELETE FROM chunks_fts
-                    WHERE collection_name = ?
-                      AND chunk_id IN (SELECT value FROM json_each(?))
-                    """,
-                    (coll, ids_json),
-                )
-            conn.execute(
-                """
-                DELETE FROM chunks_vec
-                WHERE chunk_rowid IN (
-                    SELECT rowid
-                    FROM chunks
-                    WHERE collection_name = ?
-                      AND id IN (SELECT value FROM json_each(?))
-                )
-                """,
-                (coll, ids_json),
-            )
-            conn.execute(
-                """
-                DELETE FROM chunks
-                WHERE collection_name = ?
-                  AND id IN (SELECT value FROM json_each(?))
-                """,
-                (coll, ids_json),
-            )
+            deleted = self._delete_records(conn, ids, coll)
             conn.commit()
-            return len(ids)
+            return deleted
         except Exception as e:
             conn.rollback()
             raise RuntimeError(
                 f"SQLite delete 失败 (backend={self._backend}, collection={coll}): {str(e)}"
             ) from e
+
+    def _delete_records(
+        self,
+        conn: sqlite3.Connection,
+        ids: List[str],
+        collection_name: str,
+    ) -> int:
+        """在调用方事务内删除指定 collection 的记录及关联索引。"""
+        if not ids:
+            return 0
+        ids_json = json.dumps(ids, ensure_ascii=False)
+        row = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM chunks
+            WHERE collection_name = ?
+              AND id IN (SELECT value FROM json_each(?))
+            """,
+            (collection_name, ids_json),
+        ).fetchone()
+        deleted = int(row[0] if row else 0)
+        if deleted == 0:
+            return 0
+
+        if self._write_fts:
+            self._delete_orphan_images(conn, ids, collection_name)
+            conn.execute(
+                """
+                DELETE FROM chunks_fts
+                WHERE collection_name = ?
+                  AND chunk_id IN (SELECT value FROM json_each(?))
+                """,
+                (collection_name, ids_json),
+            )
+        conn.execute(
+            """
+            DELETE FROM chunks_vec
+            WHERE chunk_rowid IN (
+                SELECT rowid
+                FROM chunks
+                WHERE collection_name = ?
+                  AND id IN (SELECT value FROM json_each(?))
+            )
+            """,
+            (collection_name, ids_json),
+        )
+        conn.execute(
+            """
+            DELETE FROM chunks
+            WHERE collection_name = ?
+              AND id IN (SELECT value FROM json_each(?))
+            """,
+            (collection_name, ids_json),
+        )
+        return deleted
 
     def delete_by_source_doc_id(
         self,

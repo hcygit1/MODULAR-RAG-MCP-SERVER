@@ -72,7 +72,7 @@ def _parse_markdown(path: Path) -> "Document":
         stem = img_path.stem
         count = id_counter.get(stem, 0)
         id_counter[stem] = count + 1
-        image_id = stem if count == 0 else f"{stem}_{count}"
+        image_id = f"{doc_id}_image_{stem}_{count}"
 
         mime = _IMAGE_MIME.get(img_path.suffix.lower(), "image/png")
         image_data[image_id] = data

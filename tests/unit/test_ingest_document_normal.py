@@ -5,7 +5,10 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from src.ingestion.models import Document
-from src.mcp_server.tools.ingest_document_normal import execute_ingest_document_normal
+from src.mcp_server.tools.ingest_document_normal import (
+    _parse_markdown,
+    execute_ingest_document_normal,
+)
 
 
 def test_execute_file_path_empty() -> None:
@@ -31,6 +34,26 @@ def test_execute_file_not_found() -> None:
     assert result["isError"] is True
     assert result["structuredContent"]["errorType"] == "RESOURCE_NOT_FOUND"
     assert "文件不存在" in result["structuredContent"]["message"]
+
+
+def test_markdown_image_ids_are_scoped_to_document(tmp_path: Path) -> None:
+    """不同文档引用同名图片时不得生成相同 image id。"""
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    for directory, payload in ((first_dir, b"first"), (second_dir, b"second")):
+        (directory / "image.png").write_bytes(payload)
+        (directory / "doc.md").write_text("![sample](image.png)", encoding="utf-8")
+
+    first = _parse_markdown(first_dir / "doc.md")
+    second = _parse_markdown(second_dir / "doc.md")
+
+    first_id = first.metadata["images"][0]["image_id"]
+    second_id = second.metadata["images"][0]["image_id"]
+    assert first_id != second_id
+    assert first_id.startswith(f"{first.id}_image_")
+    assert second_id.startswith(f"{second.id}_image_")
 
 
 @patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")

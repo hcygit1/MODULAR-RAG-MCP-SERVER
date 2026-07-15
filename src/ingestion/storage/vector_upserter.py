@@ -55,19 +55,7 @@ class VectorUpserter:
             ValueError: 当输入参数不匹配或格式不正确时
             RuntimeError: 当存储操作失败时
         """
-        if not chunks:
-            raise ValueError("chunks 列表不能为空")
-        
-        if len(chunks) != len(dense_vectors):
-            raise ValueError(
-                f"chunks 数量 ({len(chunks)}) 与 dense_vectors 数量 ({len(dense_vectors)}) 不一致"
-            )
-        
-        if len(chunks) != len(sparse_vectors):
-            raise ValueError(
-                f"chunks 数量 ({len(chunks)}) 与 sparse_vectors 数量 ({len(sparse_vectors)}) 不一致"
-            )
-        
+        self._validate_inputs(chunks, dense_vectors, sparse_vectors)
         records = self._build_records(chunks, dense_vectors, sparse_vectors)
         
         # 批量写入向量数据库。SQLite+write_fts 时传入 chunks 以同期写入 images
@@ -109,20 +97,15 @@ class VectorUpserter:
         if not doc_id:
             raise ValueError("source_doc_id 不能为空")
 
-        # 先删除旧块，避免文档改短时残留旧 chunk。
-        deleted_count = self._vector_store.delete_by_source_doc_id(
-            collection_name=collection_name or self._vector_store.get_collection_name(),
+        self._validate_inputs(chunks, dense_vectors, sparse_vectors)
+        records = self._build_records(chunks, dense_vectors, sparse_vectors)
+        return self._vector_store.replace_document_records(
             source_doc_id=doc_id,
+            records=records,
+            collection_name=collection_name or self._vector_store.get_collection_name(),
             trace=trace,
+            chunks_for_images=chunks,
         )
-        self.upsert_chunks(
-            chunks=chunks,
-            dense_vectors=dense_vectors,
-            sparse_vectors=sparse_vectors,
-            trace=trace,
-            collection_name=collection_name,
-        )
-        return deleted_count
 
     def delete_chunks(
         self,
@@ -161,6 +144,24 @@ class VectorUpserter:
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _validate_inputs(
+        chunks: List[Chunk],
+        dense_vectors: List[List[float]],
+        sparse_vectors: List[Dict[str, float]],
+    ) -> None:
+        """统一验证普通 upsert 和文档替换的输入数量。"""
+        if not chunks:
+            raise ValueError("chunks 列表不能为空")
+        if len(chunks) != len(dense_vectors):
+            raise ValueError(
+                f"chunks 数量 ({len(chunks)}) 与 dense_vectors 数量 ({len(dense_vectors)}) 不一致"
+            )
+        if len(chunks) != len(sparse_vectors):
+            raise ValueError(
+                f"chunks 数量 ({len(chunks)}) 与 sparse_vectors 数量 ({len(sparse_vectors)}) 不一致"
+            )
+
     def _build_records(
         self,
         chunks: List[Chunk],
@@ -176,11 +177,12 @@ class VectorUpserter:
                 )
             chunk_id = chunk.id
             dense_vector = dense_vectors[i]
-            sparse_vector = sparse_vectors[i]
-
             content_hash = self._compute_content_hash(chunk.text)
-            enriched_metadata = chunk.metadata.copy()
-            enriched_metadata["sparse_vector"] = sparse_vector
+            enriched_metadata = {
+                key: value
+                for key, value in chunk.metadata.items()
+                if key != "image_data" and not isinstance(value, bytes)
+            }
             enriched_metadata["content_hash"] = content_hash
 
             records.append(

@@ -106,6 +106,40 @@ def test_chroma_store_upsert_and_query_roundtrip():
 
 @pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB 未安装")
 @pytest.mark.integration
+def test_chroma_store_roundtrips_composite_metadata():
+    """Chroma 应以标量形式保存复合 metadata，并在查询时恢复。"""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        store = ChromaStore(
+            VectorStoreConfig(
+                backend="chroma",
+                persist_path=temp_dir,
+                collection_name="composite_metadata",
+            )
+        )
+        record = VectorRecord(
+            id="doc_1_chunk_0",
+            vector=[0.1] * 16,
+            text="composite metadata",
+            metadata={
+                "source_doc_id": "doc_1",
+                "image_refs": ["doc_1_image_0"],
+                "attributes": {"language": "zh", "page": 1},
+            },
+        )
+
+        store.upsert([record])
+        results = store.query(record.vector, top_k=1)
+
+        assert len(results) == 1
+        assert results[0].metadata["image_refs"] == ["doc_1_image_0"]
+        assert results[0].metadata["attributes"] == {"language": "zh", "page": 1}
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB 未安装")
+@pytest.mark.integration
 def test_chroma_store_persistence():
     """测试 Chroma Store 持久化功能"""
     # 使用临时目录

@@ -241,3 +241,21 @@ class BaseVectorStore(ABC):
             f"{self.__class__.__name__} 不支持 delete_by_source_doc_id，"
             "请使用 SQLiteVectorStore 或实现该方法。"
         )
+
+    def replace_document_records(
+        self,
+        source_doc_id: str,
+        records: List[VectorRecord],
+        collection_name: str,
+        trace: Optional[Any] = None,
+        chunks_for_images: Optional[List[Any]] = None,
+    ) -> int:
+        """
+        原子替换指定文档的全部向量记录。
+
+        不具备事务或等价原子能力的后端应保留默认实现，调用方会回退到普通 upsert，
+        避免通过“先删后写”制造数据丢失窗口。
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} 不支持原子文档替换。"
+        )

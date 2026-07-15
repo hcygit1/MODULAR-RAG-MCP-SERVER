@@ -145,6 +145,11 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         settings = _cached_settings
         if settings is None:
             settings = load_mcp_settings()
+        effective_collection = (
+            str(collection_name).strip()
+            if collection_name and str(collection_name).strip()
+            else settings.vector_store.collection_name
+        )
         vs_backend = getattr(getattr(settings, "vector_store", None), "backend", "")
         sparse_backend = getattr(getattr(settings, "retrieval", None), "sparse_backend", "bm25")
         use_sqlite_images = vs_backend == "sqlite" and sparse_backend == "fts5"
@@ -156,7 +161,7 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
             sqlite_path = None
         return build_mcp_content(
             results,
-            collection_name=collection_name,
+            collection_name=effective_collection,
             sqlite_path=sqlite_path,
         )
     except FileNotFoundError as e:
