@@ -4,10 +4,9 @@ Cross-Encoder Reranker 实现
 使用 Cross-Encoder 模型对候选结果进行重排序。
 支持本地模型和托管模型，提供超时和失败回退机制。
 """
-import signal
 import threading
 from typing import List, Optional, Any, Callable
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from src.libs.vector_store.base_vector_store import QueryResult
 from src.libs.reranker.base_reranker import BaseReranker
@@ -20,6 +19,10 @@ try:
 except ImportError:
     CROSS_ENCODER_AVAILABLE = False
     CrossEncoder = None
+
+
+class _RerankDeadlineExceeded(Exception):
+    """等待评分结果超过配置的截止时间。"""
 
 
 class CrossEncoderReranker(BaseReranker):
@@ -55,6 +58,9 @@ class CrossEncoderReranker(BaseReranker):
         self._model_name = config.model
         self._top_m = config.top_m
         self._timeout_seconds = config.timeout_seconds
+        self._score_lock = threading.Lock()
+        self._active_executor: Optional[ThreadPoolExecutor] = None
+        self._active_future: Optional[Future[List[float]]] = None
         
         # 如果提供了 scorer（用于测试），使用它
         if scorer is not None:
@@ -77,6 +83,19 @@ class CrossEncoderReranker(BaseReranker):
             
             self._scorer = None
             self._use_mock = False
+
+    def _cleanup_completed_score(self, future: Future[List[float]]) -> None:
+        """主动清理已经结束的评分任务。"""
+        executor = None
+        with self._score_lock:
+            if self._active_future is not future or not future.done():
+                return
+            executor = self._active_executor
+            self._active_future = None
+            self._active_executor = None
+
+        if executor is not None:
+            executor.shutdown(wait=False)
     
     def rerank(
         self,
@@ -135,7 +154,7 @@ class CrossEncoderReranker(BaseReranker):
             
             return reranked_results
             
-        except FutureTimeoutError:
+        except _RerankDeadlineExceeded:
             raise RuntimeError(
                 f"Cross-Encoder Reranker 超时（{self._timeout_seconds}秒）。"
                 f"请考虑增加 timeout_seconds 或减少 top_m。"
@@ -162,7 +181,7 @@ class CrossEncoderReranker(BaseReranker):
             List[float]: 相关性分数列表
         
         Raises:
-            FutureTimeoutError: 当操作超时时
+            _RerankDeadlineExceeded: 当等待评分结果超时时
         """
         def score_candidates():
             """内部函数：执行打分操作"""
@@ -177,16 +196,45 @@ class CrossEncoderReranker(BaseReranker):
                 # CrossEncoder.predict 返回 numpy array，转换为 list
                 return scores.tolist() if hasattr(scores, 'tolist') else list(scores)
         
-        # 使用 ThreadPoolExecutor 实现超时（对 mock scorer 和真实模型都适用）
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(score_candidates)
+        # 每个实例只允许一个不可中断的模型评分任务运行。
+        while True:
+            executor_to_shutdown = None
+            submit_executor = None
+            active_future = None
             try:
-                scores = future.result(timeout=self._timeout_seconds)
-                return scores
-            except FutureTimeoutError:
-                # 取消任务
-                future.cancel()
+                with self._score_lock:
+                    active_future = self._active_future
+                    if active_future is not None:
+                        if not active_future.done():
+                            raise RuntimeError(
+                                "Cross-Encoder Reranker 上一次评分任务仍在运行，请稍后重试。"
+                            )
+                        executor_to_shutdown = self._active_executor
+                        self._active_future = None
+                        self._active_executor = None
+                    else:
+                        submit_executor = ThreadPoolExecutor(max_workers=1)
+                        future = submit_executor.submit(score_candidates)
+                        self._active_executor = submit_executor
+                        self._active_future = future
+            except BaseException:
+                if submit_executor is not None:
+                    submit_executor.shutdown(wait=False, cancel_futures=True)
                 raise
+
+            if executor_to_shutdown is not None:
+                executor_to_shutdown.shutdown(wait=False)
+            if active_future is None:
+                break
+
+        # 注册回调时不能持锁：已完成 future 会在注册线程同步执行回调。
+        future.add_done_callback(self._cleanup_completed_score)
+        try:
+            return future.result(timeout=self._timeout_seconds)
+        except FutureTimeoutError as exc:
+            if future.done() and future.exception() is exc:
+                raise
+            raise _RerankDeadlineExceeded from None
     
     def get_backend(self) -> str:
         """获取 backend 名称"""

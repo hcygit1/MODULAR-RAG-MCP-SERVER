@@ -6,18 +6,33 @@ query_knowledge_hub Tool
 from __future__ import annotations
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
 from src.mcp_server.tools.config_utils import load_mcp_settings, set_config_path as _set_config_path
-from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result, run_sync_callable
 
 logger = logging.getLogger(__name__)
 
 # 懒加载的 pipeline 与缓存的 settings（避免重复 load）
 _pipeline: Optional[Any] = None
 _cached_settings: Optional[Any] = None
+_query_worker_state = threading.local()
+
+
+def _initialize_query_worker() -> None:
+    """标记固定 query executor 的 worker，供同步入口避免递归提交。"""
+    _query_worker_state.active = True
+
+
+_query_executor = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="mcp-query",
+    initializer=_initialize_query_worker,
+)
 
 
 def _get_pipeline():
@@ -100,7 +115,7 @@ def set_sqlite_path(path: Optional[str]) -> None:
     _sqlite_path_override = path
 
 
-def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
+def _execute_query_knowledge_hub_core(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     执行 query_knowledge_hub 工具。
 
@@ -185,7 +200,17 @@ def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
 
 
-def query_knowledge_hub(
+def execute_query_knowledge_hub(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """在固定 query worker 上同步执行检索，保持缓存 pipeline 的线程亲和。"""
+    if getattr(_query_worker_state, "active", False):
+        return _execute_query_knowledge_hub_core(arguments)
+    return _query_executor.submit(
+        _execute_query_knowledge_hub_core,
+        arguments,
+    ).result()
+
+
+async def query_knowledge_hub(
     query: str,
     collection_name: str | None = None,
     top_k: int = 10,
@@ -201,9 +226,13 @@ def query_knowledge_hub(
     Returns:
         CallToolResult 含 content（Markdown）、structuredContent.citations
     """
-    d = execute_query_knowledge_hub({
-        "query": query,
-        "collection_name": collection_name,
-        "top_k": top_k,
-    })
+    d = await run_sync_callable(
+        execute_query_knowledge_hub,
+        {
+            "query": query,
+            "collection_name": collection_name,
+            "top_k": top_k,
+        },
+        executor=_query_executor,
+    )
     return dict_to_call_tool_result(d)

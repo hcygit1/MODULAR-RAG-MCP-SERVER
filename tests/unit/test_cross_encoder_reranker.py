@@ -3,8 +3,9 @@ Cross-Encoder Reranker 单元测试
 
 使用 mock scorer 测试 Cross-Encoder Reranker 的实现。
 """
+import threading
 import time
-from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.core.settings import (
@@ -14,8 +15,19 @@ from src.core.settings import (
     LoggingConfig, DashboardConfig
 )
 from src.libs.reranker.cross_encoder_reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
-from src.libs.reranker.reranker_factory import RerankerFactory
 from src.libs.vector_store.base_vector_store import QueryResult
+
+
+def _wait_until(predicate, timeout: float = 1.0) -> bool:
+    """使用有界轮询等待异步条件成立。"""
+    deadline = time.monotonic() + timeout
+    poll_interval = threading.Event()
+    while not predicate():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        poll_interval.wait(min(0.01, remaining))
+    return True
 
 
 def _create_test_settings(
@@ -297,17 +309,17 @@ def test_cross_encoder_reranker_top_m_limit():
 
 
 def test_cross_encoder_reranker_timeout():
-    """测试超时功能"""
+    """超时必须在截止时间附近返回，而不是等待后台评分完成。"""
     config = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_m=30,
-        timeout_seconds=1  # 很短的超时时间
+        timeout_seconds=0.05,
     )
     
     # 创建一个会延迟的 mock scorer
     def slow_scorer(query: str, text: str) -> float:
-        time.sleep(2)  # 延迟 2 秒，超过超时时间
+        time.sleep(0.3)
         return 0.5
     
     reranker = CrossEncoderReranker(config, scorer=slow_scorer)
@@ -316,8 +328,226 @@ def test_cross_encoder_reranker_timeout():
         QueryResult(id="id2", score=0.8, text="text2")
     ]
     
+    started_at = time.monotonic()
     with pytest.raises(RuntimeError, match="超时"):
         reranker.rerank("test query", candidates)
+    assert time.monotonic() - started_at < 0.2
+
+
+def test_cross_encoder_rejects_new_work_while_timed_out_task_runs():
+    """一个超时任务仍运行时不得再启动新的评分线程。"""
+    release = threading.Event()
+    started = threading.Event()
+    scorer_calls = 0
+
+    def blocking_scorer(query: str, text: str) -> float:
+        nonlocal scorer_calls
+        scorer_calls += 1
+        started.set()
+        release.wait(timeout=1)
+        return 0.5
+
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=0.05,
+    )
+    reranker = CrossEncoderReranker(config, scorer=blocking_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    try:
+        with pytest.raises(RuntimeError, match="超时"):
+            reranker.rerank("test query", candidates)
+        assert started.is_set()
+
+        started_at = time.monotonic()
+        with pytest.raises(RuntimeError, match="仍在运行"):
+            reranker.rerank("test query", candidates)
+        assert time.monotonic() - started_at < 0.05
+        assert scorer_calls == 1
+    finally:
+        release.set()
+
+
+def test_cross_encoder_recovers_after_timed_out_task_finishes():
+    """超时后台任务结束后，同一实例必须能够接受新的评分任务。"""
+    release = threading.Event()
+    started = threading.Event()
+    scorer_calls = 0
+    scorer_calls_lock = threading.Lock()
+
+    def blocking_scorer(query: str, text: str) -> float:
+        nonlocal scorer_calls
+        started.set()
+        if not release.wait(timeout=1):
+            raise RuntimeError("测试未及时释放 scorer")
+        with scorer_calls_lock:
+            scorer_calls += 1
+        return 0.5
+
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=0.05,
+    )
+    reranker = CrossEncoderReranker(config, scorer=blocking_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    try:
+        with pytest.raises(RuntimeError, match="超时"):
+            reranker.rerank("test query", candidates)
+        assert started.is_set()
+
+        timed_out_future = reranker._active_future
+        assert timed_out_future is not None
+        release.set()
+        assert _wait_until(
+            lambda: (
+                timed_out_future.done()
+                and reranker._active_future is None
+                and reranker._active_executor is None
+            )
+        )
+
+        result = reranker.rerank("test query", candidates)
+
+        assert len(result) == 2
+        assert scorer_calls == 4
+    finally:
+        release.set()
+
+
+def test_cross_encoder_preserves_scorer_timeout_error():
+    """scorer 自身的 TimeoutError 必须按普通调用失败处理。"""
+    scorer_timeout = TimeoutError("scorer internal timeout")
+
+    def timeout_scorer(query: str, text: str) -> float:
+        raise scorer_timeout
+
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=1,
+    )
+    reranker = CrossEncoderReranker(config, scorer=timeout_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    with pytest.raises(RuntimeError, match="调用失败") as exc_info:
+        reranker.rerank("test query", candidates)
+
+    assert exc_info.value.__cause__ is scorer_timeout
+
+
+def test_cross_encoder_submit_cleans_up_and_reraises_base_exception(monkeypatch):
+    """submit 的 BaseException 必须清理 executor 后原样传播。"""
+    shutdown_called = False
+    submit_interrupt = KeyboardInterrupt("submit interrupted")
+
+    class InterruptingExecutor:
+        def __init__(self, max_workers: int):
+            assert max_workers == 1
+
+        def submit(self, function):
+            raise submit_interrupt
+
+        def shutdown(self, wait: bool, cancel_futures: bool = False):
+            nonlocal shutdown_called
+            shutdown_called = True
+
+    monkeypatch.setattr(
+        "src.libs.reranker.cross_encoder_reranker.ThreadPoolExecutor",
+        InterruptingExecutor,
+    )
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=1,
+    )
+    reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    with pytest.raises(KeyboardInterrupt, match="submit interrupted") as exc_info:
+        reranker.rerank("test query", candidates)
+
+    assert exc_info.value is submit_interrupt
+    assert shutdown_called is True
+
+
+def test_cross_encoder_recovers_after_scorer_error():
+    """评分异常清理完成后，同一实例的下一次调用必须成功。"""
+    scorer_calls = 0
+
+    def flaky_scorer(query: str, text: str) -> float:
+        nonlocal scorer_calls
+        scorer_calls += 1
+        if scorer_calls == 1:
+            raise ValueError("模拟评分异常")
+        return 0.5
+
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=1,
+    )
+    reranker = CrossEncoderReranker(config, scorer=flaky_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    with pytest.raises(RuntimeError, match="模拟评分异常"):
+        reranker.rerank("test query", candidates)
+
+    result = reranker.rerank("test query", candidates)
+
+    assert len(result) == 2
+    assert scorer_calls == 3
+
+
+def test_cross_encoder_allows_repeated_successful_calls():
+    """正常评分完成后必须及时清理，以支持同一实例重复调用。"""
+    scorer_calls = 0
+
+    def counting_scorer(query: str, text: str) -> float:
+        nonlocal scorer_calls
+        scorer_calls += 1
+        return 0.5
+
+    config = RerankConfig(
+        backend="cross_encoder",
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_m=30,
+        timeout_seconds=1,
+    )
+    reranker = CrossEncoderReranker(config, scorer=counting_scorer)
+    candidates = [
+        QueryResult(id="id1", score=0.9, text="text1"),
+        QueryResult(id="id2", score=0.8, text="text2"),
+    ]
+
+    first_result = reranker.rerank("first query", candidates)
+    second_result = reranker.rerank("second query", candidates)
+
+    assert len(first_result) == 2
+    assert len(second_result) == 2
+    assert scorer_calls == 4
 
 
 def test_cross_encoder_reranker_score_ordering():

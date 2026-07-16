@@ -89,12 +89,9 @@ class RetrievalPipeline:
             and getattr(cfg, "aggregate_by_parent", False)
         )
 
-        # 优先使用 cfg.top_k_final（来自 settings.yaml），否则 fallback 到调用方传入的 top_k
-        cfg_top_k_final = getattr(cfg, "top_k_final", None) if cfg is not None else None
-        effective_top_k_final = cfg_top_k_final if cfg_top_k_final is not None else top_k
-
+        effective_top_k_final = top_k
         child_top_k = (
-            getattr(cfg, "parent_aggregate_top_m", top_k * 5)
+            max(getattr(cfg, "parent_aggregate_top_m", top_k * 5), top_k)
             if use_parent
             else effective_top_k_final
         )
@@ -109,16 +106,18 @@ class RetrievalPipeline:
         if cfg is not None:
             dense_parent = getattr(cfg, "top_k_dense_parent", None)
             sparse_parent = getattr(cfg, "top_k_sparse_parent", None)
-            search_kwargs["top_k_dense"] = (
+            dense_budget = (
                 dense_parent
                 if use_parent and dense_parent is not None
                 else cfg.top_k_dense
             )
-            search_kwargs["top_k_sparse"] = (
+            sparse_budget = (
                 sparse_parent
                 if use_parent and sparse_parent is not None
                 else cfg.top_k_sparse
             )
+            search_kwargs["top_k_dense"] = max(dense_budget, child_top_k)
+            search_kwargs["top_k_sparse"] = max(sparse_budget, child_top_k)
             search_kwargs["top_k_final"] = child_top_k
 
         hybrid_results = self._hybrid_search.search(**search_kwargs)

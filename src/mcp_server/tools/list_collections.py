@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from mcp.types import CallToolResult
 
 from src.mcp_server.tools.config_utils import load_mcp_settings
-from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result, run_sync_callable
 
 # 测试注入：非 None 时直接使用 sqlite_path，否则从 settings 读取
 _inject_sqlite_path: Optional[str] = None
@@ -79,7 +79,7 @@ def execute_list_collections(arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
 
 
-def list_collections(base_path: Optional[str] = None) -> CallToolResult:
+async def list_collections(base_path: Optional[str] = None) -> CallToolResult:
     """
     列出知识库中的集合名称。数据源自 SQLite chunks 表（与 query、ingest 一致）。
 
@@ -90,5 +90,5 @@ def list_collections(base_path: Optional[str] = None) -> CallToolResult:
         CallToolResult 含 content（文本）、structuredContent.collections
     """
     args: Dict[str, Any] = {}
-    d = execute_list_collections(args)
+    d = await run_sync_callable(execute_list_collections, args)
     return dict_to_call_tool_result(d)

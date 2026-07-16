@@ -14,7 +14,7 @@ from src.libs.loader.file_integrity import (
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.error_utils import build_error_response
 from src.mcp_server.tools.ingest_utils import parse_force
-from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result
+from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result, run_sync_callable
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ def execute_ingest_document_docling(arguments: Dict[str, Any]) -> Dict[str, Any]
         )
 
 
-def ingest_document_docling(
+async def ingest_document_docling(
     file_path: str,
     collection_name: Optional[str] = None,
     force: bool = False,
@@ -171,4 +171,5 @@ def ingest_document_docling(
         args["collection_name"] = str(collection_name).strip()
     if force:
         args["force"] = True
-    return dict_to_call_tool_result(execute_ingest_document_docling(args))
+    result = await run_sync_callable(execute_ingest_document_docling, args)
+    return dict_to_call_tool_result(result)

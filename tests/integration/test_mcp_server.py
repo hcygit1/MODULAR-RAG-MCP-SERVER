@@ -175,8 +175,8 @@ class TestMCPServerE15:
 class TestMCPServerE2:
     """E2 验收：query_knowledge_hub Tool"""
 
-    def test_tools_list_includes_query_knowledge_hub(self) -> None:
-        """tools/list 包含 query_knowledge_hub schema"""
+    def test_tools_list_includes_all_public_tool_schemas(self) -> None:
+        """tools/list 包含五个公共工具及稳定输入 schema。"""
         proc = _start_server_subprocess()
         request = {"jsonrpc": "2.0", "id": 10, "method": "tools/list"}
         stdout_data, _ = _send_with_handshake(proc, request)
@@ -184,11 +184,45 @@ class TestMCPServerE2:
         lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
         resp = json.loads(lines[-1])
         tools = resp["result"]["tools"]
-        names = [t["name"] for t in tools]
-        assert "query_knowledge_hub" in names
-        qkh = next(t for t in tools if t["name"] == "query_knowledge_hub")
-        assert "query" in (qkh.get("inputSchema", {}).get("required") or [])
-        assert "query" in (qkh.get("inputSchema", {}).get("properties") or {})
+        tools_by_name = {tool["name"]: tool for tool in tools}
+        assert set(tools_by_name) == {
+            "query_knowledge_hub",
+            "list_collections",
+            "ingest_document_normal",
+            "ingest_document_docling",
+            "ingest_document_mineru",
+        }
+
+        query_schema = tools_by_name["query_knowledge_hub"]["inputSchema"]
+        query_properties = query_schema["properties"]
+        query_required = query_schema.get("required") or []
+        assert "query" in query_required
+        assert query_properties["query"]["type"] == "string"
+        assert query_properties["top_k"]["type"] == "integer"
+        assert query_properties["top_k"]["default"] == 10
+        assert "collection_name" in query_properties
+        assert "collection_name" not in query_required
+
+        for tool_name in (
+            "ingest_document_normal",
+            "ingest_document_docling",
+            "ingest_document_mineru",
+        ):
+            ingest_schema = tools_by_name[tool_name]["inputSchema"]
+            ingest_properties = ingest_schema["properties"]
+            ingest_required = ingest_schema.get("required") or []
+            assert "file_path" in ingest_required
+            assert ingest_properties["file_path"]["type"] == "string"
+            assert ingest_properties["force"]["type"] == "boolean"
+            assert ingest_properties["force"]["default"] is False
+            assert "collection_name" in ingest_properties
+            assert "collection_name" not in ingest_required
+
+        list_schema = tools_by_name["list_collections"]["inputSchema"]
+        list_required = list_schema.get("required") or []
+        assert list_required == []
+        assert "base_path" in list_schema["properties"]
+        assert "base_path" not in list_required
 
     def test_tools_list_includes_list_collections(self) -> None:
         """tools/list 包含 list_collections schema"""
@@ -205,27 +239,31 @@ class TestMCPServerE2:
         self, retrieval_pipeline, indexed_fixtures
     ) -> None:
         """query_knowledge_hub 返回 content[0] 为 Markdown，structuredContent.citations 含 source/page/chunk_id/score"""
-        from src.mcp_server.tools.query_knowledge_hub import query_knowledge_hub, set_pipeline
+        from src.mcp_server.tools.query_knowledge_hub import (
+            _execute_query_knowledge_hub_core,
+            set_pipeline,
+        )
 
         set_pipeline(retrieval_pipeline)
 
-        result = query_knowledge_hub(
-            query="python data science",
-            collection_name=indexed_fixtures["collection_name"],
-            top_k=5,
-        )
+        # Fixture 的 SQLite 连接在主线程创建，直接调用 core 保持线程亲和。
+        result = _execute_query_knowledge_hub_core({
+            "query": "python data science",
+            "collection_name": indexed_fixtures["collection_name"],
+            "top_k": 5,
+        })
 
-        assert result.isError is False
-        assert len(result.content) >= 1
-        assert result.content[0].type == "text"
-        assert len(result.content[0].text) > 0
+        assert result["isError"] is False
+        assert len(result["content"]) >= 1
+        assert result["content"][0]["type"] == "text"
+        assert len(result["content"][0]["text"]) > 0
         # Markdown 应包含片段标题或来源
-        text = result.content[0].text
+        text = result["content"][0]["text"]
         assert "片段" in text or "来源" in text or "Python" in text
 
-        assert result.structuredContent is not None
-        assert "citations" in result.structuredContent
-        citations = result.structuredContent["citations"]
+        assert result["structuredContent"] is not None
+        assert "citations" in result["structuredContent"]
+        citations = result["structuredContent"]["citations"]
         assert len(citations) >= 1
         for c in citations:
             assert "source" in c
@@ -248,7 +286,7 @@ class TestMCPServerE2:
         from src.libs.embedding.fake_embedding import FakeEmbedding
         from src.libs.reranker.none_reranker import NoneReranker
         from src.mcp_server.tools.query_knowledge_hub import (
-            query_knowledge_hub,
+            _execute_query_knowledge_hub_core,
             set_config_path,
             set_pipeline,
             set_sqlite_path,
@@ -302,19 +340,22 @@ class TestMCPServerE2:
         set_config_path("config/settings.yaml")
         set_pipeline(pipeline)
 
-        result = query_knowledge_hub(
-            query="chart data science",
-            collection_name=collection,
-            top_k=5,
+        # Fixture 的 SQLite 连接在主线程创建，直接调用 core 保持线程亲和。
+        result = _execute_query_knowledge_hub_core({
+            "query": "chart data science",
+            "collection_name": collection,
+            "top_k": 5,
+        })
+        assert result["isError"] is False
+        assert len(result["content"]) >= 1
+        assert result["content"][0]["type"] == "text"
+        has_image = any(c["type"] == "image" for c in result["content"])
+        assert has_image, (
+            f"Expected ImageContent, got: {[c['type'] for c in result['content']]}"
         )
-        assert result.isError is False
-        assert len(result.content) >= 1
-        assert result.content[0].type == "text"
-        has_image = any(c.type == "image" for c in result.content)
-        assert has_image, f"Expected ImageContent, got: {[c.type for c in result.content]}"
-        img_block = next(c for c in result.content if c.type == "image")
-        assert img_block.mimeType == "image/png"
-        decoded = base64.b64decode(img_block.data)
+        img_block = next(c for c in result["content"] if c["type"] == "image")
+        assert img_block["mimeType"] == "image/png"
+        decoded = base64.b64decode(img_block["data"])
         assert decoded == img_bytes
 
 
