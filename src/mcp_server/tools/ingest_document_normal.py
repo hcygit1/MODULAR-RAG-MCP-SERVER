@@ -8,11 +8,10 @@ ingest_document_normal Tool
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from src.ingestion.models import Document
@@ -23,12 +22,15 @@ from src.libs.loader.file_integrity import (
     FileIntegrityChecker,
     build_processing_profile,
 )
+from src.mcp_server.services.ingestion_service import (
+    IngestionService,
+    IngestionToolSpec,
+    ParsedIngestion,
+    SkipResponseContext,
+    SuccessResponseContext,
+)
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result, run_sync_callable
-from src.mcp_server.tools.error_utils import build_error_response
-from src.mcp_server.tools.ingest_utils import parse_force
-
-logger = logging.getLogger(__name__)
 
 _SUPPORTED_SUFFIXES = {".pdf", ".md", ".txt"}
 _LOADER_NAME_BY_SUFFIX = {
@@ -63,7 +65,7 @@ def _parse_markdown(path: Path) -> "Document":
     images_list: List[Dict[str, Any]] = []
     id_counter: Dict[str, int] = {}
 
-    def _replace(m: re.Match) -> str:
+    def _replace(m: re.Match[str]) -> str:
         alt, src = m.group(1), m.group(2)
         if src.startswith(("http://", "https://", "data:")):
             return m.group(0)
@@ -137,6 +139,76 @@ def _load_document(file_path: str):
     )
 
 
+def _parse_normal(file_path: str, _settings: Any) -> ParsedIngestion:
+    document = _load_document(file_path)
+    return ParsedIngestion(
+        document=document,
+        metadata={"doc_type": document.metadata.get("doc_type", "unknown")},
+    )
+
+
+def _build_skip_response(context: SkipResponseContext) -> Dict[str, Any]:
+    file_path = context.file_path
+    doc_type = {
+        ".pdf": "pdf",
+        ".md": "markdown",
+        ".txt": "text",
+    }.get(Path(file_path).suffix.lower(), "unknown")
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"文件未变更，已跳过入库（{doc_type}）：{file_path}",
+            }
+        ],
+        "structuredContent": {
+            "chunk_count": 0,
+            "collection_name": context.collection_name,
+            "doc_type": doc_type,
+            "skipped": True,
+            "force": context.force,
+        },
+        "isError": False,
+    }
+
+
+def _build_success_response(context: SuccessResponseContext) -> Dict[str, Any]:
+    doc_type = context.metadata["doc_type"]
+    chunk_count = context.chunk_count
+    collection_name = context.collection_name
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": (
+                    f"解析入库成功（{doc_type}），共写入 {chunk_count} 个 chunks "
+                    f"到集合 {collection_name}"
+                ),
+            }
+        ],
+        "structuredContent": {
+            "chunk_count": chunk_count,
+            "collection_name": collection_name,
+            "doc_type": doc_type,
+            "skipped": False,
+            "force": context.force,
+        },
+        "isError": False,
+    }
+
+
+_NORMAL_SPEC = IngestionToolSpec(
+    tool_name="ingest_document_normal",
+    supported_suffixes=frozenset(_SUPPORTED_SUFFIXES),
+    loader_name_resolver=lambda path: _LOADER_NAME_BY_SUFFIX[path.suffix.lower()],
+    parser=_parse_normal,
+    skip_response_builder=_build_skip_response,
+    success_response_builder=_build_success_response,
+    runtime_error_prefix="解析入库失败",
+    generic_error_prefix="解析入库失败",
+)
+
+
 def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     执行 ingest_document_normal 工具。
@@ -147,148 +219,12 @@ def execute_ingest_document_normal(arguments: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         MCP tools/call result
     """
-    file_path = arguments.get("file_path")
-    if not file_path or not str(file_path).strip():
-        return build_error_response(
-            "INVALID_PARAMS",
-            "参数 file_path 不能为空",
-            structured_content_base={"chunk_count": 0},
-        )
-
-    file_path = str(file_path).strip()
-    path = Path(file_path)
-    if not path.exists() or not path.is_file():
-        return build_error_response(
-            "RESOURCE_NOT_FOUND",
-            f"文件不存在: {file_path}",
-            structured_content_base={"chunk_count": 0},
-        )
-
-    if path.suffix.lower() not in _SUPPORTED_SUFFIXES:
-        return build_error_response(
-            "INVALID_PARAMS",
-            f"不支持的文件类型: {path.suffix}，支持：{', '.join(sorted(_SUPPORTED_SUFFIXES))}",
-            structured_content_base={"chunk_count": 0},
-        )
-
-    settings = load_mcp_settings()
-    collection_name = arguments.get("collection_name")
-    if not collection_name or not str(collection_name).strip():
-        collection_name = settings.vector_store.collection_name
-    else:
-        collection_name = str(collection_name).strip()
-    force = parse_force(arguments.get("force", False))
-
-    # 与 CLI 行为对齐：默认开启完整性跳过，force=True 时强制重入库。
-    checker = FileIntegrityChecker()
-    try:
-        processing_profile = build_processing_profile(
-            settings,
-            loader_name=_LOADER_NAME_BY_SUFFIX[path.suffix.lower()],
-        )
-        file_hash = checker.compute_sha256(file_path)
-        should_skip = (
-            False
-            if force
-            else checker.should_skip(
-                file_hash,
-                collection_name,
-                processing_profile,
-            )
-        )
-    except Exception as e:
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"完整性检查失败: {e}",
-            structured_content_base={"chunk_count": 0, "skipped": False},
-        )
-
-    if should_skip:
-        doc_type = {
-            ".pdf": "pdf",
-            ".md": "markdown",
-            ".txt": "text",
-        }.get(path.suffix.lower(), "unknown")
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"文件未变更，已跳过入库（{doc_type}）：{file_path}",
-                }
-            ],
-            "structuredContent": {
-                "chunk_count": 0,
-                "collection_name": collection_name,
-                "doc_type": doc_type,
-                "skipped": True,
-                "force": force,
-            },
-            "isError": False,
-        }
-
-    try:
-        from src.ingestion.pipeline import IngestionPipeline
-
-        document = _load_document(file_path)
-
-        from src.core.trace.trace_context import TraceContext
-        from src.observability.logger import get_trace_collector
-
-        pipeline = IngestionPipeline(settings)
-        trace = TraceContext(operation="ingestion")
-        try:
-            chunk_count = pipeline.process_document(document, collection_name, trace=trace)
-            checker.mark_success(
-                file_hash,
-                collection_name,
-                processing_profile,
-            )
-            doc_type = document.metadata.get("doc_type", "unknown")
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"解析入库成功（{doc_type}），共写入 {chunk_count} 个 chunks 到集合 {collection_name}",
-                    }
-                ],
-                "structuredContent": {
-                    "chunk_count": chunk_count,
-                    "collection_name": collection_name,
-                    "doc_type": doc_type,
-                    "skipped": False,
-                    "force": force,
-                },
-                "isError": False,
-            }
-        finally:
-            get_trace_collector().collect(trace)
-            pipeline.close()
-    except FileNotFoundError as e:
-        return build_error_response(
-            "RESOURCE_NOT_FOUND",
-            str(e),
-            structured_content_base={"chunk_count": 0},
-        )
-    except ValueError as e:
-        return build_error_response(
-            "INVALID_PARAMS",
-            str(e),
-            structured_content_base={"chunk_count": 0},
-        )
-    except RuntimeError as e:
-        logger.exception("ingest_document_normal failed: %s", e)
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"解析入库失败: {e}",
-            structured_content_base={"chunk_count": 0},
-        )
-    except Exception as e:
-        logger.exception("ingest_document_normal failed: %s", e)
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"解析入库失败: {e}",
-            structured_content_base={"chunk_count": 0},
-        )
+    service = IngestionService(
+        settings_loader=load_mcp_settings,
+        integrity_checker_factory=FileIntegrityChecker,
+        processing_profile_builder=build_processing_profile,
+    )
+    return service.execute(arguments, _NORMAL_SPEC)
 
 
 async def ingest_document_normal(

@@ -2,8 +2,6 @@
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
-import pytest
-
 from src.ingestion.models import Document
 from src.mcp_server.tools.ingest_document_normal import (
     _parse_markdown,
@@ -108,6 +106,10 @@ def test_execute_success(
 
     mock_loader.load.assert_called_once_with(str(pdf_path))
     mock_pipeline.process_document.assert_called_once_with(mock_doc, "report", trace=ANY)
+    mock_pipeline_cls.assert_called_once_with(
+        mock_settings,
+        integrity_checker=mock_integrity,
+    )
     mock_pipeline.close.assert_called_once()
     mock_build_profile.assert_called_once_with(mock_settings, loader_name="pdf")
     mock_integrity.should_skip.assert_called_once_with(

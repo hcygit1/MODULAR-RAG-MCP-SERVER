@@ -6,9 +6,7 @@ ingest_document_mineru Tool
 """
 from __future__ import annotations
 
-import logging
 import os
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
@@ -17,12 +15,17 @@ from src.libs.loader.file_integrity import (
     FileIntegrityChecker,
     build_processing_profile,
 )
+from src.mcp_server.services.ingestion_service import (
+    IngestionResponseError,
+    IngestionService,
+    IngestionToolSpec,
+    ParsedIngestion,
+    SkipResponseContext,
+    SuccessResponseContext,
+)
 from src.mcp_server.tools.config_utils import load_mcp_settings
 from src.mcp_server.tools.mcp_utils import dict_to_call_tool_result, run_sync_callable
-from src.mcp_server.tools.error_utils import build_error_response
-from src.mcp_server.tools.ingest_utils import parse_force
 
-logger = logging.getLogger(__name__)
 
 def _get_mineru_token(settings: Any) -> str:
     """优先从配置读取，为空时尝试环境变量"""
@@ -32,169 +35,108 @@ def _get_mineru_token(settings: Any) -> str:
     return (token or "").strip()
 
 
-def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    执行 ingest_document_mineru 工具。
-
-    Args:
-        arguments: file_path（必填）、collection_name（可选）
-
-    Returns:
-        MCP tools/call result
-    """
-    file_path = arguments.get("file_path")
-    if not file_path or not str(file_path).strip():
-        return build_error_response(
+def _parse_mineru(file_path: str, settings: Any) -> ParsedIngestion:
+    token = _get_mineru_token(settings)
+    if not token:
+        raise IngestionResponseError(
             "INVALID_PARAMS",
-            "参数 file_path 不能为空",
-            structured_content_base={"chunk_count": 0},
+            "MinerU API Token 未配置，请在 config/settings.yaml 的 "
+            "mineru.api_token 中填写，或设置环境变量 MINERU_API_TOKEN",
         )
 
-    file_path = str(file_path).strip()
-    path = Path(file_path)
-    if not path.exists() or not path.is_file():
-        return build_error_response(
-            "RESOURCE_NOT_FOUND",
-            f"文件不存在: {file_path}",
-            structured_content_base={"chunk_count": 0},
+    mineru_config = settings.mineru
+    from src.libs.loader.mineru_cloud_client import MinerUCloudClient
+
+    client = MinerUCloudClient(
+        api_token=token,
+        model_version=mineru_config.model_version,
+        poll_interval_seconds=mineru_config.poll_interval_seconds,
+        poll_timeout_seconds=mineru_config.poll_timeout_seconds,
+    )
+    raw = client.upload_and_parse(file_path)
+
+    if raw.content_list:
+        from src.libs.loader.mineru_block_parser import to_chunks
+
+        chunks = to_chunks(
+            raw,
+            chunk_size=settings.ingestion.chunk_size,
+        )
+        return ParsedIngestion(
+            chunks=chunks,
+            metadata={"parser_mode": "mineru_content_list"},
         )
 
-    settings = load_mcp_settings()
-    collection_name = arguments.get("collection_name")
-    if not collection_name or not str(collection_name).strip():
-        collection_name = settings.vector_store.collection_name
-    else:
-        collection_name = str(collection_name).strip()
-    force = parse_force(arguments.get("force", False))
+    from src.libs.loader.mineru_result_adapter import to_document
 
-    checker = FileIntegrityChecker()
-    try:
-        processing_profile = build_processing_profile(
-            settings,
-            loader_name="mineru",
-        )
-        file_hash = checker.compute_sha256(file_path)
-        should_skip = (
-            False
-            if force
-            else checker.should_skip(
-                file_hash,
-                collection_name,
-                processing_profile,
-            )
-        )
-    except Exception as e:
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"完整性检查失败: {e}",
-            structured_content_base={"chunk_count": 0, "skipped": False},
-        )
+    return ParsedIngestion(
+        document=to_document(raw),
+        metadata={"parser_mode": "mineru_markdown_fallback"},
+    )
 
-    if should_skip:
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"文件未变更，已跳过 MinerU 入库：{file_path}",
-                }
-            ],
-            "structuredContent": {
-                "chunk_count": 0,
-                "collection_name": collection_name,
-                "skipped": True,
-                "force": force,
-            },
-            "isError": False,
-        }
 
-    try:
-        token = _get_mineru_token(settings)
-        if not token:
-            return build_error_response(
-                "INVALID_PARAMS",
-                "MinerU API Token 未配置，请在 config/settings.yaml 的 mineru.api_token 中填写，或设置环境变量 MINERU_API_TOKEN",
-                structured_content_base={"chunk_count": 0},
-            )
-
-        mineru_config = settings.mineru
-        from src.libs.loader.mineru_cloud_client import MinerUCloudClient
-        from src.ingestion.pipeline import IngestionPipeline
-
-        client = MinerUCloudClient(
-            api_token=token,
-            model_version=mineru_config.model_version,
-            poll_interval_seconds=mineru_config.poll_interval_seconds,
-            poll_timeout_seconds=mineru_config.poll_timeout_seconds,
-        )
-
-        raw = client.upload_and_parse(file_path)
-
-        from src.core.trace.trace_context import TraceContext
-        from src.observability.logger import get_trace_collector
-
-        pipeline = IngestionPipeline(settings)
-        trace = TraceContext(operation="ingestion")
-        try:
-            if raw.content_list:
-                from src.libs.loader.mineru_block_parser import to_chunks
-
-                chunks = to_chunks(
-                    raw,
-                    chunk_size=settings.ingestion.chunk_size,
-                )
-                chunk_count = pipeline.process_chunks(chunks, collection_name, trace=trace)
-                parser_mode = "mineru_content_list"
-            else:
-                from src.libs.loader.mineru_result_adapter import to_document
-
-                document = to_document(raw)
-                chunk_count = pipeline.process_document(document, collection_name, trace=trace)
-                parser_mode = "mineru_markdown_fallback"
-            checker.mark_success(
-                file_hash,
-                collection_name,
-                processing_profile,
-            )
-            return {
-                "content": [{"type": "text", "text": f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks 到集合 {collection_name}"}],
-                "structuredContent": {
-                    "chunk_count": chunk_count,
-                    "collection_name": collection_name,
-                    "parser_mode": parser_mode,
-                    "skipped": False,
-                    "force": force,
-                },
-                "isError": False,
+def _build_skip_response(context: SkipResponseContext) -> Dict[str, Any]:
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"文件未变更，已跳过 MinerU 入库：{context.file_path}",
             }
-        finally:
-            get_trace_collector().collect(trace)
-            pipeline.close()
-    except FileNotFoundError as e:
-        return build_error_response(
-            "RESOURCE_NOT_FOUND",
-            str(e),
-            structured_content_base={"chunk_count": 0},
-        )
-    except ValueError as e:
-        return build_error_response(
-            "INVALID_PARAMS",
-            str(e),
-            structured_content_base={"chunk_count": 0},
-        )
-    except RuntimeError as e:
-        logger.exception("ingest_document_mineru failed: %s", e)
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"MinerU 解析入库失败: {e}",
-            structured_content_base={"chunk_count": 0},
-        )
-    except Exception as e:
-        logger.exception("ingest_document_mineru failed: %s", e)
-        return build_error_response(
-            "INTERNAL_ERROR",
-            f"解析入库失败: {e}",
-            structured_content_base={"chunk_count": 0},
-        )
+        ],
+        "structuredContent": {
+            "chunk_count": 0,
+            "collection_name": context.collection_name,
+            "skipped": True,
+            "force": context.force,
+        },
+        "isError": False,
+    }
+
+
+def _build_success_response(context: SuccessResponseContext) -> Dict[str, Any]:
+    chunk_count = context.chunk_count
+    collection_name = context.collection_name
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": (
+                    f"MinerU 解析并入库成功，共写入 {chunk_count} 个 chunks "
+                    f"到集合 {collection_name}"
+                ),
+            }
+        ],
+        "structuredContent": {
+            "chunk_count": chunk_count,
+            "collection_name": collection_name,
+            "parser_mode": context.metadata["parser_mode"],
+            "skipped": False,
+            "force": context.force,
+        },
+        "isError": False,
+    }
+
+
+_MINERU_SPEC = IngestionToolSpec(
+    tool_name="ingest_document_mineru",
+    supported_suffixes=frozenset(),
+    loader_name_resolver=lambda _path: "mineru",
+    parser=_parse_mineru,
+    skip_response_builder=_build_skip_response,
+    success_response_builder=_build_success_response,
+    runtime_error_prefix="MinerU 解析入库失败",
+    generic_error_prefix="解析入库失败",
+)
+
+
+def execute_ingest_document_mineru(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """执行 ingest_document_mineru 工具。"""
+    service = IngestionService(
+        settings_loader=load_mcp_settings,
+        integrity_checker_factory=FileIntegrityChecker,
+        processing_profile_builder=build_processing_profile,
+    )
+    return service.execute(arguments, _MINERU_SPEC)
 
 
 async def ingest_document_mineru(
