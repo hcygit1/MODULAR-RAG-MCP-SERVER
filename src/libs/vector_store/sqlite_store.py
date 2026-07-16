@@ -1,56 +1,47 @@
-"""
-SQLite VectorStore 实现
+"""SQLite + sqlite-vec VectorStore Facade。"""
 
-使用 SQLite + sqlite-vec 作为向量存储后端。
-Phase 1：chunks + chunks_vec 同库存储。
-Phase 3：可选单事务写入 chunks + chunks_vec + chunks_fts（write_fts=True）。
-Phase 4：write_fts 时同时写入 images 表，删除时引用计数清理孤立图片。
-"""
-import json
 import logging
+import sqlite3
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, cast
 
+from src.core.settings import VectorStoreConfig
 from src.libs.vector_store.base_vector_store import (
     BaseVectorStore,
-    VectorRecord,
     QueryResult,
+    VectorRecord,
 )
-from src.core.settings import VectorStoreConfig
+from src.libs.vector_store.sqlite_image_repository import SQLiteImageRepository
+from src.libs.vector_store.sqlite_record_repository import (
+    SQLiteRecordRepository,
+    prepare_metadata,
+    tokenized_text_for_fts,
+)
+from src.libs.vector_store.sqlite_schema import SQLiteSchemaManager
+from src.libs.vector_store.sqlite_search import SQLiteSearchService
 
 logger = logging.getLogger(__name__)
 
 try:
-    import sqlite3
-    import sqlite_vec
-    from sqlite_vec import serialize_float32
+    import sqlite_vec  # type: ignore[import-untyped]
+
     SQLITE_VEC_AVAILABLE = True
 except ImportError:
     SQLITE_VEC_AVAILABLE = False
 
-# metadata 中不序列化到 JSON 的字段
-_METADATA_EXCLUDE = ("image_data",)
-
 
 def _tokenized_text_for_fts(text: str) -> str:
-    """对文本分词，用于 FTS5 索引。"""
-    from src.libs.tokenizer import tokenize_for_search
-    return " ".join(tokenize_for_search(text))
+    """兼容原模块级 helper。"""
+    return tokenized_text_for_fts(text)
 
 
 def _prepare_metadata(metadata: Dict[str, Any]) -> str:
-    """将 metadata 转为 JSON 字符串，排除不可序列化字段。"""
-    safe = {k: v for k, v in metadata.items() if k not in _METADATA_EXCLUDE and not isinstance(v, bytes)}
-    return json.dumps(safe, ensure_ascii=False)
+    """兼容原模块级 helper。"""
+    return prepare_metadata(metadata)
 
 
 class SQLiteVectorStore(BaseVectorStore):
-    """
-    SQLite VectorStore 实现
-
-    使用 chunks + chunks_vec(vec0) 存储。chunk_rowid 对应 chunks.rowid。
-    write_fts=True 时，单事务内同时写入 chunks_fts（Phase 3 统一存储）。
-    """
+    """协调 SQLite 连接、事务和各持久化组件。"""
 
     def __init__(
         self,
@@ -58,9 +49,7 @@ class SQLiteVectorStore(BaseVectorStore):
         write_fts: bool = False,
     ) -> None:
         if not SQLITE_VEC_AVAILABLE:
-            raise RuntimeError(
-                "sqlite-vec 未安装。请运行: uv add sqlite-vec"
-            )
+            raise RuntimeError("sqlite-vec 未安装。请运行: uv add sqlite-vec")
         if not config.sqlite_path:
             raise ValueError("sqlite_path 不能为空")
         if not config.embedding_dim or config.embedding_dim <= 0:
@@ -73,6 +62,14 @@ class SQLiteVectorStore(BaseVectorStore):
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: Optional[sqlite3.Connection] = None
         self._write_fts = bool(write_fts)
+        self._schema = SQLiteSchemaManager(self._dim, self._write_fts)
+        self._images = SQLiteImageRepository()
+        self._records = SQLiteRecordRepository(
+            self._dim,
+            self._write_fts,
+            self._images,
+        )
+        self._search = SQLiteSearchService()
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -88,102 +85,29 @@ class SQLiteVectorStore(BaseVectorStore):
         conn = self._conn
         if conn is None:
             return
-        self._ensure_chunks_table(conn)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_collection ON chunks(collection_name)")
-
-        # vec0: PK, vector, metadata。collection_name 用于 WHERE 过滤
-        dim = int(self._dim)
-        if dim <= 0 or dim > 32768:
-            raise ValueError(f"非法 embedding_dim: {dim}")
-        try:
-            # sqlite-vec 的 float[N] 语法要求把维度写入 DDL，无法使用参数绑定。
-            # 这里的 dim 已做 int 转换与范围校验，不存在外部可控 SQL 注入风险。
-            # 注意：勿在同一行 f""" 后写 # noqa，否则 # 会进入字符串并被 SQLite 当成非法 token。
-            vec0_ddl = f"""
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
-                    chunk_rowid INTEGER PRIMARY KEY,
-                    embedding float[{dim}] distance_metric=cosine,
-                    collection_name TEXT
-                )
-                """.strip()
-            conn.execute(vec0_ddl)  # noqa: S608  # nosec B608  # nosemgrep
-        except sqlite3.OperationalError as e:
-            if "already exists" in str(e).lower():
-                pass
-            else:
-                raise
-        if self._write_fts:
-            conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                    chunk_id UNINDEXED,
-                    collection_name UNINDEXED,
-                    tokenized_text
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS images (
-                    id TEXT NOT NULL,
-                    collection_name TEXT NOT NULL,
-                    image_data BLOB NOT NULL,
-                    mime_type TEXT DEFAULT 'image/png',
-                    metadata_json TEXT,
-                    created_at INTEGER DEFAULT (strftime('%s','now')),
-                    PRIMARY KEY (id, collection_name)
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_images_collection ON images(collection_name)")
-        conn.commit()
-
-    @staticmethod
-    def _create_chunks_table(conn: sqlite3.Connection, table_name: str = "chunks") -> None:
-        """创建以 `(id, collection_name)` 为记录身份的 chunks 表。"""
-        conn.execute(
-            f"""
-            CREATE TABLE {table_name} (
-                id TEXT NOT NULL,
-                collection_name TEXT NOT NULL,
-                text TEXT NOT NULL,
-                metadata_json TEXT,
-                created_at INTEGER DEFAULT (strftime('%s','now')),
-                PRIMARY KEY (id, collection_name)
-            )
-            """
-        )
-
-    def _ensure_chunks_table(self, conn: sqlite3.Connection) -> None:
-        """创建新表，或将旧版全局 id 主键表原地迁移为联合主键。"""
-        columns = conn.execute("PRAGMA table_info(chunks)").fetchall()
-        if not columns:
-            self._create_chunks_table(conn)
-            return
-
-        primary_key = [
-            row["name"]
-            for row in sorted(columns, key=lambda item: int(item["pk"]))
-            if int(row["pk"]) > 0
-        ]
-        if primary_key == ["id", "collection_name"]:
-            return
-
         try:
             conn.execute("BEGIN IMMEDIATE")
-            self._create_chunks_table(conn, "chunks_migrated")
-            conn.execute(
-                """
-                INSERT INTO chunks_migrated (
-                    rowid,
-                    id,
-                    collection_name,
-                    text,
-                    metadata_json,
-                    created_at
-                )
-                SELECT rowid, id, collection_name, text, metadata_json, created_at
-                FROM chunks
-                """
-            )
-            conn.execute("DROP TABLE chunks")
-            conn.execute("ALTER TABLE chunks_migrated RENAME TO chunks")
+            self._schema.ensure_tables(conn)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    @staticmethod
+    def _create_chunks_table(
+        conn: sqlite3.Connection,
+        table_name: str = "chunks",
+    ) -> None:
+        SQLiteSchemaManager.create_chunks_table(conn, table_name)
+
+    def _ensure_chunks_table(self, conn: sqlite3.Connection) -> None:
+        migration_required = self._schema.chunks_table_needs_migration(conn)
+        if not migration_required:
+            self._schema.ensure_chunks_table(conn)
+            return
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._schema.ensure_chunks_table(conn)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -198,37 +122,24 @@ class SQLiteVectorStore(BaseVectorStore):
     ) -> None:
         if not records:
             raise ValueError("记录列表不能为空")
-        coll = collection_name or self._collection_name
-        if not coll:
+        collection = collection_name or self._collection_name
+        if not collection:
             raise ValueError("collection_name 不能为空")
 
         self._validate_records(records)
         conn = self._get_conn()
-
         try:
-            self._write_records(conn, records, coll, chunks_for_images)
+            self._write_records(conn, records, collection, chunks_for_images)
             conn.commit()
-        except Exception as e:
+        except Exception as exc:
             conn.rollback()
             raise RuntimeError(
-                f"SQLite upsert 失败 (backend={self._backend}, collection={coll}): {str(e)}"
-            ) from e
+                f"SQLite upsert 失败 (backend={self._backend}, "
+                f"collection={collection}): {str(exc)}"
+            ) from exc
 
     def _validate_records(self, records: List[VectorRecord]) -> None:
-        """验证记录结构和向量维度，不执行数据库写入。"""
-        for i, record in enumerate(records):
-            if not isinstance(record, VectorRecord):
-                raise ValueError(f"记录 {i} 必须是 VectorRecord 类型")
-            if not record.id:
-                raise ValueError(f"记录 {i} 的 id 不能为空")
-            if not record.vector:
-                raise ValueError(f"记录 {i} 的 vector 不能为空")
-            if not record.text:
-                raise ValueError(f"记录 {i} 的 text 不能为空")
-            if len(record.vector) != self._dim:
-                raise ValueError(
-                    f"记录 {i} 向量维度 {len(record.vector)} 与配置 {self._dim} 不一致"
-                )
+        self._records.validate_records(records)
 
     def _write_records(
         self,
@@ -236,35 +147,17 @@ class SQLiteVectorStore(BaseVectorStore):
         records: List[VectorRecord],
         collection_name: str,
         chunks_for_images: Optional[List[Any]] = None,
+        *,
+        orphan_candidates: Optional[set[str]] = None,
     ) -> None:
-        """在调用方事务内写入 chunks、vec、FTS 和图片。"""
-        for record in records:
-            self._delete_records(conn, [record.id], collection_name)
-            conn.execute(
-                "INSERT INTO chunks (id, collection_name, text, metadata_json) VALUES (?, ?, ?, ?)",
-                (
-                    record.id,
-                    collection_name,
-                    record.text,
-                    _prepare_metadata(record.metadata),
-                ),
-            )
-            rowid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            conn.execute(
-                "INSERT INTO chunks_vec (chunk_rowid, collection_name, embedding) VALUES (?, ?, ?)",
-                (rowid, collection_name, serialize_float32(record.vector)),
-            )
-            if self._write_fts:
-                conn.execute(
-                    "INSERT INTO chunks_fts (chunk_id, collection_name, tokenized_text) VALUES (?, ?, ?)",
-                    (
-                        record.id,
-                        collection_name,
-                        _tokenized_text_for_fts(record.text),
-                    ),
-                )
-        if self._write_fts and chunks_for_images:
-            self._upsert_images(conn, chunks_for_images, collection_name)
+        self._records.write_records(
+            conn,
+            records,
+            collection_name,
+            chunks_for_images,
+            orphan_candidates=orphan_candidates,
+            upsert_images=self._upsert_images,
+        )
 
     def replace_document_records(
         self,
@@ -275,11 +168,11 @@ class SQLiteVectorStore(BaseVectorStore):
         chunks_for_images: Optional[List[Any]] = None,
     ) -> int:
         """在单个 SQLite 事务中删除旧文档并写入新版本。"""
-        coll = (collection_name or "").strip()
-        if not coll:
+        collection = (collection_name or "").strip()
+        if not collection:
             raise ValueError("collection_name 不能为空")
-        doc_id = (source_doc_id or "").strip()
-        if not doc_id:
+        document_id = (source_doc_id or "").strip()
+        if not document_id:
             raise ValueError("source_doc_id 不能为空")
         if not records:
             raise ValueError("记录列表不能为空")
@@ -288,25 +181,37 @@ class SQLiteVectorStore(BaseVectorStore):
         conn = self._get_conn()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            rows = conn.execute(
-                """
-                SELECT id
-                FROM chunks
-                WHERE collection_name = ?
-                  AND json_extract(metadata_json, '$.source_doc_id') = ?
-                """,
-                (coll, doc_id),
-            ).fetchall()
-            old_ids = [str(row["id"]) for row in rows if row["id"]]
-            self._delete_records(conn, old_ids, coll)
-            self._write_records(conn, records, coll, chunks_for_images)
+            old_ids = self._records.find_ids_by_source_doc_id(
+                conn,
+                collection,
+                document_id,
+            )
+            orphan_candidates = self._images.collect_image_refs(
+                conn,
+                old_ids,
+                collection,
+            )
+            self._delete_records(
+                conn,
+                old_ids,
+                collection,
+                cleanup_images=False,
+            )
+            self._write_records(
+                conn,
+                records,
+                collection,
+                chunks_for_images,
+                orphan_candidates=orphan_candidates,
+            )
             conn.commit()
             return len(old_ids)
-        except Exception as e:
+        except Exception as exc:
             conn.rollback()
             raise RuntimeError(
-                f"SQLite 文档替换失败 (backend={self._backend}, collection={coll}): {str(e)}"
-            ) from e
+                f"SQLite 文档替换失败 (backend={self._backend}, "
+                f"collection={collection}): {str(exc)}"
+            ) from exc
 
     def _upsert_images(
         self,
@@ -314,34 +219,7 @@ class SQLiteVectorStore(BaseVectorStore):
         chunks: List[Any],
         collection_name: str,
     ) -> None:
-        """从 chunks 收集图片并 INSERT INTO images（同事务）。"""
-        all_image_ids: set = set()
-        image_data_map: Dict[str, bytes] = {}
-        image_meta_map: Dict[str, Dict[str, Any]] = {}
-        for chunk in chunks:
-            refs = getattr(chunk, "metadata", {}).get("image_refs") or []
-            for img_id in refs:
-                all_image_ids.add(img_id)
-                chunk_image_data = getattr(chunk, "metadata", {}).get("image_data") or {}
-                if img_id in chunk_image_data and img_id not in image_data_map:
-                    image_data_map[img_id] = chunk_image_data[img_id]
-                chunk_image_meta = getattr(chunk, "metadata", {}).get("image_metadata") or []
-                for m in chunk_image_meta:
-                    if m.get("image_id") == img_id and img_id not in image_meta_map:
-                        image_meta_map[img_id] = {k: v for k, v in m.items() if not isinstance(v, bytes)}
-                        break
-        for img_id in all_image_ids:
-            img_bytes = image_data_map.get(img_id)
-            if not img_bytes:
-                continue
-            meta = image_meta_map.get(img_id, {})
-            mime = meta.get("mime_type", "image/png")
-            meta_safe = {k: v for k, v in meta.items() if k != "mime_type" and not isinstance(v, bytes)}
-            meta_json = json.dumps(meta_safe, ensure_ascii=False) if meta_safe else None
-            conn.execute(
-                "INSERT OR REPLACE INTO images (id, collection_name, image_data, mime_type, metadata_json) VALUES (?, ?, ?, ?, ?)",
-                (img_id, collection_name, img_bytes, mime, meta_json),
-            )
+        self._images.upsert_images(conn, chunks, collection_name)
 
     def query(
         self,
@@ -351,8 +229,8 @@ class SQLiteVectorStore(BaseVectorStore):
         trace: Optional[Any] = None,
         collection_name: Optional[str] = None,
     ) -> List[QueryResult]:
-        coll = collection_name or self._collection_name
-        if not coll:
+        collection = collection_name or self._collection_name
+        if not collection:
             raise ValueError("collection_name 不能为空")
         if not vector:
             raise ValueError("查询向量不能为空")
@@ -364,86 +242,30 @@ class SQLiteVectorStore(BaseVectorStore):
             )
 
         conn = self._get_conn()
-        vec_blob = serialize_float32(vector)
-        filter_sql, filter_params = self._build_filter_sql(filters)
-        candidate_k = top_k
-        if filter_sql:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM chunks WHERE collection_name = ?",
-                (coll,),
-            ).fetchone()
-            candidate_k = max(top_k, int(row[0] if row else 0))
-
+        plan = self._search.prepare_dense_query(
+            conn,
+            top_k,
+            collection,
+            filters,
+            filter_builder=self._build_filter_sql,
+        )
         try:
-            rows = conn.execute(
-                f"""
-                SELECT c.id, c.text, c.metadata_json, v.distance
-                FROM (
-                    SELECT chunk_rowid, distance
-                    FROM chunks_vec
-                    WHERE embedding MATCH ? AND k = ? AND collection_name = ?
-                ) v
-                JOIN chunks c ON c.rowid = v.chunk_rowid
-                {filter_sql}
-                ORDER BY v.distance
-                LIMIT ?
-                """,
-                (vec_blob, candidate_k, coll, *filter_params, top_k),
-            ).fetchall()
-        except sqlite3.OperationalError as e:
-            raise RuntimeError(
-                f"SQLite query 失败 (backend={self._backend}, collection={coll}): {str(e)}"
-            ) from e
-
-        results = []
-        for row in rows:
-            meta = {}
-            if row["metadata_json"]:
-                try:
-                    meta = json.loads(row["metadata_json"])
-                except json.JSONDecodeError:
-                    pass
-            score = 1.0 - float(row["distance"]) if row["distance"] is not None else 0.0
-            results.append(
-                QueryResult(
-                    id=row["id"],
-                    score=score,
-                    text=row["text"] or "",
-                    metadata=meta,
-                )
+            return self._search.execute_dense_query(
+                conn,
+                vector,
+                plan,
             )
-        return results
+        except sqlite3.OperationalError as exc:
+            raise RuntimeError(
+                f"SQLite query 失败 (backend={self._backend}, "
+                f"collection={collection}): {str(exc)}"
+            ) from exc
 
     @staticmethod
     def _build_filter_sql(
         filters: Optional[Dict[str, Any]],
     ) -> tuple[str, List[Any]]:
-        """将 equality / `$in` metadata filters 转换为参数化 SQL。"""
-        if not filters:
-            return "", []
-
-        clauses: List[str] = []
-        params: List[Any] = []
-        for raw_key, value in filters.items():
-            key = str(raw_key or "").strip()
-            if not key or '"' in key:
-                raise ValueError(f"非法 metadata filter key: {raw_key!r}")
-            json_path = f"$.{key}"
-            if isinstance(value, dict):
-                if set(value) != {"$in"} or not isinstance(value["$in"], list):
-                    raise ValueError(
-                        f"SQLite metadata filter 仅支持 equality 和 $in: {key}"
-                    )
-                clauses.append(
-                    "json_extract(c.metadata_json, ?) "
-                    "IN (SELECT value FROM json_each(?))"
-                )
-                params.extend([json_path, json.dumps(value["$in"], ensure_ascii=False)])
-            else:
-                clauses.append("json_extract(c.metadata_json, ?) = ?")
-                params.extend([json_path, value])
-
-        return "WHERE " + " AND ".join(clauses), params
+        return SQLiteSearchService.build_filter_sql(filters)
 
     def delete(
         self,
@@ -453,75 +275,37 @@ class SQLiteVectorStore(BaseVectorStore):
     ) -> int:
         if not ids:
             return 0
-        coll = collection_name or self._collection_name
-        if not coll:
+        collection = collection_name or self._collection_name
+        if not collection:
             raise ValueError("collection_name 不能为空")
 
         conn = self._get_conn()
         try:
-            deleted = self._delete_records(conn, ids, coll)
+            deleted = self._delete_records(conn, ids, collection)
             conn.commit()
             return deleted
-        except Exception as e:
+        except Exception as exc:
             conn.rollback()
             raise RuntimeError(
-                f"SQLite delete 失败 (backend={self._backend}, collection={coll}): {str(e)}"
-            ) from e
+                f"SQLite delete 失败 (backend={self._backend}, "
+                f"collection={collection}): {str(exc)}"
+            ) from exc
 
     def _delete_records(
         self,
         conn: sqlite3.Connection,
         ids: List[str],
         collection_name: str,
+        *,
+        cleanup_images: bool = True,
     ) -> int:
-        """在调用方事务内删除指定 collection 的记录及关联索引。"""
-        if not ids:
-            return 0
-        ids_json = json.dumps(ids, ensure_ascii=False)
-        row = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM chunks
-            WHERE collection_name = ?
-              AND id IN (SELECT value FROM json_each(?))
-            """,
-            (collection_name, ids_json),
-        ).fetchone()
-        deleted = int(row[0] if row else 0)
-        if deleted == 0:
-            return 0
-
-        if self._write_fts:
-            self._delete_orphan_images(conn, ids, collection_name)
-            conn.execute(
-                """
-                DELETE FROM chunks_fts
-                WHERE collection_name = ?
-                  AND chunk_id IN (SELECT value FROM json_each(?))
-                """,
-                (collection_name, ids_json),
-            )
-        conn.execute(
-            """
-            DELETE FROM chunks_vec
-            WHERE chunk_rowid IN (
-                SELECT rowid
-                FROM chunks
-                WHERE collection_name = ?
-                  AND id IN (SELECT value FROM json_each(?))
-            )
-            """,
-            (collection_name, ids_json),
+        return self._records.delete_records(
+            conn,
+            ids,
+            collection_name,
+            cleanup_images=cleanup_images,
+            delete_orphan_images=self._delete_orphan_images,
         )
-        conn.execute(
-            """
-            DELETE FROM chunks
-            WHERE collection_name = ?
-              AND id IN (SELECT value FROM json_each(?))
-            """,
-            (collection_name, ids_json),
-        )
-        return deleted
 
     def delete_by_source_doc_id(
         self,
@@ -529,38 +313,22 @@ class SQLiteVectorStore(BaseVectorStore):
         source_doc_id: str,
         trace: Optional[Any] = None,
     ) -> int:
-        """
-        按 metadata.source_doc_id 删除文档下所有 chunk。
-
-        Args:
-            collection_name: 集合名称
-            source_doc_id: 文档 id
-            trace: 追踪上下文（可选）
-
-        Returns:
-            int: 实际删除的 chunk 数量
-        """
-        coll = (collection_name or "").strip()
-        if not coll:
+        collection = (collection_name or "").strip()
+        if not collection:
             raise ValueError("collection_name 不能为空")
-        doc_id = (source_doc_id or "").strip()
-        if not doc_id:
+        document_id = (source_doc_id or "").strip()
+        if not document_id:
             raise ValueError("source_doc_id 不能为空")
 
         conn = self._get_conn()
-        rows = conn.execute(
-            """
-            SELECT id
-            FROM chunks
-            WHERE collection_name = ?
-              AND json_extract(metadata_json, '$.source_doc_id') = ?
-            """,
-            (coll, doc_id),
-        ).fetchall()
-        chunk_ids = [str(r["id"]) for r in rows if r["id"]]
+        chunk_ids = self._records.find_ids_by_source_doc_id(
+            conn,
+            collection,
+            document_id,
+        )
         if not chunk_ids:
             return 0
-        return self.delete(ids=chunk_ids, trace=trace, collection_name=coll)
+        return self.delete(ids=chunk_ids, trace=trace, collection_name=collection)
 
     def _delete_orphan_images(
         self,
@@ -568,54 +336,11 @@ class SQLiteVectorStore(BaseVectorStore):
         deleted_chunk_ids: List[str],
         collection_name: str,
     ) -> None:
-        """删除仅被已删 chunk 引用的图片。"""
-        deleted_refs: set = set()
-        ids_json = json.dumps(deleted_chunk_ids, ensure_ascii=False)
-        rows = conn.execute(
-            """
-            SELECT metadata_json
-            FROM chunks
-            WHERE collection_name = ?
-              AND id IN (SELECT value FROM json_each(?))
-            """,
-            (collection_name, ids_json),
-        ).fetchall()
-        for row in rows:
-            meta = {}
-            if row[0]:
-                try:
-                    meta = json.loads(row[0])
-                except json.JSONDecodeError:
-                    pass
-            for ref in meta.get("image_refs") or []:
-                deleted_refs.add(ref)
-        if not deleted_refs:
-            return
-        remaining = conn.execute(
-            """
-            SELECT metadata_json
-            FROM chunks
-            WHERE collection_name = ?
-              AND id NOT IN (SELECT value FROM json_each(?))
-            """,
-            (collection_name, ids_json),
-        ).fetchall()
-        still_refd: set = set()
-        for row in remaining:
-            meta = {}
-            if row[0]:
-                try:
-                    meta = json.loads(row[0])
-                except json.JSONDecodeError:
-                    pass
-            for ref in meta.get("image_refs") or []:
-                still_refd.add(ref)
-        to_delete = deleted_refs - still_refd
-        for img_id in to_delete:
-            conn.execute(
-                "DELETE FROM images WHERE id = ? AND collection_name = ?",
-                (img_id, collection_name),
-            )
+        self._images.delete_orphan_images(
+            conn,
+            deleted_chunk_ids,
+            collection_name,
+        )
 
     def sparse_query(
         self,
@@ -624,87 +349,29 @@ class SQLiteVectorStore(BaseVectorStore):
         top_k: int,
         trace: Optional[Any] = None,
     ) -> List[QueryResult]:
-        """
-        稀疏检索（FTS5 BM25）。仅当 write_fts=True 时可用。
-        """
         if not self._write_fts:
             raise RuntimeError("sparse_query 需要 write_fts=True")
         if not terms:
             return []
         if top_k <= 0:
             raise ValueError(f"top_k 必须大于 0，得到: {top_k}")
-        coll = collection_name or self._collection_name
-        if not coll:
+        collection = collection_name or self._collection_name
+        if not collection:
             raise ValueError("collection_name 不能为空")
-
-        from src.ingestion.storage.fts5_bm25_indexer import _escape_fts5_term
-
-        safe_terms = [_escape_fts5_term(t) for t in terms if t and str(t).strip()]
-        if not safe_terms:
-            return []
-        query_str = " OR ".join(f'"{t}"' for t in safe_terms)
-
-        conn = self._get_conn()
-        try:
-            rows = conn.execute(
-                """
-                SELECT c.id, c.text, c.metadata_json, fts.rk
-                FROM (
-                    SELECT chunk_id, bm25(chunks_fts) AS rk
-                    FROM chunks_fts
-                    WHERE chunks_fts MATCH ? AND collection_name = ?
-                    ORDER BY rk
-                    LIMIT ?
-                ) fts
-                JOIN chunks c ON c.id = fts.chunk_id AND c.collection_name = ?
-                """,
-                (query_str, coll, top_k, coll),
-            ).fetchall()
-        except sqlite3.OperationalError as e:
-            if "syntax error" in str(e).lower() or "malformed" in str(e).lower():
-                return []
-            raise
-
-        results = []
-        for row in rows:
-            meta = {}
-            if row["metadata_json"]:
-                try:
-                    meta = json.loads(row["metadata_json"])
-                except json.JSONDecodeError:
-                    pass
-            # FTS5 bm25 越小越相关，取负值使分数越大越好
-            score = -float(row["rk"] or 0)
-            results.append(
-                QueryResult(
-                    id=row["id"],
-                    score=score,
-                    text=row["text"] or "",
-                    metadata=meta,
-                )
-            )
-        return results
+        return self._search.sparse_query(
+            self._get_conn(),
+            terms,
+            collection,
+            top_k,
+        )
 
     def sparse_index_exists(self, collection_name: str) -> bool:
-        """检查 collection 的 FTS5 索引是否有数据。"""
-        if not collection_name:
+        if not collection_name or not self._write_fts:
             return False
-        if not self._write_fts:
-            return False
-        conn = self._get_conn()
-        row = conn.execute(
-            "SELECT 1 FROM chunks_fts WHERE collection_name = ? LIMIT 1",
-            (collection_name,),
-        ).fetchone()
-        return row is not None
+        return self._search.sparse_index_exists(self._get_conn(), collection_name)
 
     def list_collections(self) -> List[str]:
-        """列出所有 collection 名称。"""
-        conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT DISTINCT collection_name FROM chunks ORDER BY collection_name"
-        ).fetchall()
-        return [r[0] for r in rows]
+        return self._records.list_collections(self._get_conn())
 
     def get_chunks_by_parent_id(
         self,
@@ -712,86 +379,32 @@ class SQLiteVectorStore(BaseVectorStore):
         parent_id: str,
         metadata_key: str = "parent_id",
     ) -> List[QueryResult]:
-        """
-        按 parent_id 取出该父下所有子块，按 chunk_index 升序排列。
-
-        Args:
-            collection_name: 集合名称
-            parent_id: 父节点 id
-            metadata_key: metadata 中的父节点字段名
-
-        Returns:
-            List[QueryResult]: 子块列表，按 chunk_index 升序
-        """
-        key = str(metadata_key or "").strip()
-        if not key or '"' in key:
-            raise ValueError(f"非法 parent metadata key: {metadata_key!r}")
-        conn = self._get_conn()
-        rows = conn.execute(
-            """
-            SELECT id, text, metadata_json
-            FROM chunks
-            WHERE collection_name = ?
-              AND json_extract(metadata_json, ?) = ?
-            ORDER BY CAST(json_extract(metadata_json, '$.chunk_index') AS INTEGER)
-            """,
-            (collection_name, f"$.{key}", parent_id),
-        ).fetchall()
-
-        results = []
-        for row in rows:
-            meta: dict = {}
-            if row["metadata_json"]:
-                try:
-                    meta = json.loads(row["metadata_json"])
-                except json.JSONDecodeError:
-                    pass
-            results.append(
-                QueryResult(
-                    id=row["id"],
-                    score=0.0,
-                    text=row["text"] or "",
-                    metadata=meta,
-                )
-            )
-        return results
+        return self._records.get_chunks_by_parent_id(
+            self._get_conn(),
+            collection_name,
+            parent_id,
+            metadata_key,
+        )
 
     def get_image(
         self,
         image_id: str,
         collection_name: str,
     ) -> Optional[tuple]:
-        """
-        从 images 表加载单张图片。
-
-        Args:
-            image_id: 图片 ID
-            collection_name: 集合名称
-
-        Returns:
-            (image_data: bytes, mime_type: str) 或 None
-        """
         if not self._write_fts:
             return None
-        conn = self._get_conn()
-        row = conn.execute(
-            "SELECT image_data, mime_type FROM images WHERE id = ? AND collection_name = ?",
-            (image_id, collection_name),
-        ).fetchone()
-        if row:
-            return (row[0], row[1] or "image/png")
-        return None
+        return self._images.get_image(self._get_conn(), image_id, collection_name)
 
     def get_backend(self) -> str:
         return self._backend
 
     def get_collection_name(self) -> str:
-        return self._collection_name
+        return cast(str, self._collection_name)
 
     def close(self) -> None:
         if self._conn is not None:
             try:
                 self._conn.close()
-            except Exception as e:
-                logger.debug("SQLite 连接关闭时异常: %s", e)
+            except Exception as exc:
+                logger.debug("SQLite 连接关闭时异常: %s", exc)
             self._conn = None

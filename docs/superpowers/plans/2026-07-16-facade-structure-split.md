@@ -83,11 +83,11 @@ git commit -m "refactor: 拆分文档入库流水线职责"
 **Files:**
 - Create: `tests/unit/test_sqlite_store_components.py`
 
-- [ ] 新增 schema manager 测试，覆盖新库建表和旧联合主键迁移。
-- [ ] 新增 record repository 测试，覆盖 collection 隔离写删和 parent 查询。
-- [ ] 新增 image repository 测试，覆盖图片写入、读取和孤立图片清理。
-- [ ] 新增 search service 测试，覆盖 filter SQL、dense 结果映射和 sparse 查询。
-- [ ] 运行新测试并确认因组件模块不存在而失败。
+- [x] 新增 schema manager 测试，覆盖新库建表和旧联合主键迁移。
+- [x] 新增 record repository 测试，覆盖 collection 隔离写删和 parent 查询。
+- [x] 新增 image repository 测试，覆盖图片写入、读取和孤立图片清理。
+- [x] 新增 search service 测试，覆盖 filter SQL、dense 结果映射和 sparse 查询。
+- [x] 运行新测试并确认因组件模块不存在而失败。
 
 Run:
 
@@ -106,12 +106,12 @@ Expected: collection 阶段失败，提示待新增组件模块无法导入。
 - Create: `src/libs/vector_store/sqlite_search.py`
 - Modify: `src/libs/vector_store/sqlite_store.py`
 
-- [ ] 将 schema DDL 和旧表迁移移入 schema manager。
-- [ ] 将记录 SQL 和 metadata 序列化移入 record repository。
-- [ ] 将图片 SQL 移入 image repository，并由 record repository 在同一事务中调用。
-- [ ] 将 dense/sparse 查询和 filter 编译移入 search service。
-- [ ] Facade 保留参数校验、连接加载、事务、公开返回值和异常包装。
-- [ ] 运行 SQLite 聚焦测试。
+- [x] 将 schema DDL 和旧表迁移移入 schema manager。
+- [x] 将记录 SQL 和 metadata 序列化移入 record repository。
+- [x] 将图片 SQL 移入 image repository，并由 record repository 在同一事务中调用。
+- [x] 将 dense/sparse 查询和 filter 编译移入 search service。
+- [x] Facade 保留参数校验、连接加载、事务、公开返回值和异常包装。
+- [x] 运行 SQLite 聚焦测试。
 
 Run:
 
@@ -125,8 +125,8 @@ Run:
 
 Expected: 全部通过。
 
-- [ ] 运行全量测试、编译和 diff 检查。
-- [ ] 提交：
+- [x] 运行全量测试、编译和 diff 检查。
+- [x] 提交：
 
 ```bash
 git commit -m "refactor: 拆分 SQLite 向量存储职责"
