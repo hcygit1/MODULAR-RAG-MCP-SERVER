@@ -8,13 +8,9 @@ import time
 
 import pytest
 
-from src.core.settings import (
-    Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig,
-    VectorStoreConfig, RetrievalConfig, RerankConfig,
-    EvaluationConfig, ObservabilityConfig, IngestionConfig,
-    LoggingConfig, DashboardConfig
-)
-from src.libs.reranker.cross_encoder_reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
+import src.libs.reranker.cross_encoder_reranker as cross_encoder_module
+from src.core.settings import RerankConfig
+from src.libs.reranker.cross_encoder_reranker import CrossEncoderReranker
 from src.libs.vector_store.base_vector_store import QueryResult
 
 
@@ -30,117 +26,34 @@ def _wait_until(predicate, timeout: float = 1.0) -> bool:
     return True
 
 
-def _create_test_settings(
-    llm_config: LLMConfig,
-    rerank_config: RerankConfig = None
-) -> Settings:
-    """创建测试用的 Settings 对象"""
-    if rerank_config is None:
-        rerank_config = RerankConfig(
-            backend="cross_encoder",
-            model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-            top_m=30,
-            timeout_seconds=5
-        )
-    
-    vision_llm_config = VisionLLMConfig(
-        provider="azure",
-        model="gpt-4o",
-        azure_endpoint="",
-        azure_api_key="",
-        deployment_name=""
-    )
-    embedding_config = EmbeddingConfig(
-        provider="openai",
-        model="text-embedding-3-small",
-        openai_api_key="test-key"
-    )
-    vector_store_config = VectorStoreConfig(
-        backend="chroma",
-        persist_path="./data/db/chroma",
-        collection_name="test"
-    )
-    retrieval_config = RetrievalConfig(
-        sparse_backend="bm25",
-        fusion_algorithm="rrf",
-        top_k_dense=20,
-        top_k_sparse=20,
-        top_k_final=10
-    )
-    evaluation_config = EvaluationConfig(
-        backends=["ragas"],
-        golden_test_set="./tests/fixtures/golden_test_set.json"
-    )
-    logging_config = LoggingConfig(
-        log_file="./logs/app.log",
-        log_level="INFO"
-    )
-    dashboard_config = DashboardConfig(
-        enabled=True,
-        port=8501
-    )
-    observability_config = ObservabilityConfig(
-        enabled=True,
-        logging=logging_config,
-        detail_level="standard",
-        dashboard=dashboard_config
-    )
-    ingestion_config = IngestionConfig(
-        chunk_size=512,
-        chunk_overlap=50,
-        enable_llm_refinement=False,
-        enable_metadata_enrichment=True,
-        enable_image_captioning=True,
-        batch_size=32
-    )
-    
-    return Settings(
-        llm=llm_config,
-        vision_llm=vision_llm_config,
-        embedding=embedding_config,
-        vector_store=vector_store_config,
-        retrieval=retrieval_config,
-        rerank=rerank_config,
-        evaluation=evaluation_config,
-        observability=observability_config,
-        ingestion=ingestion_config
-    )
-
-
 def _mock_scorer(query: str, text: str) -> float:
     """
     Mock scorer 函数（用于测试）
-    
+
     简单的确定性打分函数：基于文本长度和查询匹配度
     """
     # 简单的打分逻辑：文本长度越短，分数越高（模拟相关性）
     base_score = 1.0 / (len(text) + 1)
-    
+
     # 如果查询在文本中，增加分数
     if query.lower() in text.lower():
         base_score += 0.5
-    
+
     return base_score
 
 
 def test_factory_creates_cross_encoder_reranker():
     """测试工厂可以创建 Cross-Encoder Reranker（使用 mock scorer）"""
-    llm_config = LLMConfig(
-        provider="openai",
-        model="gpt-4o",
-        openai_api_key="test-key"
-    )
     rerank_config = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_m=30,
         timeout_seconds=5
     )
-    settings = _create_test_settings(llm_config, rerank_config)
-    
+
     # 使用 mock scorer 创建 reranker
     reranker = CrossEncoderReranker(rerank_config, scorer=_mock_scorer)
-    
+
     assert isinstance(reranker, CrossEncoderReranker)
     assert reranker.get_backend() == "cross_encoder"
 
@@ -153,9 +66,9 @@ def test_cross_encoder_reranker_initialization_with_mock():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
-    
+
     assert reranker.get_backend() == "cross_encoder"
     assert reranker._use_mock is True
     assert reranker._scorer == _mock_scorer
@@ -169,38 +82,58 @@ def test_cross_encoder_reranker_missing_model():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     with pytest.raises(ValueError, match="模型名称不能为空"):
         CrossEncoderReranker(config, scorer=_mock_scorer)
 
 
-@pytest.mark.skipif(not CROSS_ENCODER_AVAILABLE, reason="sentence-transformers 未安装")
-def test_cross_encoder_reranker_initialization_without_mock():
-    """测试 Cross-Encoder Reranker 不使用 mock scorer 初始化（需要 sentence-transformers）"""
+def test_cross_encoder_reranker_initialization_without_scorer(monkeypatch):
+    """不传 scorer 时初始化 CrossEncoder 依赖，不访问网络或模型缓存。"""
+    created_models = []
+
+    class FakeCrossEncoder:
+        def __init__(self, model_name):
+            created_models.append(model_name)
+
+    monkeypatch.setattr(
+        cross_encoder_module,
+        "CROSS_ENCODER_AVAILABLE",
+        True,
+    )
+    monkeypatch.setattr(
+        cross_encoder_module,
+        "CrossEncoder",
+        FakeCrossEncoder,
+    )
     config = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config)
-    
+
     assert reranker.get_backend() == "cross_encoder"
     assert reranker._use_mock is False
     assert reranker._model is not None
+    assert created_models == ["cross-encoder/ms-marco-MiniLM-L-6-v2"]
 
 
-@pytest.mark.skipif(CROSS_ENCODER_AVAILABLE, reason="sentence-transformers 已安装，跳过此测试")
-def test_cross_encoder_reranker_not_installed():
+def test_cross_encoder_reranker_not_installed(monkeypatch):
     """测试 CrossEncoder 未安装时抛出错误"""
+    monkeypatch.setattr(
+        cross_encoder_module,
+        "CROSS_ENCODER_AVAILABLE",
+        False,
+    )
     config = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_m=30,
         timeout_seconds=5
     )
-    
+
     with pytest.raises(RuntimeError, match="CrossEncoder 未安装"):
         CrossEncoderReranker(config)
 
@@ -213,13 +146,13 @@ def test_cross_encoder_reranker_empty_query():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="text1"),
         QueryResult(id="id2", score=0.8, text="text2")
     ]
-    
+
     with pytest.raises(ValueError, match="查询文本不能为空"):
         reranker.rerank("", candidates)
 
@@ -232,9 +165,9 @@ def test_cross_encoder_reranker_empty_candidates():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
-    
+
     with pytest.raises(ValueError, match="候选列表不能为空"):
         reranker.rerank("test query", [])
 
@@ -247,12 +180,12 @@ def test_cross_encoder_reranker_single_candidate():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
     candidates = [QueryResult(id="id1", score=0.9, text="text1")]
-    
+
     result = reranker.rerank("test query", candidates)
-    
+
     assert len(result) == 1
     assert result[0].id == "id1"
 
@@ -265,16 +198,16 @@ def test_cross_encoder_reranker_successful_rerank():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="short text"),  # 应该得分最高
         QueryResult(id="id2", score=0.8, text="this is a much longer text that should score lower"),
         QueryResult(id="id3", score=0.7, text="medium length text")
     ]
-    
+
     result = reranker.rerank("test query", candidates)
-    
+
     assert len(result) == 3
     # 由于 mock scorer 的逻辑，较短的文本应该得分更高
     assert result[0].id == "id1"  # "short text" 最短
@@ -291,7 +224,7 @@ def test_cross_encoder_reranker_top_m_limit():
         top_m=2,  # 只处理前 2 个
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="text1"),
@@ -299,9 +232,9 @@ def test_cross_encoder_reranker_top_m_limit():
         QueryResult(id="id3", score=0.7, text="text3"),
         QueryResult(id="id4", score=0.6, text="text4")
     ]
-    
+
     result = reranker.rerank("test query", candidates)
-    
+
     # 应该只返回 top_m=2 个结果
     assert len(result) == 2
     assert result[0].id in ["id1", "id2"]
@@ -316,18 +249,18 @@ def test_cross_encoder_reranker_timeout():
         top_m=30,
         timeout_seconds=0.05,
     )
-    
+
     # 创建一个会延迟的 mock scorer
     def slow_scorer(query: str, text: str) -> float:
         time.sleep(0.3)
         return 0.5
-    
+
     reranker = CrossEncoderReranker(config, scorer=slow_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="text1"),
         QueryResult(id="id2", score=0.8, text="text2")
     ]
-    
+
     started_at = time.monotonic()
     with pytest.raises(RuntimeError, match="超时"):
         reranker.rerank("test query", candidates)
@@ -558,7 +491,7 @@ def test_cross_encoder_reranker_score_ordering():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     # 创建一个确定性 scorer，返回预定义的分数
     def deterministic_scorer(query: str, text: str) -> float:
         score_map = {
@@ -567,16 +500,16 @@ def test_cross_encoder_reranker_score_ordering():
             "text3": 0.8
         }
         return score_map.get(text, 0.5)
-    
+
     reranker = CrossEncoderReranker(config, scorer=deterministic_scorer)
     candidates = [
         QueryResult(id="id1", score=0.5, text="text1"),
         QueryResult(id="id2", score=0.5, text="text2"),
         QueryResult(id="id3", score=0.5, text="text3")
     ]
-    
+
     result = reranker.rerank("test query", candidates)
-    
+
     # 验证排序：text1 (0.9) > text3 (0.8) > text2 (0.7)
     assert len(result) == 3
     assert result[0].id == "id1"  # 最高分
@@ -595,15 +528,15 @@ def test_cross_encoder_reranker_metadata_preserved():
         top_m=30,
         timeout_seconds=5
     )
-    
+
     reranker = CrossEncoderReranker(config, scorer=_mock_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="text1", metadata={"key1": "value1"}),
         QueryResult(id="id2", score=0.8, text="text2", metadata={"key2": "value2"})
     ]
-    
+
     result = reranker.rerank("test query", candidates)
-    
+
     assert len(result) == 2
     # 验证元数据被保留
     assert result[0].metadata == {"key1": "value1"} or result[0].metadata == {"key2": "value2"}
@@ -612,27 +545,18 @@ def test_cross_encoder_reranker_metadata_preserved():
 
 def test_cross_encoder_reranker_factory_integration():
     """测试工厂集成（使用 mock scorer）"""
-    llm_config = LLMConfig(
-        provider="openai",
-        model="gpt-4o",
-        openai_api_key="test-key"
-    )
     rerank_config = RerankConfig(
         backend="cross_encoder",
         model="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_m=30,
         timeout_seconds=5
     )
-    settings = _create_test_settings(llm_config, rerank_config)
-    
-    # 工厂创建会失败（因为没有提供 scorer），但我们可以测试工厂方法
-    # 实际上，我们需要修改工厂以支持传入 scorer，或者直接测试 reranker
-    # 这里我们直接测试 reranker 的功能
+
     reranker = CrossEncoderReranker(rerank_config, scorer=_mock_scorer)
     candidates = [
         QueryResult(id="id1", score=0.9, text="text1"),
         QueryResult(id="id2", score=0.8, text="text2")
     ]
-    
+
     result = reranker.rerank("test query", candidates)
     assert len(result) == 2
