@@ -6,28 +6,31 @@ Ingestion Pipeline 模块
 """
 import logging
 from pathlib import Path
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 
-from src.ingestion.models import Document, Chunk
-from src.libs.splitter.splitter_factory import SplitterFactory
+from src.core.settings import Settings
+from src.core.trace.trace_context import TraceContext
+from src.ingestion.document_chunk_builder import DocumentChunkBuilder
+from src.ingestion.embedding.batch_processor import BatchProcessor
+from src.ingestion.embedding.dense_encoder import DenseEncoder
+from src.ingestion.embedding.encoding_runner import EncodingRunner
+from src.ingestion.embedding.sparse_encoder import SparseEncoder
+from src.ingestion.models import Chunk, Document
+from src.ingestion.storage.storage_coordinator import StorageCoordinator
+from src.ingestion.storage.vector_upserter import VectorUpserter
+from src.ingestion.transform.boundary_repairer import BoundaryRepairer
+from src.ingestion.transform.chunk_refiner import ChunkRefiner
+from src.ingestion.transform.image_captioner import ImageCaptioner
+from src.ingestion.transform.metadata_enricher import MetadataEnricher
+from src.ingestion.transform.transform_runner import TransformRunner
+from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.loader.file_integrity import (
     FileIntegrityChecker,
     build_processing_profile,
 )
 from src.libs.loader.pdf_loader import PdfLoader
-from src.libs.embedding.embedding_factory import EmbeddingFactory
+from src.libs.splitter.splitter_factory import SplitterFactory
 from src.libs.vector_store.vector_store_factory import VectorStoreFactory
-from src.core.settings import Settings
-from src.core.trace.trace_context import TraceContext
-
-from src.ingestion.transform.chunk_refiner import ChunkRefiner
-from src.ingestion.transform.metadata_enricher import MetadataEnricher
-from src.ingestion.transform.image_captioner import ImageCaptioner
-from src.ingestion.transform.boundary_repairer import BoundaryRepairer
-from src.ingestion.embedding.dense_encoder import DenseEncoder
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
-from src.ingestion.embedding.batch_processor import BatchProcessor
-from src.ingestion.storage.vector_upserter import VectorUpserter
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +76,8 @@ class IngestionPipeline:
             if integrity_checker is not None
             else FileIntegrityChecker()
         )
-        self._splitter = SplitterFactory.create(settings, strategy=splitter_strategy)
+        splitter = SplitterFactory.create(settings, strategy=splitter_strategy)
+        self._chunk_builder = DocumentChunkBuilder(splitter)
 
         # Text LLM：仅在未传入且 (enable_llm_refinement 或 enable_metadata_enrichment) 时创建
         if llm is None and (
@@ -87,11 +91,11 @@ class IngestionPipeline:
                 llm = None
 
         # Transform 组件
-        self._chunk_refiner = ChunkRefiner(
+        chunk_refiner = ChunkRefiner(
             config=self._ingestion_config,
             llm=llm
         )
-        self._metadata_enricher = MetadataEnricher(
+        metadata_enricher = MetadataEnricher(
             config=self._ingestion_config,
             llm=llm
         )
@@ -103,7 +107,7 @@ class IngestionPipeline:
             from src.libs.llm.llm_factory import LLMFactory
             vision_llm = LLMFactory.create_vision_llm(settings)
 
-        self._image_captioner = ImageCaptioner(
+        image_captioner = ImageCaptioner(
             config=self._ingestion_config,
             vision_llm_config=settings.vision_llm,
             vision_llm=vision_llm,
@@ -111,12 +115,18 @@ class IngestionPipeline:
         )
 
         # Boundary Repair 组件（可选，默认关闭）
-        self._boundary_repairer: Optional[BoundaryRepairer] = None
+        boundary_repairer: Optional[BoundaryRepairer] = None
         if self._ingestion_config.enable_boundary_repair:
-            self._boundary_repairer = BoundaryRepairer(
+            boundary_repairer = BoundaryRepairer(
                 config=self._ingestion_config,
                 llm=llm,
             )
+        self._transform_runner = TransformRunner(
+            chunk_refiner=chunk_refiner,
+            metadata_enricher=metadata_enricher,
+            image_captioner=image_captioner,
+            boundary_repairer=boundary_repairer,
+        )
 
         # Embedding 组件
         if embedding is None:
@@ -126,16 +136,74 @@ class IngestionPipeline:
             batch_size=None  # BatchProcessor 负责批处理
         )
         self._sparse_encoder = SparseEncoder()
-        self._batch_processor = BatchProcessor(
+        batch_processor = BatchProcessor(
             dense_encoder=self._dense_encoder,
             sparse_encoder=self._sparse_encoder,
             batch_size=self._ingestion_config.batch_size
         )
+        self._encoding_runner = EncodingRunner(batch_processor)
 
         # Storage 组件（统一存储：chunk+vec+sparse 由 VectorStore 完成，不再使用独立 BM25Indexer）
         if vector_store is None:
             vector_store = VectorStoreFactory.create(settings)
-        self._vector_upserter = VectorUpserter(vector_store=vector_store)
+        vector_upserter = VectorUpserter(vector_store=vector_store)
+        self._storage_coordinator = StorageCoordinator(vector_upserter)
+
+    @property
+    def _splitter(self) -> Any:
+        return self._chunk_builder.splitter
+
+    @_splitter.setter
+    def _splitter(self, value: Any) -> None:
+        self._chunk_builder.splitter = value
+
+    @property
+    def _chunk_refiner(self) -> Any:
+        return self._transform_runner.chunk_refiner
+
+    @_chunk_refiner.setter
+    def _chunk_refiner(self, value: Any) -> None:
+        self._transform_runner.chunk_refiner = value
+
+    @property
+    def _metadata_enricher(self) -> Any:
+        return self._transform_runner.metadata_enricher
+
+    @_metadata_enricher.setter
+    def _metadata_enricher(self, value: Any) -> None:
+        self._transform_runner.metadata_enricher = value
+
+    @property
+    def _image_captioner(self) -> Any:
+        return self._transform_runner.image_captioner
+
+    @_image_captioner.setter
+    def _image_captioner(self, value: Any) -> None:
+        self._transform_runner.image_captioner = value
+
+    @property
+    def _boundary_repairer(self) -> Optional[Any]:
+        return self._transform_runner.boundary_repairer
+
+    @_boundary_repairer.setter
+    def _boundary_repairer(self, value: Optional[Any]) -> None:
+        self._transform_runner.boundary_repairer = value
+
+    @property
+    def _batch_processor(self) -> Any:
+        return self._encoding_runner.batch_processor
+
+    @_batch_processor.setter
+    def _batch_processor(self, value: Any) -> None:
+        self._encoding_runner.batch_processor = value
+
+    @property
+    def _vector_upserter(self) -> Any:
+        return self._storage_coordinator.vector_upserter
+
+    @_vector_upserter.setter
+    def _vector_upserter(self, value: Any) -> None:
+        self._storage_coordinator.vector_upserter = value
 
     def close(self) -> None:
         """关闭资源（如 VectorStore、FTS5 连接），避免进程退出时析构报错"""
@@ -240,7 +308,11 @@ class IngestionPipeline:
                 processing_profile,
             )
         except Exception as e:
-            logger.warning("标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s", file_hash[:16] if file_hash else "?", e)
+            logger.warning(
+                "标记文件处理成功失败 (file_hash=%s)，可能导致后续重复处理: %s",
+                file_hash[:16] if file_hash else "?",
+                e,
+            )
 
         if _trace:
             _trace.set_metric("skipped", False)
@@ -344,28 +416,26 @@ class IngestionPipeline:
 
         # 步骤 3.5: Boundary Repair（可选，修复块边界断裂）
         if self._boundary_repairer is not None:
-            try:
-                if _trace:
-                    with _trace.stage("boundary_repair"):
-                        transformed_chunks = self._boundary_repairer.repair(
-                            transformed_chunks, trace=trace
-                        )
-                else:
-                    transformed_chunks = self._boundary_repairer.repair(
-                        transformed_chunks, trace=trace
-                    )
-            except Exception as e:
-                logger.warning("块边界修复失败，跳过: %s", e)
+            stage_context = (
+                _trace.stage("boundary_repair")
+                if _trace
+                else None
+            )
+            transformed_chunks = self._transform_runner.repair_boundaries(
+                transformed_chunks,
+                trace=trace,
+                stage_context=stage_context,
+            )
 
         # 步骤 4: Encode
         try:
             if _trace:
                 with _trace.stage("encode"):
-                    dense_vectors, sparse_vectors = self._batch_processor.process(
+                    dense_vectors, sparse_vectors = self._encoding_runner.encode(
                         transformed_chunks, trace=trace
                     )
             else:
-                dense_vectors, sparse_vectors = self._batch_processor.process(
+                dense_vectors, sparse_vectors = self._encoding_runner.encode(
                     transformed_chunks, trace=trace
                 )
         except Exception as e:
@@ -404,22 +474,7 @@ class IngestionPipeline:
         Returns:
             List[Chunk]: 转换后的 Chunk 列表
         """
-        transformed_chunks = []
-
-        for chunk in chunks:
-            # 依次应用 Transform
-            # 1. ChunkRefiner（文本清理和优化）
-            chunk = self._chunk_refiner.transform(chunk, trace=trace)
-
-            # 2. MetadataEnricher（元数据增强）
-            chunk = self._metadata_enricher.transform(chunk, trace=trace)
-
-            # 3. ImageCaptioner（图片描述生成）
-            chunk = self._image_captioner.transform(chunk, trace=trace)
-
-            transformed_chunks.append(chunk)
-
-        return transformed_chunks
+        return self._transform_runner.run(chunks, trace=trace)
 
     def _store_results(
         self,
@@ -439,33 +494,12 @@ class IngestionPipeline:
             collection_name: 集合名称
             trace: 追踪上下文（可选）
         """
-        source_doc_id = ""
-        if chunks:
-            source_doc_id = str(chunks[0].metadata.get("source_doc_id", "")).strip()
-
-        if source_doc_id:
-            try:
-                self._vector_upserter.replace_document_chunks(
-                    source_doc_id=source_doc_id,
-                    chunks=chunks,
-                    dense_vectors=dense_vectors,
-                    sparse_vectors=sparse_vectors,
-                    trace=trace,
-                    collection_name=collection_name,
-                )
-                return
-            except NotImplementedError:
-                logger.warning(
-                    "当前 VectorStore 不支持按 source_doc_id 清理，回退到普通 upsert。backend=%s",
-                    self._vector_upserter.get_vector_store().get_backend(),
-                )
-
-        self._vector_upserter.upsert_chunks(
-            chunks=chunks,
-            dense_vectors=dense_vectors,
-            sparse_vectors=sparse_vectors,
+        self._storage_coordinator.store(
+            chunks,
+            dense_vectors,
+            sparse_vectors,
+            collection_name,
             trace=trace,
-            collection_name=collection_name,
         )
 
     def split_document(
@@ -492,80 +526,7 @@ class IngestionPipeline:
             ValueError: 当 Document 无效时
             RuntimeError: 当切分过程失败时
         """
-        if not document or not document.text:
-            raise ValueError("Document 或 Document.text 不能为空")
-
-        # 使用 Splitter 切分文本，同时获取每段的结构 metadata（如 parent_id）
-        chunk_tuples = self._splitter.split_with_metadata(
-            document.text, doc_id=document.id, trace=trace
-        )
-
-        # 准备阶段：建立图片元数据索引（用于高效查找）
-        image_data_dict = document.metadata.get("image_data") or {}
-        images_list = document.metadata.get("images") or []
-        image_metadata_index: Dict[str, Dict[str, Any]] = {}
-        for img_meta in images_list:
-            img_id = img_meta.get("image_id")
-            if img_id:
-                image_metadata_index[img_id] = img_meta
-
-        # 将文本片段转换为 Chunk 对象
-        chunks: List[Chunk] = []
-        current_offset = 0
-
-        for idx, (chunk_text, split_meta) in enumerate(chunk_tuples):
-            # 生成 Chunk ID（基于文档 ID 和 chunk 索引）
-            chunk_id = self._generate_chunk_id(document.id, idx)
-
-            # 计算位置偏移量
-            start_offset = current_offset
-            end_offset = current_offset + len(chunk_text)
-
-            # 构建 Chunk 元数据（继承 Document 的元数据，排除图片数据，只传递 chunk 相关的）
-            chunk_metadata = {
-                k: v for k, v in document.metadata.items()
-                if k not in ("image_data", "images")
-            }
-            chunk_metadata.update({
-                "chunk_index": idx,
-                "source_doc_id": document.id,
-                "total_chunks": len(chunk_tuples),
-            })
-            # 合并切分器返回的结构 metadata（如 parent_id、heading_text 等）
-            # recursive 策略下 split_meta 为空字典，此处无副作用
-            chunk_metadata.update(split_meta)
-
-            # 提取该 chunk 的图片引用
-            image_refs = self._extract_image_refs(chunk_text)
-
-            # 只传递该 chunk 相关的图片数据和元数据
-            if image_refs:
-                chunk_metadata["image_refs"] = image_refs
-                chunk_image_data: Dict[str, bytes] = {}
-                chunk_image_metadata: List[Dict[str, Any]] = []
-                for img_id in image_refs:
-                    if img_id in image_data_dict:
-                        chunk_image_data[img_id] = image_data_dict[img_id]
-                    if img_id in image_metadata_index:
-                        chunk_image_metadata.append(image_metadata_index[img_id])
-                if chunk_image_data:
-                    chunk_metadata["image_data"] = chunk_image_data
-                if chunk_image_metadata:
-                    chunk_metadata["image_metadata"] = chunk_image_metadata
-
-            # 创建 Chunk 对象
-            chunk = Chunk(
-                id=chunk_id,
-                text=chunk_text,
-                metadata=chunk_metadata,
-                start_offset=start_offset,
-                end_offset=end_offset
-            )
-
-            chunks.append(chunk)
-            current_offset = end_offset
-
-        return chunks
+        return self._chunk_builder.build(document, trace=trace)
 
     def _generate_chunk_id(self, doc_id: str, chunk_index: int) -> str:
         """
@@ -578,8 +539,7 @@ class IngestionPipeline:
         Returns:
             str: Chunk ID
         """
-        # 格式：{doc_id}_chunk_{index}
-        return f"{doc_id}_chunk_{chunk_index}"
+        return self._chunk_builder.generate_chunk_id(doc_id, chunk_index)
 
     def _extract_image_refs(self, text: str) -> List[str]:
         """
@@ -593,11 +553,7 @@ class IngestionPipeline:
         Returns:
             List[str]: 图片 ID 列表
         """
-        import re
-        # 匹配 [IMAGE: {image_id}] 格式
-        pattern = r'\[IMAGE:\s*([^\]]+)\]'
-        matches = re.findall(pattern, text)
-        return matches
+        return self._chunk_builder.extract_image_refs(text)
 
     def get_splitter_strategy(self) -> str:
         """
@@ -606,7 +562,7 @@ class IngestionPipeline:
         Returns:
             str: 策略名称
         """
-        return self._splitter.get_strategy()
+        return self._chunk_builder.get_splitter_strategy()
 
     def get_chunk_size(self) -> int:
         """
@@ -615,7 +571,7 @@ class IngestionPipeline:
         Returns:
             int: 块大小
         """
-        return self._splitter.get_chunk_size()
+        return self._chunk_builder.get_chunk_size()
 
     def get_chunk_overlap(self) -> int:
         """
@@ -624,4 +580,4 @@ class IngestionPipeline:
         Returns:
             int: 重叠大小
         """
-        return self._splitter.get_chunk_overlap()
+        return self._chunk_builder.get_chunk_overlap()
