@@ -5,14 +5,24 @@ Splitter Factory 测试
 """
 import pytest
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.splitter.base_splitter import BaseSplitter
-from src.libs.splitter.splitter_factory import SplitterFactory
-from src.libs.splitter.fake_splitter import FakeSplitter
-from src.libs.splitter.recursive_splitter import RecursiveSplitter
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.splitter.base_splitter import BaseSplitter
+from modular_rag_mcp_server.libs.splitter.fake_splitter import FakeSplitter
+from modular_rag_mcp_server.libs.splitter.recursive_splitter import RecursiveSplitter
+from modular_rag_mcp_server.libs.splitter.splitter_factory import SplitterFactory
 
 
 def test_factory_creates_fake_splitter():

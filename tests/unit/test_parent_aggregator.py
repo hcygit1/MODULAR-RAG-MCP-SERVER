@@ -4,11 +4,9 @@ ParentAggregator 单元测试
 覆盖：分组聚合、sum/count 打分、top_k 截断、正文合并顺序、
 去重子块、无 parent_id 子块跳过、空输入。
 """
-import pytest
 
-from src.core.query_engine.parent_aggregator import ParentAggregator
-from src.libs.vector_store.base_vector_store import QueryResult
-
+from modular_rag_mcp_server.core.query_engine.parent_aggregator import ParentAggregator
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 # ---------------------------------------------------------------------------
 # 辅助：模拟 VectorStore

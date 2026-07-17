@@ -6,13 +6,16 @@ from types import SimpleNamespace
 import pytest
 import sqlite_vec
 
-from src.core.settings import VectorStoreConfig
-from src.libs.vector_store.base_vector_store import VectorRecord
-from src.libs.vector_store.sqlite_image_repository import SQLiteImageRepository
-from src.libs.vector_store.sqlite_record_repository import SQLiteRecordRepository
-from src.libs.vector_store.sqlite_schema import SQLiteSchemaManager
-from src.libs.vector_store.sqlite_search import DenseQueryPlan, SQLiteSearchService
-from src.libs.vector_store.sqlite_store import SQLiteVectorStore
+from modular_rag_mcp_server.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import VectorRecord
+from modular_rag_mcp_server.libs.vector_store.sqlite_image_repository import SQLiteImageRepository
+from modular_rag_mcp_server.libs.vector_store.sqlite_record_repository import SQLiteRecordRepository
+from modular_rag_mcp_server.libs.vector_store.sqlite_schema import SQLiteSchemaManager
+from modular_rag_mcp_server.libs.vector_store.sqlite_search import (
+    DenseQueryPlan,
+    SQLiteSearchService,
+)
+from modular_rag_mcp_server.libs.vector_store.sqlite_store import SQLiteVectorStore
 
 
 class TrackingConnection(sqlite3.Connection):

@@ -3,12 +3,12 @@ DenseEncoder 契约测试
 
 验证批量编码功能、向量数量一致性和维度一致性。
 """
-import pytest
-from unittest.mock import MagicMock
 
-from src.ingestion.models import Chunk
-from src.ingestion.embedding.dense_encoder import DenseEncoder
-from src.libs.embedding.base_embedding import BaseEmbedding
+import pytest
+
+from modular_rag_mcp_server.ingestion.embedding.dense_encoder import DenseEncoder
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.libs.embedding.base_embedding import BaseEmbedding
 
 
 class MockEmbedding(BaseEmbedding):

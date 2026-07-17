@@ -3,27 +3,39 @@ Recursive Splitter 测试
 
 测试 Recursive Splitter 实现（封装 LangChain）。
 """
+import importlib
+
 import pytest
 
 # 检查 LangChain Text Splitters 是否可用
 try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    importlib.import_module("langchain_text_splitters")
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     try:
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        importlib.import_module("langchain.text_splitter")
         LANGCHAIN_AVAILABLE = True
     except ImportError:
         LANGCHAIN_AVAILABLE = False
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.splitter.splitter_factory import SplitterFactory
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.splitter.splitter_factory import SplitterFactory
 
 if LANGCHAIN_AVAILABLE:
-    from src.libs.splitter.recursive_splitter import RecursiveSplitter
+    from modular_rag_mcp_server.libs.splitter.recursive_splitter import RecursiveSplitter
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain 未安装")
@@ -143,24 +155,10 @@ def test_recursive_splitter_chunk_overlap():
     
     text = " ".join([f"word{i}" for i in range(50)])  # 长文本
     chunks = splitter.split_text(text)
-    
-    if len(chunks) > 1:
-        # 验证相邻块之间有重叠
-        # 通过检查前一个块的结尾是否出现在下一个块的开头
-        for i in range(len(chunks) - 1):
-            current_chunk = chunks[i]
-            next_chunk = chunks[i + 1]
-            
-            # 检查是否有重叠（简单检查：前一个块的结尾部分是否出现在下一个块的开头）
-            overlap_found = False
-            for overlap_len in range(10, min(len(current_chunk), len(next_chunk))):
-                if current_chunk[-overlap_len:] == next_chunk[:overlap_len]:
-                    overlap_found = True
-                    break
-            
-            # 注意：由于 LangChain 的分隔符优先级，重叠可能不是精确的
-            # 这里只验证切分功能正常，不强制要求精确重叠
-            assert True  # 切分成功即可
+
+    assert len(chunks) > 1
+    for current_chunk, next_chunk in zip(chunks, chunks[1:]):
+        assert set(current_chunk.split()) & set(next_chunk.split())
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain 未安装")
@@ -235,8 +233,7 @@ def test_recursive_splitter_trace_parameter():
 def test_recursive_splitter_langchain_not_installed():
     """测试 LangChain 未安装时的错误处理"""
     # 临时模拟 LangChain 未安装的情况
-    import sys
-    import src.libs.splitter.recursive_splitter as rs_module
+    import modular_rag_mcp_server.libs.splitter.recursive_splitter as rs_module
     
     # 保存原始值
     original_splitter = rs_module.RecursiveCharacterTextSplitter

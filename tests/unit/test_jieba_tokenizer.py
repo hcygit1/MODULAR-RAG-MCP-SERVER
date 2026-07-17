@@ -1,10 +1,9 @@
 """
 jieba 分词模块单元测试
 """
-import pytest
 
-from src.libs.tokenizer import tokenize
-from src.libs.tokenizer.jieba_tokenizer import _get_default_stopwords
+from modular_rag_mcp_server.libs.tokenizer import tokenize
+from modular_rag_mcp_server.libs.tokenizer.jieba_tokenizer import _get_default_stopwords
 
 
 class TestJiebaTokenizerBasic:

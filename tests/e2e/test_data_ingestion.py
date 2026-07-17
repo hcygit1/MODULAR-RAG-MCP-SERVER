@@ -5,11 +5,10 @@
 - 命令行可运行并在 data/db 产生产物
 - 重复运行在未变更时跳过
 """
-import subprocess
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 

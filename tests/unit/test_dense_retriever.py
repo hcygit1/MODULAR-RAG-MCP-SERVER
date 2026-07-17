@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.core.query_engine.dense_retriever import DenseRetriever
-from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.vector_store.base_vector_store import QueryResult
-from src.libs.vector_store.fake_vector_store import FakeVectorStore, VectorRecord
+from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore, VectorRecord
 
 
 class TestDenseRetrieverBasic:

@@ -5,7 +5,7 @@ QueryProcessor 单元测试
 """
 import pytest
 
-from src.core.query_engine.query_processor import (
+from modular_rag_mcp_server.core.query_engine.query_processor import (
     ProcessedQuery,
     QueryProcessor,
 )

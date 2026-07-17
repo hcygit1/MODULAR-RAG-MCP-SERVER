@@ -8,6 +8,7 @@ import argparse
 import json
 import logging
 import sys
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -43,7 +44,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default="config/settings.yaml",
+        default=None,
         help="配置文件路径",
     )
     parser.add_argument(
@@ -59,7 +60,7 @@ def main() -> None:
 
     # 加载配置
     try:
-        from src.core.settings import load_settings
+        from modular_rag_mcp_server.core.settings import load_settings
 
         settings = load_settings(args.config)
     except Exception as e:
@@ -67,21 +68,21 @@ def main() -> None:
         sys.exit(1)
 
     # 创建组件
-    from src.libs.embedding.embedding_factory import EmbeddingFactory
-    from src.libs.vector_store.vector_store_factory import VectorStoreFactory
-    from src.libs.reranker.reranker_factory import RerankerFactory
+    from modular_rag_mcp_server.libs.embedding.embedding_factory import EmbeddingFactory
+    from modular_rag_mcp_server.libs.reranker.reranker_factory import RerankerFactory
+    from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
 
     embedding = EmbeddingFactory.create(settings)
     vector_store = VectorStoreFactory.create(settings)
     reranker_backend = RerankerFactory.create(settings)
 
     # 构建 RetrievalPipeline
-    from src.core.query_engine.dense_retriever import DenseRetriever
-    from src.core.query_engine.sparse_retriever import SparseRetriever
-    from src.core.query_engine.hybrid_search import HybridSearch
-    from src.core.query_engine.query_processor import QueryProcessor
-    from src.core.query_engine.reranker import RerankerOrchestrator
-    from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
+    from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+    from modular_rag_mcp_server.core.query_engine.hybrid_search import HybridSearch
+    from modular_rag_mcp_server.core.query_engine.query_processor import QueryProcessor
+    from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+    from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+    from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
 
     dense = DenseRetriever(embedding=embedding, vector_store=vector_store)
     sqlite_path = getattr(settings.vector_store, "sqlite_path", None)

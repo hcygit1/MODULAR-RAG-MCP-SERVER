@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
@@ -95,7 +94,7 @@ def e2e_runtime(tmp_path):
     env = os.environ.copy()
     python_path = env.get("PYTHONPATH")
     env["PYTHONPATH"] = os.pathsep.join(
-        part for part in (str(PROJECT_ROOT), python_path) if part
+        part for part in (str(PROJECT_ROOT / "src"), python_path) if part
     )
     env["MODULAR_RAG_CONFIG_PATH"] = str(config_path)
 

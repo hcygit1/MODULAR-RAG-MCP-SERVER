@@ -21,16 +21,18 @@ Modular RAG MCP Server 面向文档问答、知识库检索和智能助手集成
 
 ```text
 .
-├── main.py                  # MCP Server 启动入口
+├── main.py                  # 兼容启动入口
 ├── config/
-│   └── settings.yaml        # 主配置文件
+│   └── settings.local.yaml.example  # 本地配置覆盖示例
 ├── scripts/                 # 入库、检索、评估、Dashboard 等脚本
 ├── src/
-│   ├── core/                # 配置、查询引擎、Trace、响应模型
-│   ├── ingestion/           # 文档解析、切分、Embedding、存储流程
-│   ├── libs/                # Loader、Embedding、Reranker、VectorStore、LLM 等组件
-│   ├── mcp_server/          # MCP Server 与工具定义
-│   └── observability/       # 日志、Dashboard、评估辅助
+│   └── modular_rag_mcp_server/
+│       ├── core/            # 配置、查询引擎、Trace、响应模型
+│       ├── ingestion/       # 文档解析、切分、Embedding、存储流程
+│       ├── libs/            # Loader、Embedding、Reranker、VectorStore、LLM 等组件
+│       ├── mcp_server/      # MCP Server 与工具定义
+│       ├── observability/   # 日志、Dashboard、评估辅助
+│       └── resources/       # wheel 内置默认配置和 prompts
 ├── tests/                   # 单元、集成和端到端测试
 └── docs/                    # 补充文档
 ```
@@ -45,7 +47,7 @@ Modular RAG MCP Server 面向文档问答、知识库检索和智能助手集成
 - `ingest_document_docling`：使用 Docling 结构化解析并入库 `.pdf`、`.doc`、`.docx`、`.ppt`、`.pptx`、`.html`、`.md` 文件。参数：`file_path`、`collection_name`、`force`。
 - `ingest_document_mineru`：使用 MinerU 云端解析并入库复杂版式 PDF。参数：`file_path`、`collection_name`、`force`。
 
-具体实现见 `src/mcp_server/server.py` 和 `src/mcp_server/tools/`。
+具体实现见 `src/modular_rag_mcp_server/mcp_server/`。
 
 ## 环境要求
 
@@ -85,19 +87,14 @@ pip install -e ".[docling]"
 
 ## 配置
 
-默认配置文件为：
-
-```text
-config/settings.yaml
-```
-
-也可以通过环境变量指定配置文件路径：
+默认配置随 wheel 打包，无需依赖仓库文件。可以通过 CLI 或环境变量指定完整的外部配置：
 
 ```bash
+modular-rag-mcp-server --config /path/to/settings.yaml
 export MODULAR_RAG_CONFIG_PATH=/path/to/settings.yaml
 ```
 
-推荐创建本地覆盖配置文件保存密钥、模型提供商、存储路径等环境相关内容：
+未指定外部配置时，可创建本地覆盖文件保存密钥、模型提供商和存储路径：
 
 ```text
 config/settings.local.yaml
@@ -116,16 +113,16 @@ config/settings.local.yaml
 ## 运行 MCP Server
 
 ```bash
-python main.py
+modular-rag-mcp-server
 ```
 
-或：
+只校验配置而不启动服务：
 
 ```bash
-python -m src.mcp_server.server
+modular-rag-mcp-server --check-config
 ```
 
-默认使用 Stdio 传输，适合接入支持 MCP 的客户端。
+`python main.py` 仍作为仓库内兼容入口。服务默认使用 Stdio 传输，适合接入支持 MCP 的客户端。
 
 ## 常用脚本
 
@@ -174,6 +171,6 @@ pytest
 ## 开发说明
 
 - 新增组件时优先复用现有接口和工厂模式。
-- 配置项应集中在 `config/settings.yaml` 或本地覆盖配置中管理。
+- 默认配置和 prompts 是包资源；环境差异通过外部配置、环境变量或 `config/settings.local.yaml` 管理。
 - 修改检索、入库、重排、评估等核心链路后，应补充对应单元测试或集成测试。
 - 评估后端中 `custom` 当前可用，`ragas` 和 `deepeval` 相关实现以代码状态为准。

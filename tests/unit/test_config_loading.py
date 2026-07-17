@@ -3,24 +3,22 @@
 
 测试配置文件的加载、解析和校验功能。
 """
-import pytest
 import tempfile
-import yaml
 from pathlib import Path
 
-from src.core.settings import (
+import pytest
+import yaml
+
+from modular_rag_mcp_server.core.settings import (
+    Settings,
     load_settings,
     validate_settings,
-    Settings,
-    LLMConfig,
-    EmbeddingConfig,
-    VectorStoreConfig,
 )
 
 
 def test_load_valid_settings():
     """测试加载有效的配置文件"""
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
     assert isinstance(settings, Settings)
     assert hasattr(settings, "llm")
     assert hasattr(settings, "embedding")
@@ -33,6 +31,14 @@ def test_load_settings_file_not_found():
         load_settings("config/nonexistent.yaml")
     
     assert "配置文件不存在" in str(exc_info.value)
+
+
+def test_load_settings_rejects_non_mapping_yaml(tmp_path: Path):
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text("- invalid\n- settings\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="顶层必须是映射"):
+        load_settings(str(config_path))
 
 
 def test_load_settings_missing_required_field():
@@ -184,14 +190,14 @@ def test_load_settings_missing_multiple_fields():
 
 def test_validate_settings_valid():
     """测试校验有效配置"""
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
     # 不应该抛出异常
     validate_settings(settings)
 
 
 def test_validate_settings_sqlite_requires_fts5():
     """backend=sqlite 时必须 sparse_backend=fts5（统一存储约束）"""
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
     # 模拟 sqlite + bm25 的非法组合
     settings.vector_store.backend = "sqlite"
     settings.vector_store.sqlite_path = "./data/db/rag.sqlite"
@@ -205,7 +211,7 @@ def test_validate_settings_sqlite_requires_fts5():
 
 def test_validate_settings_parent_aggregation_requires_enough_rerank_candidates():
     """父聚合不能在 rerank 阶段提前丢失子块候选。"""
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
     settings.retrieval.aggregate_by_parent = True
     settings.retrieval.parent_aggregate_top_m = 30
     settings.rerank.backend = "cross_encoder"
@@ -263,7 +269,7 @@ def test_load_settings_local_override():
 
 def test_settings_structure():
     """测试 Settings 对象的结构"""
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
 
     # 验证所有主要配置都存在
     assert hasattr(settings, "llm")

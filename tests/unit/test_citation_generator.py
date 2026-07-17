@@ -1,8 +1,10 @@
 """Citation generator 单元测试"""
-import pytest
 
-from src.core.response.citation_generator import CitationGenerator, generate_citations
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.response.citation_generator import (
+    CitationGenerator,
+    generate_citations,
+)
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 def test_generate_citations_empty() -> None:

@@ -3,17 +3,19 @@
 import asyncio
 import importlib
 import inspect
+import os
 import subprocess
 import sys
-import threading
 import textwrap
+import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 _TOOL_CASES = [
     pytest.param(
-        "src.mcp_server.tools.query_knowledge_hub",
+        "modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub",
         "query_knowledge_hub",
         "execute_query_knowledge_hub",
         {
@@ -29,7 +31,7 @@ _TOOL_CASES = [
         id="query-knowledge-hub",
     ),
     pytest.param(
-        "src.mcp_server.tools.list_collections",
+        "modular_rag_mcp_server.mcp_server.tools.list_collections",
         "list_collections",
         "execute_list_collections",
         {"base_path": "/deprecated"},
@@ -37,7 +39,7 @@ _TOOL_CASES = [
         id="list-collections",
     ),
     pytest.param(
-        "src.mcp_server.tools.ingest_document_normal",
+        "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal",
         "ingest_document_normal",
         "execute_ingest_document_normal",
         {
@@ -53,7 +55,7 @@ _TOOL_CASES = [
         id="ingest-document-normal",
     ),
     pytest.param(
-        "src.mcp_server.tools.ingest_document_docling",
+        "modular_rag_mcp_server.mcp_server.tools.ingest_document_docling",
         "ingest_document_docling",
         "execute_ingest_document_docling",
         {
@@ -69,7 +71,7 @@ _TOOL_CASES = [
         id="ingest-document-docling",
     ),
     pytest.param(
-        "src.mcp_server.tools.ingest_document_mineru",
+        "modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru",
         "ingest_document_mineru",
         "execute_ingest_document_mineru",
         {
@@ -100,10 +102,17 @@ async def _wait_for_thread_event(
 
 
 def _run_cancellation_script(script: str) -> None:
+    env = os.environ.copy()
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        part for part in (str(source_root), existing_pythonpath) if part
+    )
     subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script)],
         check=True,
         timeout=2,
+        env=env,
     )
 
 
@@ -112,7 +121,7 @@ def test_run_sync_callable_propagates_inner_cancelled_error() -> None:
         """
         import asyncio
 
-        from src.mcp_server.tools.mcp_utils import run_sync_callable
+        from modular_rag_mcp_server.mcp_server.tools.mcp_utils import run_sync_callable
 
         inner = asyncio.CancelledError("inner")
 
@@ -139,7 +148,7 @@ def test_run_sync_callable_propagates_cancelled_executor_operation() -> None:
         import threading
         from concurrent.futures import ThreadPoolExecutor
 
-        from src.mcp_server.tools.mcp_utils import run_sync_callable
+        from modular_rag_mcp_server.mcp_server.tools.mcp_utils import run_sync_callable
 
         release = threading.Event()
         executor = ThreadPoolExecutor(max_workers=1)
@@ -238,7 +247,7 @@ def test_fastmcp_public_tool_offloads_blocking_executor(
 
 def test_query_tool_serializes_calls_on_one_worker_thread(monkeypatch) -> None:
     module = importlib.import_module(
-        "src.mcp_server.tools.query_knowledge_hub"
+        "modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub"
     )
     first_started = threading.Event()
     release_first = threading.Event()
@@ -283,7 +292,7 @@ def test_query_tool_serializes_calls_on_one_worker_thread(monkeypatch) -> None:
 
 def test_sync_and_async_query_share_the_same_worker_thread(monkeypatch) -> None:
     module = importlib.import_module(
-        "src.mcp_server.tools.query_knowledge_hub"
+        "modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub"
     )
     thread_ids: list[int] = []
 
@@ -371,7 +380,7 @@ def test_cancelled_wrapper_waits_for_sync_operation_to_finish(
 
 def test_cancelled_wrapper_preserves_sync_failure_as_cause(monkeypatch) -> None:
     module = importlib.import_module(
-        "src.mcp_server.tools.ingest_document_normal"
+        "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal"
     )
     started = threading.Event()
     release = threading.Event()

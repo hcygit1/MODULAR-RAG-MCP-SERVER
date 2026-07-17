@@ -5,17 +5,27 @@ VectorStore 契约测试
 """
 import pytest
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.vector_store.base_vector_store import (
-    BaseVectorStore,
-    VectorRecord,
-    QueryResult
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
-from src.libs.vector_store.vector_store_factory import VectorStoreFactory
-from src.libs.vector_store.fake_vector_store import FakeVectorStore
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
+    BaseVectorStore,
+    QueryResult,
+    VectorRecord,
+)
+from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore
+from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
 
 
 def test_factory_creates_fake_vector_store():

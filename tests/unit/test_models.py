@@ -4,9 +4,10 @@ Ingestion 数据模型单元测试
 验证 Document 和 Chunk 的数据结构、序列化和字段稳定性。
 """
 import json
+
 import pytest
 
-from src.ingestion.models import Document, Chunk
+from modular_rag_mcp_server.ingestion.models import Chunk, Document
 
 
 class TestDocument:

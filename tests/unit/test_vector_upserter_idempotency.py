@@ -7,12 +7,12 @@ VectorUpserter 幂等性测试
 - 同一 chunk.id 内容变更时覆盖更新
 - content_hash 存入 metadata
 """
-import pytest
-from unittest.mock import MagicMock
 
-from src.ingestion.models import Chunk
-from src.ingestion.storage.vector_upserter import VectorUpserter
-from src.libs.vector_store.base_vector_store import BaseVectorStore, VectorRecord
+import pytest
+
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.ingestion.storage.vector_upserter import VectorUpserter
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import BaseVectorStore, VectorRecord
 
 
 class MockVectorStore(BaseVectorStore):

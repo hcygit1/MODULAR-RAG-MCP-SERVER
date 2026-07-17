@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from src.core.trace.trace_context import TraceContext
-from src.observability.logger import (
+from modular_rag_mcp_server.core.trace.trace_context import TraceContext
+from modular_rag_mcp_server.observability.logger import (
     get_logger,
     get_trace_collector,
     init_trace_collector,

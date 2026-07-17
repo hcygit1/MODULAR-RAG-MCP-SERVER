@@ -5,21 +5,33 @@ Ingestion Pipeline 集成测试
 - integrity → load → split → transform → encode → store
 - 输出向量与 bm25 索引文件
 """
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
-from src.ingestion.pipeline import IngestionPipeline
-from src.core.settings import Settings, IngestionConfig, LLMConfig, VisionLLMConfig, EmbeddingConfig, VectorStoreConfig, RetrievalConfig, RerankConfig, EvaluationConfig, ObservabilityConfig, LoggingConfig, DashboardConfig
-from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.loader.file_integrity import (
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
+from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+from modular_rag_mcp_server.libs.loader.file_integrity import (
     FileIntegrityChecker,
     build_processing_profile,
 )
-from src.libs.vector_store.fake_vector_store import FakeVectorStore
-from src.ingestion.embedding.dense_encoder import DenseEncoder
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore
 
 
 def create_test_settings(temp_dir: str) -> Settings:
@@ -159,8 +171,7 @@ class TestIngestionPipelineIntegration:
     
     def test_pipeline_integrity_check_skips_processed_file(self, temp_dir, test_settings):
         """测试文件完整性检查能跳过已处理的文件"""
-        from src.ingestion.models import Document
-        from src.libs.loader.file_integrity import FileIntegrityChecker
+        from modular_rag_mcp_server.libs.loader.file_integrity import FileIntegrityChecker
         
         # 创建一个测试文件
         test_file = Path(temp_dir) / "test.txt"
@@ -174,7 +185,7 @@ class TestIngestionPipelineIntegration:
         # 创建 Pipeline（使用 Fake 组件）
         fake_embedding = FakeEmbedding(dimension=128)
         fake_vector_store = FakeVectorStore()
-        pipeline = IngestionPipeline(
+        _pipeline = IngestionPipeline(
             test_settings,
             embedding=fake_embedding,
             vector_store=fake_vector_store
@@ -224,7 +235,7 @@ class TestIngestionPipelineIntegration:
 
     def test_store_results_vector_upsert(self, temp_dir, test_settings):
         """向量写入成功（统一存储：chunk+vec+fts 由 VectorStore 单次完成）"""
-        from src.ingestion.models import Chunk
+        from modular_rag_mcp_server.ingestion.models import Chunk
 
         fake_embedding = FakeEmbedding(dimension=128)
         fake_vector_store = FakeVectorStore()

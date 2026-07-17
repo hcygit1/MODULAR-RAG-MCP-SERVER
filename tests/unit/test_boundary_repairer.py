@@ -1,8 +1,8 @@
 """BoundaryRepairer unit tests."""
 
-from src.core.settings import IngestionConfig
-from src.ingestion.models import Chunk
-from src.ingestion.transform.boundary_repairer import BoundaryRepairer
+from modular_rag_mcp_server.core.settings import IngestionConfig
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.ingestion.transform.boundary_repairer import BoundaryRepairer
 
 
 def _config() -> IngestionConfig:

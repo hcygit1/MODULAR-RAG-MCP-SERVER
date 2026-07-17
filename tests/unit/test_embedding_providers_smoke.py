@@ -4,16 +4,27 @@ Embedding Providers 冒烟测试
 使用 mock HTTP 测试各个 Embedding provider 的实现，不走真实网络。
 """
 import json
-from unittest.mock import patch, MagicMock
-import pytest
 import urllib.error
+from unittest.mock import MagicMock, patch
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.embedding.embedding_factory import EmbeddingFactory
-from src.libs.embedding.openai_embedding import OpenAIEmbedding
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.embedding.embedding_factory import EmbeddingFactory
+from modular_rag_mcp_server.libs.embedding.openai_embedding import OpenAIEmbedding
 
 
 def test_factory_creates_openai_embedding():

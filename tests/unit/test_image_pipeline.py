@@ -9,19 +9,27 @@ from pathlib import Path
 
 import pytest
 
-from src.ingestion.pipeline import IngestionPipeline
-from src.ingestion.models import Document
+from modular_rag_mcp_server.ingestion.models import Document
+from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
 
 MARKITDOWN_AVAILABLE = True  # Pipeline 不直接依赖 MarkItDown
-from src.core.settings import (
-    Settings, IngestionConfig, LLMConfig, VisionLLMConfig,
-    EmbeddingConfig, VectorStoreConfig, RetrievalConfig,
-    RerankConfig, EvaluationConfig, ObservabilityConfig,
-    LoggingConfig, DashboardConfig,
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
-from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.vector_store.fake_vector_store import FakeVectorStore
-from src.ingestion.storage.image_storage import ImageStorage
+from modular_rag_mcp_server.ingestion.storage.image_storage import ImageStorage
+from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore
 
 
 def _create_test_settings(temp_dir: str) -> Settings:

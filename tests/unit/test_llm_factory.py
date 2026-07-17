@@ -3,20 +3,30 @@ LLM Factory 测试
 
 测试 LLMFactory 的路由逻辑和错误处理。
 """
-import pytest
-from dataclasses import dataclass
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.llm.base_llm import BaseLLM
-from src.libs.llm.azure_llm import AzureLLM
-from src.libs.llm.deepseek_llm import DeepSeekLLM
-from src.libs.llm.llm_factory import LLMFactory
-from src.libs.llm.fake_llm import FakeLLM
-from src.libs.llm.ollama_llm import OllamaLLM
-from src.libs.llm.openai_llm import OpenAILLM
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.llm.azure_llm import AzureLLM
+from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
+from modular_rag_mcp_server.libs.llm.deepseek_llm import DeepSeekLLM
+from modular_rag_mcp_server.libs.llm.fake_llm import FakeLLM
+from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
+from modular_rag_mcp_server.libs.llm.ollama_llm import OllamaLLM
+from modular_rag_mcp_server.libs.llm.openai_llm import OpenAILLM
 
 
 def test_factory_creates_fake_llm():

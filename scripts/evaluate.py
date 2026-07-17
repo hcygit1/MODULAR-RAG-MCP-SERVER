@@ -49,7 +49,7 @@ class DenseOnlySearch:
         filters: Optional[Dict[str, Any]] = None,
         trace: Optional[Any] = None,
     ) -> List[Any]:
-        from src.core.trace.trace_context import TraceContext
+        from modular_rag_mcp_server.core.trace.trace_context import TraceContext
 
         k_dense = top_k_dense if top_k_dense is not None else top_k
         k_final = top_k_final if top_k_final is not None else top_k
@@ -92,15 +92,15 @@ def _build_pipeline(
     dense_only: bool = False,
 ):
     """根据 settings 构建 RetrievalPipeline（可选仅稠密检索）。"""
-    from src.libs.embedding.embedding_factory import EmbeddingFactory
-    from src.libs.vector_store.vector_store_factory import VectorStoreFactory
-    from src.libs.reranker.reranker_factory import RerankerFactory
-    from src.core.query_engine.dense_retriever import DenseRetriever
-    from src.core.query_engine.sparse_retriever import SparseRetriever
-    from src.core.query_engine.hybrid_search import HybridSearch
-    from src.core.query_engine.query_processor import QueryProcessor
-    from src.core.query_engine.reranker import RerankerOrchestrator
-    from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
+    from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+    from modular_rag_mcp_server.core.query_engine.hybrid_search import HybridSearch
+    from modular_rag_mcp_server.core.query_engine.query_processor import QueryProcessor
+    from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+    from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+    from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
+    from modular_rag_mcp_server.libs.embedding.embedding_factory import EmbeddingFactory
+    from modular_rag_mcp_server.libs.reranker.reranker_factory import RerankerFactory
+    from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
 
     embedding = EmbeddingFactory.create(settings)
     vector_store = VectorStoreFactory.create(settings)
@@ -167,7 +167,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default="config/settings.yaml",
+        default=None,
         help="配置文件路径",
     )
     parser.add_argument(
@@ -195,7 +195,7 @@ def main() -> None:
 
     # 加载配置
     try:
-        from src.core.settings import load_settings
+        from modular_rag_mcp_server.core.settings import load_settings
 
         settings = load_settings(args.config)
     except Exception as e:
@@ -249,7 +249,7 @@ def main() -> None:
             top_k=effective_top_k,
             collection_name=effective_coll,
         )
-        from src.core.response.response_builder import build_mcp_content
+        from modular_rag_mcp_server.core.response.response_builder import build_mcp_content
 
         mcp_content = build_mcp_content(
             results,
@@ -259,7 +259,7 @@ def main() -> None:
         return results, mcp_content
 
     # 构建评估器
-    from src.libs.evaluator.evaluator_factory import EvaluatorFactory
+    from modular_rag_mcp_server.libs.evaluator.evaluator_factory import EvaluatorFactory
 
     try:
         evaluators = EvaluatorFactory.create(settings)
@@ -269,11 +269,11 @@ def main() -> None:
 
     # 运行评估
     if args.e2e:
-        from src.observability.evaluation.e2e_runner import E2ERunner
+        from modular_rag_mcp_server.observability.evaluation.e2e_runner import E2ERunner
 
         runner = E2ERunner(rag_func=rag_func, l1_evaluators=evaluators)
     else:
-        from src.observability.evaluation.eval_runner import EvalRunner
+        from modular_rag_mcp_server.observability.evaluation.eval_runner import EvalRunner
 
         runner = EvalRunner(retrieve_func=retrieve_func, evaluators=evaluators)
 

@@ -5,8 +5,8 @@ SparseEncoder 契约测试
 """
 import pytest
 
-from src.ingestion.models import Chunk
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.ingestion.models import Chunk
 
 
 class TestSparseEncoderBasic:

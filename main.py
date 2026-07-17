@@ -1,56 +1,6 @@
 #!/usr/bin/env python3
-"""
-MCP Server 启动入口
-
-遵循 MCP 协议规范，通过 Stdio Transport 与 MCP Clients 通信。
-"""
-import sys
-import logging
-from pathlib import Path
-
-# 配置日志输出到 stderr（避免污染 stdout 的 MCP 消息）
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stderr,
-)
-
-logger = logging.getLogger(__name__)
-
-
-def main():
-    """MCP Server 主入口"""
-    logger.info("Starting Modular RAG MCP Server...")
-    
-    try:
-        # A3: 配置加载（可选，用于验证配置），支持 MODULAR_RAG_CONFIG_PATH 环境变量
-        from src.mcp_server.tools.config_utils import load_mcp_settings
-
-        settings = load_mcp_settings()
-        logger.info(f"配置加载成功: LLM provider={settings.llm.provider}, Embedding provider={settings.embedding.provider}")
-
-        # 初始化 TraceCollector，MCP 工具调用时写入 logs/traces.jsonl
-        if getattr(settings, "observability", None) and getattr(settings.observability, "logging", None):
-            log_file = getattr(settings.observability.logging, "log_file", "./logs/traces.jsonl")
-            from src.observability.logger import init_trace_collector
-            init_trace_collector(log_file)
-
-        # 启动 MCP Server（Stdio Transport，与 Copilot/Claude 对接）
-        from src.mcp_server.server import run_server
-
-        logger.info("MCP Server 启动中 (stdio transport)...")
-        run_server()
-        
-    except FileNotFoundError as e:
-        logger.error(f"配置文件未找到: {e}")
-        sys.exit(1)
-    except ValueError as e:
-        logger.error(f"配置校验失败: {e}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"启动失败: {e}", exc_info=True)
-        sys.exit(1)
-
+"""Compatibility wrapper for the installed console entry point."""
+from modular_rag_mcp_server.cli import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

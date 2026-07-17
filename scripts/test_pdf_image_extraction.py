@@ -12,12 +12,11 @@ import argparse
 import sys
 from pathlib import Path
 
-# 添加项目根目录到 path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-from src.libs.loader.pdf_loader import PdfLoader, PYMUPDF_AVAILABLE, MARKITDOWN_AVAILABLE
-from src.ingestion.models import Document
+from modular_rag_mcp_server.libs.loader.pdf_loader import (
+    MARKITDOWN_AVAILABLE,
+    PYMUPDF_AVAILABLE,
+    PdfLoader,
+)
 
 
 def run_test(pdf_path: str) -> None:

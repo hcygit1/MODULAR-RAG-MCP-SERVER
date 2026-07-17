@@ -2,8 +2,8 @@
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
-from src.ingestion.models import Document
-from src.mcp_server.tools.ingest_document_normal import (
+from modular_rag_mcp_server.ingestion.models import Document
+from modular_rag_mcp_server.mcp_server.tools.ingest_document_normal import (
     _parse_markdown,
     execute_ingest_document_normal,
 )
@@ -55,14 +55,14 @@ def test_markdown_image_ids_are_scoped_to_document(tmp_path: Path) -> None:
 
 
 @patch(
-    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.build_processing_profile",
     return_value="profile-normal",
     create=True,
 )
-@patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
-@patch("src.ingestion.pipeline.IngestionPipeline")
-@patch("src.libs.loader.pdf_loader.PdfLoader")
-@patch("src.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.load_mcp_settings")
+@patch("modular_rag_mcp_server.ingestion.pipeline.IngestionPipeline")
+@patch("modular_rag_mcp_server.libs.loader.pdf_loader.PdfLoader")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
 def test_execute_success(
     mock_integrity_cls: MagicMock,
     mock_loader_cls: MagicMock,
@@ -125,14 +125,14 @@ def test_execute_success(
 
 
 @patch(
-    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.build_processing_profile",
     return_value="profile-normal",
     create=True,
 )
-@patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
-@patch("src.ingestion.pipeline.IngestionPipeline")
-@patch("src.libs.loader.pdf_loader.PdfLoader")
-@patch("src.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.load_mcp_settings")
+@patch("modular_rag_mcp_server.ingestion.pipeline.IngestionPipeline")
+@patch("modular_rag_mcp_server.libs.loader.pdf_loader.PdfLoader")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
 def test_execute_uses_default_collection(
     mock_integrity_cls: MagicMock,
     mock_loader_cls: MagicMock,
@@ -178,12 +178,12 @@ def test_execute_uses_default_collection(
 
 
 @patch(
-    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.build_processing_profile",
     return_value="profile-normal",
     create=True,
 )
-@patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
-@patch("src.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.load_mcp_settings")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
 def test_execute_skip_when_unchanged(
     mock_integrity_cls: MagicMock,
     mock_load_settings: MagicMock,

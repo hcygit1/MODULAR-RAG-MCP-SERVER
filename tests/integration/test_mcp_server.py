@@ -6,21 +6,32 @@ MCP Server 集成测试
 E2：验证 query_knowledge_hub tool 返回 Markdown + citations。
 """
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
-import pytest
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _start_server_subprocess():
     """启动 MCP Server 子进程，返回 Popen 实例。"""
+    env = os.environ.copy()
+    source_root = str(PROJECT_ROOT / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        source_root
+        if not existing_pythonpath
+        else source_root + os.pathsep + existing_pythonpath
+    )
     proc = subprocess.Popen(
-        [sys.executable, "-m", "src.mcp_server.server"],
+        [sys.executable, "-m", "modular_rag_mcp_server.mcp_server.server"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        cwd=None,
+        cwd=PROJECT_ROOT,
+        env=env,
     )
     return proc
 
@@ -239,7 +250,7 @@ class TestMCPServerE2:
         self, retrieval_pipeline, indexed_fixtures
     ) -> None:
         """query_knowledge_hub 返回 content[0] 为 Markdown，structuredContent.citations 含 source/page/chunk_id/score"""
-        from src.mcp_server.tools.query_knowledge_hub import (
+        from modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub import (
             _execute_query_knowledge_hub_core,
             set_pipeline,
         )
@@ -276,16 +287,16 @@ class TestMCPServerE2:
         """当 chunk 含 image_refs 且图片在 SQLite 时，content 中应包含 type=image"""
         import base64
 
-        from src.core.query_engine.dense_retriever import DenseRetriever
-        from src.core.query_engine.hybrid_search import HybridSearch
-        from src.core.query_engine.query_processor import QueryProcessor
-        from src.core.query_engine.reranker import RerankerOrchestrator
-        from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
-        from src.core.query_engine.sparse_retriever import SparseRetriever
-        from src.ingestion.models import Chunk
-        from src.libs.embedding.fake_embedding import FakeEmbedding
-        from src.libs.reranker.none_reranker import NoneReranker
-        from src.mcp_server.tools.query_knowledge_hub import (
+        from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+        from modular_rag_mcp_server.core.query_engine.hybrid_search import HybridSearch
+        from modular_rag_mcp_server.core.query_engine.query_processor import QueryProcessor
+        from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+        from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+        from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
+        from modular_rag_mcp_server.ingestion.models import Chunk
+        from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+        from modular_rag_mcp_server.libs.reranker.none_reranker import NoneReranker
+        from modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub import (
             _execute_query_knowledge_hub_core,
             set_config_path,
             set_pipeline,
@@ -313,7 +324,7 @@ class TestMCPServerE2:
         )
         embedding = FakeEmbedding(dimension=16)
         vecs = embedding.embed([chunk_with_image.text])
-        from src.libs.vector_store.base_vector_store import VectorRecord
+        from modular_rag_mcp_server.libs.vector_store.base_vector_store import VectorRecord
 
         records = [
             VectorRecord(
@@ -337,7 +348,7 @@ class TestMCPServerE2:
             hybrid_search=hybrid,
             reranker=RerankerOrchestrator(backend=NoneReranker()),
         )
-        set_config_path("config/settings.yaml")
+        set_config_path(None)
         set_pipeline(pipeline)
 
         # Fixture 的 SQLite 连接在主线程创建，直接调用 core 保持线程亲和。
@@ -364,7 +375,9 @@ class TestMCPServerE6:
 
     def test_query_knowledge_hub_empty_query_returns_error(self) -> None:
         """空 query 返回 isError=True，errorType=INVALID_PARAMS"""
-        from src.mcp_server.tools.query_knowledge_hub import execute_query_knowledge_hub
+        from modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub import (
+            execute_query_knowledge_hub,
+        )
 
         result = execute_query_knowledge_hub({"query": ""})
         assert result["isError"] is True
@@ -377,7 +390,9 @@ class TestMCPServerE6:
 
     def test_error_response_has_unified_format(self) -> None:
         """错误响应统一包含 content[0].text、structuredContent.errorCode/errorType/message"""
-        from src.mcp_server.tools.query_knowledge_hub import execute_query_knowledge_hub
+        from modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub import (
+            execute_query_knowledge_hub,
+        )
 
         result = execute_query_knowledge_hub({"query": ""})
         assert result["isError"] is True

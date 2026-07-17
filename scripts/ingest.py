@@ -5,8 +5,8 @@
 支持离线批量处理文档，将文档转换为向量和索引存储。
 """
 import argparse
-import sys
 import logging
+import sys
 from pathlib import Path
 
 # 配置日志
@@ -59,8 +59,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/settings.yaml",
-        help="配置文件路径（默认: config/settings.yaml）"
+        default=None,
+        help="外部配置文件路径（默认使用包内置配置）"
     )
     
     args = parser.parse_args()
@@ -74,7 +74,7 @@ def main():
     
     # 加载配置
     try:
-        from src.core.settings import load_settings
+        from modular_rag_mcp_server.core.settings import load_settings
         settings = load_settings(args.config)
         logger.info(f"配置加载成功: LLM provider={settings.llm.provider}, Embedding provider={settings.embedding.provider}")
     except Exception as e:
@@ -83,7 +83,7 @@ def main():
     
     # 初始化 Pipeline
     try:
-        from src.ingestion.pipeline import IngestionPipeline
+        from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
         pipeline = IngestionPipeline(settings)
         logger.info("Pipeline 初始化成功")
     except Exception as e:
@@ -125,7 +125,7 @@ def main():
     error_count = 0
     
     # 导入 FileIntegrityChecker 用于检查文件是否会被跳过
-    from src.libs.loader.file_integrity import (
+    from modular_rag_mcp_server.libs.loader.file_integrity import (
         FileIntegrityChecker,
         build_processing_profile,
     )

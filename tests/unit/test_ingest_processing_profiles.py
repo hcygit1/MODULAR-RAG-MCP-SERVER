@@ -5,18 +5,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.core.settings import load_settings
-from src.ingestion.pipeline import IngestionPipeline
-from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.loader.file_integrity import build_processing_profile
-from src.libs.vector_store.fake_vector_store import FakeVectorStore
-from src.mcp_server.tools.ingest_document_docling import (
+from modular_rag_mcp_server.core.settings import load_settings
+from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
+from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+from modular_rag_mcp_server.libs.loader.file_integrity import build_processing_profile
+from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore
+from modular_rag_mcp_server.mcp_server.tools.ingest_document_docling import (
     execute_ingest_document_docling,
 )
-from src.mcp_server.tools.ingest_document_mineru import (
+from modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru import (
     execute_ingest_document_mineru,
 )
-from src.mcp_server.tools.ingest_document_normal import (
+from modular_rag_mcp_server.mcp_server.tools.ingest_document_normal import (
     execute_ingest_document_normal,
 )
 
@@ -29,11 +29,11 @@ from src.mcp_server.tools.ingest_document_normal import (
     ],
 )
 @patch(
-    "src.mcp_server.tools.ingest_document_normal.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.build_processing_profile",
     return_value="profile-normal",
 )
-@patch("src.mcp_server.tools.ingest_document_normal.load_mcp_settings")
-@patch("src.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.load_mcp_settings")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_normal.FileIntegrityChecker")
 def test_normal_integrity_uses_actual_loader_type(
     mock_integrity_cls: MagicMock,
     mock_load_settings: MagicMock,
@@ -61,12 +61,12 @@ def test_normal_integrity_uses_actual_loader_type(
 
 
 @patch(
-    "src.mcp_server.tools.ingest_document_docling.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_docling.build_processing_profile",
     return_value="profile-docling",
     create=True,
 )
-@patch("src.mcp_server.tools.ingest_document_docling.load_mcp_settings")
-@patch("src.mcp_server.tools.ingest_document_docling.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_docling.load_mcp_settings")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_docling.FileIntegrityChecker")
 def test_docling_integrity_is_scoped_by_processing_profile(
     mock_integrity_cls: MagicMock,
     mock_load_settings: MagicMock,
@@ -94,12 +94,12 @@ def test_docling_integrity_is_scoped_by_processing_profile(
 
 
 @patch(
-    "src.mcp_server.tools.ingest_document_mineru.build_processing_profile",
+    "modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru.build_processing_profile",
     return_value="profile-mineru",
     create=True,
 )
-@patch("src.mcp_server.tools.ingest_document_mineru.load_mcp_settings")
-@patch("src.mcp_server.tools.ingest_document_mineru.FileIntegrityChecker")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru.load_mcp_settings")
+@patch("modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru.FileIntegrityChecker")
 def test_mineru_integrity_is_scoped_by_processing_profile(
     mock_integrity_cls: MagicMock,
     mock_load_settings: MagicMock,
@@ -131,7 +131,7 @@ def test_pipeline_integrity_is_scoped_by_pdf_processing_profile(
 ) -> None:
     file_path = tmp_path / "document.pdf"
     file_path.write_bytes(b"%PDF-1.4 fake")
-    settings = load_settings("config/settings.yaml")
+    settings = load_settings()
     settings.ingestion.enable_llm_refinement = False
     settings.ingestion.enable_metadata_enrichment = False
     settings.ingestion.enable_image_captioning = False

@@ -1,12 +1,12 @@
 from unittest.mock import ANY, Mock, call
 
-from src.core.trace.trace_context import TraceContext
-from src.ingestion.document_chunk_builder import DocumentChunkBuilder
-from src.ingestion.embedding.encoding_runner import EncodingRunner
-from src.ingestion.models import Chunk, Document
-from src.ingestion.pipeline import IngestionPipeline
-from src.ingestion.storage.storage_coordinator import StorageCoordinator
-from src.ingestion.transform.transform_runner import TransformRunner
+from modular_rag_mcp_server.core.trace.trace_context import TraceContext
+from modular_rag_mcp_server.ingestion.document_chunk_builder import DocumentChunkBuilder
+from modular_rag_mcp_server.ingestion.embedding.encoding_runner import EncodingRunner
+from modular_rag_mcp_server.ingestion.models import Chunk, Document
+from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
+from modular_rag_mcp_server.ingestion.storage.storage_coordinator import StorageCoordinator
+from modular_rag_mcp_server.ingestion.transform.transform_runner import TransformRunner
 
 
 def test_document_chunk_builder_preserves_structure_and_crops_image_assets():

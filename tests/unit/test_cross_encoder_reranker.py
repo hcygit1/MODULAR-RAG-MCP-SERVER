@@ -8,10 +8,10 @@ import time
 
 import pytest
 
-import src.libs.reranker.cross_encoder_reranker as cross_encoder_module
-from src.core.settings import RerankConfig
-from src.libs.reranker.cross_encoder_reranker import CrossEncoderReranker
-from src.libs.vector_store.base_vector_store import QueryResult
+import modular_rag_mcp_server.libs.reranker.cross_encoder_reranker as cross_encoder_module
+from modular_rag_mcp_server.core.settings import RerankConfig
+from modular_rag_mcp_server.libs.reranker.cross_encoder_reranker import CrossEncoderReranker
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 def _wait_until(predicate, timeout: float = 1.0) -> bool:
@@ -400,7 +400,7 @@ def test_cross_encoder_submit_cleans_up_and_reraises_base_exception(monkeypatch)
             shutdown_called = True
 
     monkeypatch.setattr(
-        "src.libs.reranker.cross_encoder_reranker.ThreadPoolExecutor",
+        "modular_rag_mcp_server.libs.reranker.cross_encoder_reranker.ThreadPoolExecutor",
         InterruptingExecutor,
     )
     config = RerankConfig(

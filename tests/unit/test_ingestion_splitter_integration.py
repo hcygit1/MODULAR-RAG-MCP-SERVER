@@ -4,14 +4,23 @@ Ingestion Pipeline 与 Splitter 集成测试
 验证 Pipeline 中 Splitter 的集成是否正确，配置切换是否生效。
 """
 import pytest
-from src.ingestion.models import Document
-from src.ingestion.pipeline import IngestionPipeline
-from src.core.settings import (
-    Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig,
-    VectorStoreConfig, RetrievalConfig, RerankConfig,
-    EvaluationConfig, ObservabilityConfig, IngestionConfig,
-    LoggingConfig, DashboardConfig
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
+from modular_rag_mcp_server.ingestion.models import Document
+from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
 
 
 def _create_test_settings(
@@ -119,7 +128,7 @@ def test_split_document_basic():
     
     assert len(chunks) > 0
     # 验证所有 chunk 都是 Chunk 类型
-    from src.ingestion.models import Chunk
+    from modular_rag_mcp_server.ingestion.models import Chunk
     assert all(isinstance(chunk, Chunk) for chunk in chunks)
     
     # 验证所有 chunk 的文本加起来应该等于或接近原文
@@ -267,13 +276,10 @@ def test_split_document_position_info():
 
 def test_split_document_empty_text():
     """测试空文本时抛出错误"""
-    settings = _create_test_settings()
-    pipeline = IngestionPipeline(settings)
-    
     # Document 模型在初始化时就会验证 text 不能为空
     # 所以我们需要在创建 Document 时就捕获错误
     with pytest.raises(ValueError, match="不能为空"):
-        document = Document(
+        Document(
             id="test_doc_6",
             text="",
             metadata={}

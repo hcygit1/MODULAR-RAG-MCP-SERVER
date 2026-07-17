@@ -3,8 +3,6 @@ PDF Loader 图片提取单元测试
 
 测试 PdfLoader 的图片提取、页面映射和占位符插入功能。
 """
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -31,6 +29,7 @@ def _create_pdf_with_image(tmp_path: Path) -> str:
         pytest.skip("PyMuPDF 未安装")
     
     import base64
+
     import fitz
     
     # 有效的 1x1 像素 PNG（base64 解码）
@@ -69,7 +68,7 @@ class TestPdfLoaderImageExtraction:
     
     def test_extract_images_from_pdf_with_images(self, tmp_path):
         """测试有图片的 PDF 能正确提取图片"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_with_image(tmp_path)
         loader = PdfLoader()
@@ -91,7 +90,7 @@ class TestPdfLoaderImageExtraction:
     
     def test_extract_images_from_pdf_without_images(self, tmp_path):
         """测试无图片的 PDF 不报错且 metadata 为空或合理"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_without_image(tmp_path)
         loader = PdfLoader()
@@ -104,7 +103,7 @@ class TestPdfLoaderImageExtraction:
     
     def test_image_id_format(self, tmp_path):
         """测试 image_id 格式正确"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_with_image(tmp_path)
         loader = PdfLoader()
@@ -125,7 +124,7 @@ class TestPdfLoaderPlaceholderInsertion:
     
     def test_placeholder_inserted_when_images_extracted(self, tmp_path):
         """测试有图片时 Markdown 中包含占位符"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_with_image(tmp_path)
         loader = PdfLoader()
@@ -143,7 +142,7 @@ class TestPdfLoaderPlaceholderInsertion:
     
     def test_placeholder_format(self, tmp_path):
         """测试占位符格式为 [IMAGE: {image_id}]"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_with_image(tmp_path)
         loader = PdfLoader()
@@ -163,7 +162,7 @@ class TestPdfLoaderPageMapping:
     
     def test_map_pages_to_markdown_returns_dict(self, tmp_path):
         """测试 _map_pages_to_markdown 返回正确格式"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         if not PYMUPDF_AVAILABLE:
             pytest.skip("PyMuPDF 未安装")
@@ -187,7 +186,7 @@ class TestPdfLoaderFallback:
     
     def test_loader_works_when_pymupdf_available(self, tmp_path):
         """PyMuPDF 可用时能正常加载"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         pdf_path = _create_pdf_with_image(tmp_path)
         loader = PdfLoader()
@@ -201,7 +200,7 @@ class TestPdfLoaderImageMetadata:
     
     def test_image_metadata_contains_required_fields(self, tmp_path):
         """测试图片元数据包含必要字段"""
-        from src.libs.loader.pdf_loader import PdfLoader
+        from modular_rag_mcp_server.libs.loader.pdf_loader import PdfLoader
         
         if not PYMUPDF_AVAILABLE:
             pytest.skip("PyMuPDF 未安装")

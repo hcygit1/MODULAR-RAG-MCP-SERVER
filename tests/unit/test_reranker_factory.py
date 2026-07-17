@@ -5,14 +5,24 @@ Reranker Factory 测试
 """
 import pytest
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.reranker.base_reranker import BaseReranker
-from src.libs.reranker.reranker_factory import RerankerFactory
-from src.libs.reranker.none_reranker import NoneReranker
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.reranker.base_reranker import BaseReranker
+from modular_rag_mcp_server.libs.reranker.none_reranker import NoneReranker
+from modular_rag_mcp_server.libs.reranker.reranker_factory import RerankerFactory
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 def test_factory_creates_none_reranker():
@@ -120,7 +130,7 @@ def test_factory_unsupported_backend():
 
 def test_factory_routes_implemented_backends(monkeypatch):
     """测试已实现 backend 的工厂路由，不加载真实模型或调用 LLM。"""
-    from src.libs.reranker import cross_encoder_reranker, llm_reranker
+    from modular_rag_mcp_server.libs.reranker import cross_encoder_reranker, llm_reranker
 
     cross_encoder = object()
     llm = object()
@@ -168,7 +178,7 @@ def test_factory_backend_case_insensitive(monkeypatch):
     reranker = RerankerFactory.create(settings_upper)
     assert isinstance(reranker, NoneReranker)
     
-    from src.libs.reranker import cross_encoder_reranker
+    from modular_rag_mcp_server.libs.reranker import cross_encoder_reranker
 
     cross_encoder = object()
     monkeypatch.setattr(

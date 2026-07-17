@@ -3,16 +3,14 @@ FTS5BM25Indexer 单元测试
 
 验证 FTS5 全文索引的 build、merge、query、index_exists。
 """
-import json
-import sqlite3
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from src.ingestion.models import Chunk
-from src.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
 
 
 @pytest.fixture

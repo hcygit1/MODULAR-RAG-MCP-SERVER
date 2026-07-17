@@ -6,8 +6,8 @@ HeadingSplitter 单元测试
 """
 import pytest
 
-from src.core.settings import IngestionConfig
-from src.libs.splitter.heading_splitter import HeadingSplitter
+from modular_rag_mcp_server.core.settings import IngestionConfig
+from modular_rag_mcp_server.libs.splitter.heading_splitter import HeadingSplitter
 
 
 def _make_splitter(parent_level=2, split_level=3) -> HeadingSplitter:
@@ -56,7 +56,6 @@ def test_mode_a_parent_ids():
         by_parent.setdefault(pid, []).append(meta["heading_text"])
 
     # 宫保鸡丁的节都应在同一个 parent_id 下
-    parent_headings = list(by_parent.values())
     dish1_chunks = [v for v in by_parent.values() if "宫保鸡丁" in v]
     dish2_chunks = [v for v in by_parent.values() if "鱼香肉丝" in v]
     assert len(dish1_chunks) == 1, "宫保鸡丁的子块应属于同一父"

@@ -6,13 +6,14 @@ ImageStorage 契约测试
 - 查找 image_id 返回正确路径
 """
 import json
-import pytest
-import tempfile
 import shutil
-from pathlib import Path
+import tempfile
 from base64 import b64encode
+from pathlib import Path
 
-from src.ingestion.storage.image_storage import ImageStorage
+import pytest
+
+from modular_rag_mcp_server.ingestion.storage.image_storage import ImageStorage
 
 
 class TestImageStorageBasic:

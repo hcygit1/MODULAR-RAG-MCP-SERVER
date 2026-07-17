@@ -1,8 +1,7 @@
 """Response builder 单元测试"""
-import pytest
 
-from src.core.response.response_builder import ResponseBuilder, build_mcp_content
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.response.response_builder import ResponseBuilder, build_mcp_content
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 def test_build_mcp_content_empty() -> None:

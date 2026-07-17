@@ -5,14 +5,15 @@ from unittest.mock import MagicMock
 
 import yaml
 
-from src.core.query_engine.query_processor import ProcessedQuery
-from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
-from src.core.settings import RetrievalConfig, load_settings
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.query_engine.query_processor import ProcessedQuery
+from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+from modular_rag_mcp_server.core.settings import RetrievalConfig, load_settings
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.package_resources import read_resource_text
 
 
 def test_loads_parent_candidate_limits_from_yaml(tmp_path: Path) -> None:
-    config = yaml.safe_load(Path("config/settings.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load(read_resource_text("settings.yaml"))
     config["retrieval"]["top_k_dense_parent"] = 80
     config["retrieval"]["top_k_sparse_parent"] = 60
     config_path = tmp_path / "settings.yaml"

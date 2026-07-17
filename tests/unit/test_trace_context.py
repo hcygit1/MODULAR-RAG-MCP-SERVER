@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from src.core.trace.trace_context import StageRecord, TraceContext
-from src.core.trace.trace_collector import TraceCollector
-
+from modular_rag_mcp_server.core.trace.trace_collector import TraceCollector
+from modular_rag_mcp_server.core.trace.trace_context import StageRecord, TraceContext
 
 # ── TraceContext 基础 ──────────────────────────────────────────────
 

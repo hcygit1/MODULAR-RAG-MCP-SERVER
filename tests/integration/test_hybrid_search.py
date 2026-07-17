@@ -9,15 +9,15 @@ import os
 
 import pytest
 
-from src.core.query_engine.dense_retriever import DenseRetriever
-from src.core.query_engine.hybrid_search import HybridSearch
-from src.core.query_engine.query_processor import QueryProcessor
-from src.core.query_engine.reranker import RerankerOrchestrator
-from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
-from src.core.query_engine.sparse_retriever import SparseRetriever
-from src.core.trace.trace_context import TraceContext
-from src.libs.reranker.none_reranker import NoneReranker
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+from modular_rag_mcp_server.core.query_engine.hybrid_search import HybridSearch
+from modular_rag_mcp_server.core.query_engine.query_processor import QueryProcessor
+from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
+from modular_rag_mcp_server.core.trace.trace_context import TraceContext
+from modular_rag_mcp_server.libs.reranker.none_reranker import NoneReranker
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 class TestHybridSearchBasic:
@@ -289,7 +289,7 @@ class TestHybridSearchTrace:
         hybrid = HybridSearch(dense_retriever=dense, sparse_retriever=sparse)
 
         trace = TraceContext(operation="retrieval")
-        results = hybrid.search(
+        hybrid.search(
             query="python RAG",
             top_k=5,
             collection_name=fixtures["collection_name"],
@@ -326,7 +326,7 @@ class TestHybridSearchTrace:
             hybrid_search=hybrid,
             reranker=reranker,
         )
-        results = pipeline.retrieve(
+        pipeline.retrieve(
             query="python RAG",
             top_k=5,
             collection_name=fixtures["collection_name"],
@@ -422,7 +422,7 @@ class TestGoldenSetSmoke:
         """EvalRunner + RetrievalPipeline 端到端产出指标"""
         import json
 
-        from src.observability.evaluation.eval_runner import EvalRunner
+        from modular_rag_mcp_server.observability.evaluation.eval_runner import EvalRunner
 
         fixtures = indexed_fixtures
 

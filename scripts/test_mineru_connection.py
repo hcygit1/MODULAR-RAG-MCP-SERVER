@@ -2,14 +2,10 @@
 """
 测试 MinerU 云端 API 连接与密钥有效性
 
-从 config/settings.yaml（含 settings.local.yaml 合并）读取 mineru.api_token，
+从内置默认配置（含可选 config/settings.local.yaml 覆盖）读取 mineru.api_token，
 调用 MinerU API 申请上传链接，验证密钥是否正确。
 """
 import sys
-from pathlib import Path
-
-# 项目根目录
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     import requests
@@ -19,11 +15,11 @@ except ImportError:
 
 
 def main():
-    from src.core.settings import load_settings
+    from modular_rag_mcp_server.core.settings import load_settings
 
-    print("正在加载配置 (config/settings.yaml + settings.local.yaml)...")
+    print("正在加载内置配置和可选 config/settings.local.yaml...")
     try:
-        settings = load_settings("config/settings.yaml")
+        settings = load_settings()
     except Exception as e:
         print(f"❌ 加载配置失败: {e}")
         sys.exit(1)
@@ -95,7 +91,7 @@ def main():
 
     print("✅ 连接成功！密钥有效。")
     print(f"   batch_id: {batch_id}")
-    print(f"   已获取上传链接，可正常使用 ingest_document_mineru 工具")
+    print("   已获取上传链接，可正常使用 ingest_document_mineru 工具")
 
 
 if __name__ == "__main__":

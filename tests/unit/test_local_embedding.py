@@ -5,12 +5,22 @@ Local Embedding 测试
 """
 import pytest
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.embedding.embedding_factory import EmbeddingFactory
-from src.libs.embedding.local_embedding import LocalEmbedding
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.embedding.embedding_factory import EmbeddingFactory
+from modular_rag_mcp_server.libs.embedding.local_embedding import LocalEmbedding
 
 
 def test_factory_creates_local_embedding():

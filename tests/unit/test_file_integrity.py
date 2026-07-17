@@ -3,19 +3,20 @@
 
 验证 SHA256 计算、跳过判断和成功标记功能。
 """
-import tempfile
 import os
 import sqlite3
-import pytest
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.libs.loader.file_integrity import (
+import pytest
+
+from modular_rag_mcp_server.libs.loader.file_integrity import (
     FileIntegrityChecker,
     build_processing_profile,
     compute_sha256,
+    mark_success,
     should_skip,
-    mark_success
 )
 
 

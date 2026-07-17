@@ -4,25 +4,31 @@ Chroma Store 集成测试
 测试 Chroma Store 的完整 roundtrip：upsert → query。
 标记为 integration 测试，允许跳过。
 """
-import pytest
-import os
+import importlib.util
 import shutil
 import tempfile
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.vector_store.vector_store_factory import VectorStoreFactory
-from src.libs.vector_store.chroma_store import ChromaStore
-from src.libs.vector_store.base_vector_store import VectorRecord, QueryResult
+import pytest
 
-# 检查 ChromaDB 是否可用
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import VectorRecord
+from modular_rag_mcp_server.libs.vector_store.chroma_store import ChromaStore
+from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
+
+CHROMADB_AVAILABLE = importlib.util.find_spec("chromadb") is not None
 
 
 @pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB 未安装")
@@ -400,7 +406,7 @@ def test_chroma_store_not_installed():
         pytest.skip("ChromaDB 已安装，跳过此测试")
     
     # 临时模拟 ChromaDB 未安装
-    import src.libs.vector_store.chroma_store as cs_module
+    import modular_rag_mcp_server.libs.vector_store.chroma_store as cs_module
     original_available = cs_module.CHROMADB_AVAILABLE
     cs_module.CHROMADB_AVAILABLE = False
     

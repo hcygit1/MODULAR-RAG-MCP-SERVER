@@ -5,8 +5,8 @@ RRF Fusion 单元测试
 """
 import pytest
 
-from src.core.query_engine.fusion import fuse_rrf
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.query_engine.fusion import fuse_rrf
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 class TestFusionRRFBasic:

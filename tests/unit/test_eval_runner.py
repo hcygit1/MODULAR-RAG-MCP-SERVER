@@ -4,20 +4,15 @@ EvalRunner 单元测试
 验证 eval_runner 的核心流程：加载测试集、调用检索、计算指标、聚合报告。
 """
 import json
-import tempfile
 from pathlib import Path
 from typing import List, Optional
 
 import pytest
 
-from src.observability.evaluation.eval_runner import (
-    CaseResult,
-    EvalReport,
+from modular_rag_mcp_server.observability.evaluation.eval_runner import (
     EvalRunner,
-    GoldenCase,
     load_golden_test_set,
 )
-
 
 # ── 辅助工厂 ──────────────────────────────────────────────────────
 

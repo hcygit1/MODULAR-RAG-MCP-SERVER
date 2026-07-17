@@ -1,12 +1,14 @@
 """MinerUCloudClient 单元测试（Mock HTTP）"""
-import json
 import zipfile
 from io import BytesIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.libs.loader.mineru_cloud_client import MinerUCloudClient, MinerURawResult
+from modular_rag_mcp_server.libs.loader.mineru_cloud_client import (
+    MinerUCloudClient,
+    MinerURawResult,
+)
 
 
 @pytest.fixture
@@ -50,7 +52,7 @@ def _make_fake_zip_with_md(md_content: str = "# Test\n\nContent.") -> bytes:
     return buf.getvalue()
 
 
-@patch("src.libs.loader.mineru_cloud_client.requests")
+@patch("modular_rag_mcp_server.libs.loader.mineru_cloud_client.requests")
 def test_upload_and_parse_success(mock_requests, mock_batch_response, mock_extract_response_done, tmp_path):
     """完整流程 Mock 成功"""
     pdf_path = tmp_path / "test.pdf"

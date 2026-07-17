@@ -7,13 +7,11 @@ import base64
 import sqlite3
 from pathlib import Path
 
-import pytest
-
-from src.core.response.multimodal_assembler import (
-    assemble_content,
+from modular_rag_mcp_server.core.response.multimodal_assembler import (
     _image_refs_to_content_items,
+    assemble_content,
 )
-from src.core.response.response_builder import build_mcp_content
+from modular_rag_mcp_server.core.response.response_builder import build_mcp_content
 
 
 def test_image_refs_to_content_items_sqlite(tmp_path: Path) -> None:
@@ -51,7 +49,7 @@ def test_image_refs_to_content_items_sqlite(tmp_path: Path) -> None:
 
 def test_assemble_content_no_images() -> None:
     """无 image_refs 时仅返回文本"""
-    from src.libs.vector_store.base_vector_store import QueryResult
+    from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
     results = [
         QueryResult(id="c1", score=0.9, text="hello", metadata={}),
@@ -64,7 +62,7 @@ def test_assemble_content_no_images() -> None:
 
 def test_assemble_content_no_sqlite_path() -> None:
     """sqlite_path 为空时即使有 image_refs 也不加载图片"""
-    from src.libs.vector_store.base_vector_store import QueryResult
+    from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
     results = [
         QueryResult(id="c1", score=0.9, text="text", metadata={"image_refs": ["img_1"]}),
@@ -76,7 +74,7 @@ def test_assemble_content_no_sqlite_path() -> None:
 
 def test_assemble_content_sqlite(tmp_path: Path) -> None:
     """sqlite_path 时从 images 表加载图片"""
-    from src.libs.vector_store.base_vector_store import QueryResult
+    from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
     db_path = tmp_path / "rag.sqlite"
     conn = sqlite3.connect(str(db_path))
@@ -112,7 +110,7 @@ def test_assemble_content_sqlite(tmp_path: Path) -> None:
 
 def test_assemble_content_does_not_guess_collection(tmp_path: Path) -> None:
     """collection 缺失时不得仅按 image id 加载任意集合的图片。"""
-    from src.libs.vector_store.base_vector_store import QueryResult
+    from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
     db_path = tmp_path / "rag.sqlite"
     conn = sqlite3.connect(str(db_path))

@@ -1,9 +1,8 @@
 """MinerUResultAdapter 单元测试"""
-import pytest
 
-from src.ingestion.models import Document
-from src.libs.loader.mineru_cloud_client import MinerURawResult
-from src.libs.loader.mineru_result_adapter import to_document
+from modular_rag_mcp_server.ingestion.models import Document
+from modular_rag_mcp_server.libs.loader.mineru_cloud_client import MinerURawResult
+from modular_rag_mcp_server.libs.loader.mineru_result_adapter import to_document
 
 
 def test_to_document_basic():

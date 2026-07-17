@@ -4,16 +4,27 @@ Ollama LLM 测试
 使用 mock HTTP 测试 Ollama LLM 实现，不走真实网络。
 """
 import json
-from unittest.mock import patch, MagicMock
-import pytest
 import urllib.error
+from unittest.mock import MagicMock, patch
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.llm.llm_factory import LLMFactory
-from src.libs.llm.ollama_llm import OllamaLLM
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
+from modular_rag_mcp_server.libs.llm.ollama_llm import OllamaLLM
 
 
 def test_factory_creates_ollama_llm():

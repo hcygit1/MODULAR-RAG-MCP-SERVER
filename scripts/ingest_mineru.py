@@ -5,11 +5,9 @@
 与 ingest_document_mineru MCP 工具等价，可直接从命令行调用。
 """
 import argparse
-import sys
 import logging
+import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,7 +36,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/settings.yaml",
+        default=None,
         help="配置文件路径",
     )
     args = parser.parse_args()
@@ -48,10 +46,10 @@ def main():
         logger.error("文件不存在: %s", file_path)
         sys.exit(1)
 
-    from src.core.settings import load_settings
-    from src.libs.loader.mineru_cloud_client import MinerUCloudClient
-    from src.libs.loader.mineru_result_adapter import to_document
-    from src.ingestion.pipeline import IngestionPipeline
+    from modular_rag_mcp_server.core.settings import load_settings
+    from modular_rag_mcp_server.ingestion.pipeline import IngestionPipeline
+    from modular_rag_mcp_server.libs.loader.mineru_cloud_client import MinerUCloudClient
+    from modular_rag_mcp_server.libs.loader.mineru_result_adapter import to_document
 
     settings = load_settings(args.config)
     collection_name = (args.collection or "").strip() or settings.vector_store.collection_name

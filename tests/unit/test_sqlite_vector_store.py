@@ -1,20 +1,18 @@
 """
 SQLite VectorStore 单元测试
 """
-import tempfile
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-from src.core.settings import VectorStoreConfig
-from src.libs.vector_store.base_vector_store import (
+from modular_rag_mcp_server.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
     BaseVectorStore,
     VectorRecord,
-    QueryResult,
 )
-from src.libs.vector_store.sqlite_store import SQLiteVectorStore
-from src.libs.vector_store.vector_store_factory import VectorStoreFactory
+from modular_rag_mcp_server.libs.vector_store.sqlite_store import SQLiteVectorStore
+from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
 
 
 def _make_config(tmp_path: Path, dim: int = 4) -> VectorStoreConfig:
@@ -309,7 +307,7 @@ def test_sqlite_store_write_fts_upsert_and_delete(tmp_path):
 
 def test_sqlite_store_upsert_with_images(tmp_path):
     """Phase 4: chunks_for_images 时同期写入 images 表"""
-    from src.ingestion.models import Chunk
+    from modular_rag_mcp_server.ingestion.models import Chunk
 
     config = _make_config(tmp_path, dim=4)
     store = SQLiteVectorStore(config, write_fts=True)
@@ -345,7 +343,7 @@ def test_sqlite_store_upsert_with_images(tmp_path):
 
 def test_sqlite_store_delete_orphan_images(tmp_path):
     """Phase 4: 删除 chunk 时移除不再被引用的图片"""
-    from src.ingestion.models import Chunk
+    from modular_rag_mcp_server.ingestion.models import Chunk
 
     config = _make_config(tmp_path, dim=4)
     store = SQLiteVectorStore(config, write_fts=True)
@@ -376,10 +374,20 @@ def test_sqlite_store_delete_orphan_images(tmp_path):
 
 def test_factory_creates_sqlite_store(tmp_path):
     """当 backend=sqlite 时，工厂应返回 SQLiteVectorStore"""
-    from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-    from src.core.settings import RetrievalConfig, RerankConfig, EvaluationConfig
-    from src.core.settings import ObservabilityConfig, IngestionConfig, MinerUConfig
-    from src.core.settings import LoggingConfig, DashboardConfig
+    from modular_rag_mcp_server.core.settings import (
+        DashboardConfig,
+        EmbeddingConfig,
+        EvaluationConfig,
+        IngestionConfig,
+        LLMConfig,
+        LoggingConfig,
+        MinerUConfig,
+        ObservabilityConfig,
+        RerankConfig,
+        RetrievalConfig,
+        Settings,
+        VisionLLMConfig,
+    )
 
     config = VectorStoreConfig(
         backend="sqlite",

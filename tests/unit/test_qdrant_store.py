@@ -3,15 +3,15 @@ Qdrant VectorStore 单元测试
 
 测试 QdrantStore 的 upsert、query 及复杂 metadata（list、dict）支持。
 """
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from src.libs.vector_store.qdrant_store import QdrantStore, QDRANT_AVAILABLE
-from src.libs.vector_store.base_vector_store import VectorRecord, QueryResult
-from src.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult, VectorRecord
+from modular_rag_mcp_server.libs.vector_store.qdrant_store import QDRANT_AVAILABLE, QdrantStore
 
 
 @pytest.mark.skipif(not QDRANT_AVAILABLE, reason="qdrant-client 未安装")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.libs.loader import file_integrity
+from modular_rag_mcp_server.libs.loader import file_integrity
 
 
 @pytest.fixture(autouse=True)

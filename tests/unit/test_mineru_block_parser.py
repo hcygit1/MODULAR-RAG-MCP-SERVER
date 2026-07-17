@@ -1,7 +1,7 @@
 """MinerU block parser tests."""
 
-from src.libs.loader.mineru_block_parser import to_chunks
-from src.libs.loader.mineru_cloud_client import MinerURawResult
+from modular_rag_mcp_server.libs.loader.mineru_block_parser import to_chunks
+from modular_rag_mcp_server.libs.loader.mineru_cloud_client import MinerURawResult
 
 
 def test_mineru_content_list_table_keeps_html_and_repeats_header() -> None:

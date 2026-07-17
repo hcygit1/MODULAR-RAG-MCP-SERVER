@@ -3,14 +3,14 @@ Loader PDF 契约测试
 
 验证 BaseLoader 接口和 PdfLoader 实现是否符合规范要求。
 """
-import tempfile
 import os
-import pytest
-from pathlib import Path
+import tempfile
 
-from src.libs.loader.base_loader import BaseLoader
-from src.libs.loader.pdf_loader import PdfLoader, MARKITDOWN_AVAILABLE
-from src.ingestion.models import Document
+import pytest
+
+from modular_rag_mcp_server.ingestion.models import Document
+from modular_rag_mcp_server.libs.loader.base_loader import BaseLoader
+from modular_rag_mcp_server.libs.loader.pdf_loader import MARKITDOWN_AVAILABLE, PdfLoader
 
 
 @pytest.mark.skipif(not MARKITDOWN_AVAILABLE, reason="MarkItDown 未安装")
@@ -69,7 +69,7 @@ class TestPdfLoader:
     
     def test_pdf_loader_returns_document(self):
         """测试 PdfLoader.load() 返回 Document 对象"""
-        loader = PdfLoader()
+        _loader = PdfLoader()
         
         # 创建一个最小的 PDF 文件（实际测试中需要真实的 PDF）
         # 这里我们测试接口契约，实际 PDF 解析需要真实文件
@@ -81,7 +81,7 @@ class TestPdfLoader:
     
     def test_pdf_loader_document_has_required_fields(self):
         """测试返回的 Document 包含必需字段"""
-        loader = PdfLoader()
+        _loader = PdfLoader()
         
         # 这个测试需要真实的 PDF 文件
         # 验证 Document 包含：

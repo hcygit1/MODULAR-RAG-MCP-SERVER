@@ -7,17 +7,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.core.query_engine.dense_retriever import DenseRetriever
-from src.core.query_engine.hybrid_search import HybridSearch
-from src.core.query_engine.query_processor import ProcessedQuery, QueryProcessor
-from src.core.query_engine.reranker import RerankerOrchestrator
-from src.core.query_engine.retrieval_pipeline import RetrievalPipeline
-from src.core.query_engine.sparse_retriever import SparseRetriever
-from src.core.settings import RetrievalConfig
-from src.libs.reranker.none_reranker import NoneReranker
-from src.libs.vector_store.base_vector_store import QueryResult
-
-
+from modular_rag_mcp_server.core.query_engine.dense_retriever import DenseRetriever
+from modular_rag_mcp_server.core.query_engine.hybrid_search import HybridSearch
+from modular_rag_mcp_server.core.query_engine.query_processor import ProcessedQuery, QueryProcessor
+from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+from modular_rag_mcp_server.core.query_engine.retrieval_pipeline import RetrievalPipeline
+from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
+from modular_rag_mcp_server.core.settings import RetrievalConfig
+from modular_rag_mcp_server.libs.reranker.none_reranker import NoneReranker
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 class TestRetrievalPipelineBasic:

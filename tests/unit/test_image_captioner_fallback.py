@@ -3,17 +3,26 @@ ImageCaptioner 契约测试
 
 验证图片描述生成、降级机制和失败处理功能。
 """
-import pytest
 from unittest.mock import MagicMock
 
-from src.ingestion.models import Chunk
-from src.ingestion.transform.image_captioner import ImageCaptioner
-from src.core.settings import (
-    Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig,
-    VectorStoreConfig, RetrievalConfig, RerankConfig,
-    EvaluationConfig, ObservabilityConfig, IngestionConfig,
-    LoggingConfig, DashboardConfig
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.ingestion.transform.image_captioner import ImageCaptioner
 
 
 def _create_test_settings(
@@ -373,12 +382,9 @@ class TestImageCaptionerEdgeCases:
     
     def test_transform_empty_chunk(self):
         """测试空 Chunk 抛出错误"""
-        settings = _create_test_settings()
-        captioner = ImageCaptioner(settings.ingestion, settings.vision_llm)
-        
         # Chunk 模型在初始化时就会验证 text 不能为空
         with pytest.raises(ValueError, match="不能为空"):
-            chunk = Chunk(
+            Chunk(
                 id="test_chunk_11",
                 text="",
                 metadata={}

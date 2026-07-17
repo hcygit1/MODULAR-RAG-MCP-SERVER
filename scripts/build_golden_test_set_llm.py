@@ -3,7 +3,7 @@
 从 rag.sqlite 抽样 report / cslearning 的 chunk，用配置中的大模型阅读每段正文后生成检索问句，
 写入黄金测试集 JSON（不使用规则模板拼接）。
 
-依赖：config/settings.yaml（或 --config）中已配置可用的 text LLM（如 qwen / dashscope API key 等）。
+依赖：默认配置或 --config 中已配置可用的 text LLM（如 qwen / dashscope API key 等）。
 
 用法（仓库根目录）:
   python scripts/build_golden_test_set_llm.py
@@ -26,10 +26,9 @@ import logging
 import random
 import re
 import sqlite3
-import sys
 import time
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, List
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,7 +95,6 @@ def _fetch_chunk_text(conn: sqlite3.Connection, chunk_id: str, collection: str) 
 
 
 def _regenerate_queries_only(args: argparse.Namespace) -> None:
-    root = _repo_root()
     in_path = args.golden_set or args.out
     out_path = args.out
 
@@ -105,8 +103,8 @@ def _regenerate_queries_only(args: argparse.Namespace) -> None:
 
     llm = None
     if not args.dry_run:
-        from src.core.settings import load_settings
-        from src.libs.llm.llm_factory import LLMFactory
+        from modular_rag_mcp_server.core.settings import load_settings
+        from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
 
         settings = load_settings(args.config)
         llm = LLMFactory.create(settings)
@@ -178,8 +176,6 @@ def _generate_question_llm(llm: Any, passage: str) -> str:
 
 def main() -> None:
     root = _repo_root()
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
 
     parser = argparse.ArgumentParser(
         description="用 LLM 阅读每个 chunk 后生成 query，写入 golden_test_set.json",
@@ -194,7 +190,7 @@ def main() -> None:
         type=Path,
         default=root / "tests" / "fixtures" / "golden_test_set.json",
     )
-    parser.add_argument("--config", type=str, default="config/settings.yaml")
+    parser.add_argument("--config", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--report-n", type=int, default=5)
     parser.add_argument("--cslearning-n", type=int, default=45)
@@ -257,8 +253,8 @@ def main() -> None:
 
     llm = None
     if not args.dry_run:
-        from src.core.settings import load_settings
-        from src.libs.llm.llm_factory import LLMFactory
+        from modular_rag_mcp_server.core.settings import load_settings
+        from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
 
         settings = load_settings(args.config)
         llm = LLMFactory.create(settings)

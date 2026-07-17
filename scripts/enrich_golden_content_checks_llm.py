@@ -8,7 +8,7 @@
 - expect_images: 仅当 chunk metadata 含 image_refs 时应为 true
 - keywords_in_markdown: 1～2 条，须为「与 MCP 展示一致」的 chunk 正文子串（前 1000 字内原文）
 
-依赖：config/settings.yaml（及可选 settings.local.yaml）中 text LLM 可用。
+依赖：包内默认配置、可选外部配置或 settings.local.yaml 中 text LLM 可用。
 
 用法（仓库根目录）:
   python scripts/enrich_golden_content_checks_llm.py
@@ -24,7 +24,6 @@ import json
 import logging
 import re
 import sqlite3
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -138,8 +137,6 @@ def _fallback_checks(display_text: str, has_image_refs: bool) -> Dict[str, Any]:
 
 def main() -> None:
     root = _repo_root()
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
 
     parser = argparse.ArgumentParser(
         description="用大模型为黄金集补全 expected_content_checks",
@@ -156,7 +153,7 @@ def main() -> None:
         help="输出路径，默认与 --golden-set 相同",
     )
     parser.add_argument("--db", type=Path, default=root / "data" / "db" / "rag.sqlite")
-    parser.add_argument("--config", type=str, default="config/settings.yaml")
+    parser.add_argument("--config", type=str, default=None)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -187,8 +184,8 @@ def main() -> None:
     conn = sqlite3.connect(str(args.db))
     llm = None
     if not args.dry_run:
-        from src.core.settings import load_settings
-        from src.libs.llm.llm_factory import LLMFactory
+        from modular_rag_mcp_server.core.settings import load_settings
+        from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
 
         settings = load_settings(args.config)
         llm = LLMFactory.create(settings)

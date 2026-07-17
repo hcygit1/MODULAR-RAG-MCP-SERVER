@@ -50,7 +50,7 @@ def inspect_markitdown_result(pdf_path: str, output_file: str = None):
     print("=" * 80)
     print(f"类型: {type(result)}")
     print(f"类型名: {type(result).__name__}")
-    print(f"\n所有属性:")
+    print("\n所有属性:")
     attrs = [attr for attr in dir(result) if not attr.startswith('_')]
     for attr in attrs:
         try:
@@ -86,7 +86,7 @@ def inspect_markitdown_result(pdf_path: str, output_file: str = None):
     if markdown_text:
         print(f"\n文本长度: {len(markdown_text)} 字符")
         print(f"文本行数: {len(markdown_text.splitlines())} 行")
-        print(f"\n前 500 个字符预览:")
+        print("\n前 500 个字符预览:")
         print("-" * 80)
         print(markdown_text[:500])
         if len(markdown_text) > 500:

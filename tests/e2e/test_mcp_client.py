@@ -20,7 +20,7 @@ def _start_server_subprocess(
 ) -> subprocess.Popen:
     """启动 MCP Server 子进程，返回 Popen 实例。"""
     return subprocess.Popen(
-        [sys.executable, "-m", "src.mcp_server.server"],
+        [sys.executable, "-m", "modular_rag_mcp_server.mcp_server.server"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

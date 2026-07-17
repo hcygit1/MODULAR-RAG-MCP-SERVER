@@ -3,15 +3,13 @@ SQLiteVectorStore.get_chunks_by_parent_id 单元测试
 
 覆盖：按父取子块、chunk_index 排序、不同 collection 隔离、无结果返回空列表。
 """
-import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from src.core.settings import VectorStoreConfig
-from src.libs.vector_store.base_vector_store import VectorRecord
-from src.libs.vector_store.sqlite_store import SQLiteVectorStore
+from modular_rag_mcp_server.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import VectorRecord
+from modular_rag_mcp_server.libs.vector_store.sqlite_store import SQLiteVectorStore
 
 
 def _make_store(tmp_path: Path, dim: int = 4) -> SQLiteVectorStore:

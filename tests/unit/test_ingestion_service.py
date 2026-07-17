@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.mcp_server.services import ingestion_service as ingestion_service_module
-from src.mcp_server.services.ingestion_service import (
+from modular_rag_mcp_server.mcp_server.services import ingestion_service as ingestion_service_module
+from modular_rag_mcp_server.mcp_server.services.ingestion_service import (
     IngestionService,
     IngestionToolSpec,
     ParsedIngestion,

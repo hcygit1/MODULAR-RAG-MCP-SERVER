@@ -5,13 +5,23 @@ Custom Evaluator 测试
 """
 import pytest
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.evaluator.base_evaluator import BaseEvaluator
-from src.libs.evaluator.evaluator_factory import EvaluatorFactory
-from src.libs.evaluator.custom_evaluator import CustomEvaluator
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.evaluator.base_evaluator import BaseEvaluator
+from modular_rag_mcp_server.libs.evaluator.custom_evaluator import CustomEvaluator
+from modular_rag_mcp_server.libs.evaluator.evaluator_factory import EvaluatorFactory
 
 
 def test_factory_creates_custom_evaluator():

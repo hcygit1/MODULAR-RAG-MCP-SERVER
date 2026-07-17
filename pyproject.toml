@@ -22,7 +22,6 @@ classifiers = [
 
 dependencies = [
     # Core dependencies will be added in later stages
-    "pytest>=9.0.2",
     "pyyaml>=6.0",
     "langchain>=0.1.0",  # B7.5: Recursive Splitter
     "langchain-text-splitters>=0.1.0",  # B7.5: RecursiveCharacterTextSplitter
@@ -35,6 +34,9 @@ dependencies = [
     "sqlite-vec>=0.1.0",  # SQLite 向量扩展，用于 chunks_vec 虚拟表
 ]
 
+[project.scripts]
+modular-rag-mcp-server = "modular_rag_mcp_server.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
@@ -43,6 +45,7 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "types-PyYAML>=6.0.12",
 ]
 dashboard = [
     "streamlit>=1.30.0",  # F4: Observability Dashboard
@@ -55,11 +58,18 @@ docling = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src", "src.*"]
+where = ["src"]
+include = ["modular_rag_mcp_server", "modular_rag_mcp_server.*"]
+
+[tool.setuptools.package-data]
+modular_rag_mcp_server = [
+    "resources/*.yaml",
+    "resources/prompts/*.txt",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -79,6 +89,9 @@ include = '\.pyi?$'
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = [".cursor", ".venv", "build", "data", "model"]
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
 [tool.mypy]

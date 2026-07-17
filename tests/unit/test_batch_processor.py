@@ -3,14 +3,14 @@ BatchProcessor 契约测试
 
 验证批处理编排功能、批次分割逻辑和顺序稳定性。
 """
-import pytest
-from unittest.mock import MagicMock
 
-from src.ingestion.models import Chunk
-from src.ingestion.embedding.batch_processor import BatchProcessor
-from src.ingestion.embedding.dense_encoder import DenseEncoder
-from src.ingestion.embedding.sparse_encoder import SparseEncoder
-from src.libs.embedding.base_embedding import BaseEmbedding
+import pytest
+
+from modular_rag_mcp_server.ingestion.embedding.batch_processor import BatchProcessor
+from modular_rag_mcp_server.ingestion.embedding.dense_encoder import DenseEncoder
+from modular_rag_mcp_server.ingestion.embedding.sparse_encoder import SparseEncoder
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.libs.embedding.base_embedding import BaseEmbedding
 
 
 class MockEmbedding(BaseEmbedding):

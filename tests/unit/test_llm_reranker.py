@@ -3,21 +3,29 @@ LLM Reranker 单元测试
 
 使用 mock LLM 测试 LLM Reranker 的实现。
 """
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from src.core.settings import (
-    Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig,
-    VectorStoreConfig, RetrievalConfig, RerankConfig,
-    EvaluationConfig, ObservabilityConfig, IngestionConfig,
-    LoggingConfig, DashboardConfig
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
-from src.libs.reranker.llm_reranker import LLMReranker
-from src.libs.reranker.reranker_factory import RerankerFactory
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.libs.reranker.llm_reranker import LLMReranker
+from modular_rag_mcp_server.libs.reranker.reranker_factory import RerankerFactory
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 def _create_test_settings(
@@ -114,7 +122,7 @@ def test_factory_creates_llm_reranker():
     settings = _create_test_settings(llm_config)
     
     # Mock LLM 的 chat 方法
-    with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+    with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
         mock_llm = MagicMock()
         mock_llm.chat.return_value = '["id1", "id2", "id3"]'
         mock_llm_factory.return_value = mock_llm
@@ -139,7 +147,7 @@ def test_llm_reranker_initialization():
     prompt_path = _create_test_prompt_file(prompt_content)
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm_factory.return_value = mock_llm
             
@@ -176,7 +184,7 @@ def test_llm_reranker_empty_query():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm_factory.return_value = mock_llm
             
@@ -204,7 +212,7 @@ def test_llm_reranker_empty_candidates():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm_factory.return_value = mock_llm
             
@@ -228,7 +236,7 @@ def test_llm_reranker_single_candidate():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm_factory.return_value = mock_llm
             
@@ -257,7 +265,7 @@ def test_llm_reranker_successful_rerank():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}\nRanked chunk IDs:")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             # LLM 返回排序后的 ID 列表（JSON 格式）
             mock_llm.chat.return_value = '["id2", "id3", "id1"]'
@@ -301,7 +309,7 @@ def test_llm_reranker_json_with_extra_text():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             # LLM 返回包含额外文本的 JSON
             mock_llm.chat.return_value = 'Here are the ranked IDs:\n["id2", "id1"]\nThese are the most relevant.'
@@ -334,7 +342,7 @@ def test_llm_reranker_invalid_json():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm.chat.return_value = "This is not JSON"
             mock_llm_factory.return_value = mock_llm
@@ -363,7 +371,7 @@ def test_llm_reranker_invalid_id():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             # LLM 返回不存在的 ID
             mock_llm.chat.return_value = '["id999", "id1"]'
@@ -393,7 +401,7 @@ def test_llm_reranker_non_list_response():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             # LLM 返回字典而不是列表
             mock_llm.chat.return_value = '{"ids": ["id1", "id2"]}'
@@ -423,7 +431,7 @@ def test_llm_reranker_partial_ranking():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             # LLM 只返回部分 ID
             mock_llm.chat.return_value = '["id2", "id1"]'
@@ -459,7 +467,7 @@ def test_llm_reranker_llm_failure():
     prompt_path = _create_test_prompt_file("Query: {query}\nCandidates:\n{candidates}")
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm.chat.side_effect = RuntimeError("LLM API 调用失败")
             mock_llm_factory.return_value = mock_llm
@@ -489,7 +497,7 @@ def test_llm_reranker_prompt_building():
     prompt_path = _create_test_prompt_file(prompt_template)
     
     try:
-        with patch('src.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
+        with patch('modular_rag_mcp_server.libs.llm.llm_factory.LLMFactory.create') as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm.chat.return_value = '["id1", "id2"]'
             mock_llm_factory.return_value = mock_llm

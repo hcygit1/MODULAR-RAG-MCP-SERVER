@@ -9,12 +9,12 @@ import tempfile
 
 import pytest
 
-from src.core.query_engine.sparse_retriever import SparseRetriever
-from src.core.settings import VectorStoreConfig
-from src.ingestion.models import Chunk
-from src.libs.embedding.fake_embedding import FakeEmbedding
-from src.libs.vector_store.base_vector_store import VectorRecord
-from src.libs.vector_store.sqlite_store import SQLiteVectorStore
+from modular_rag_mcp_server.core.query_engine.sparse_retriever import SparseRetriever
+from modular_rag_mcp_server.core.settings import VectorStoreConfig
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.libs.embedding.fake_embedding import FakeEmbedding
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import VectorRecord
+from modular_rag_mcp_server.libs.vector_store.sqlite_store import SQLiteVectorStore
 
 
 @pytest.fixture

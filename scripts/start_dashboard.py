@@ -2,7 +2,7 @@
 """
 启动 Trace Dashboard
 
-读取 config/settings.yaml 中的端口配置，调用 streamlit 启动 Dashboard。
+读取默认或外部配置中的端口设置，调用 streamlit 启动 Dashboard。
 
 用法:
     python scripts/start_dashboard.py
@@ -10,12 +10,23 @@
     python scripts/start_dashboard.py --log-file ./logs/traces.jsonl
 """
 import argparse
+import importlib.util
 import logging
 import subprocess
 import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def get_dashboard_app_path() -> Path:
+    """Resolve the dashboard module from the active installed package."""
+    spec = importlib.util.find_spec(
+        "modular_rag_mcp_server.observability.dashboard.app"
+    )
+    if spec is None or spec.origin is None:
+        raise FileNotFoundError("Dashboard 应用模块不可用")
+    return Path(spec.origin)
 
 
 def main() -> None:
@@ -37,15 +48,19 @@ def main() -> None:
     port = args.port
     if port is None:
         try:
-            from src.mcp_server.tools.config_utils import load_mcp_settings
+            from modular_rag_mcp_server.mcp_server.tools.config_utils import load_mcp_settings
             settings = load_mcp_settings()
             port = settings.observability.dashboard.port
         except Exception as e:
             logger.warning("读取 Dashboard 端口配置失败，使用默认 8501: %s", e)
             port = 8501
 
-    app_path = Path(__file__).resolve().parent.parent / "src" / "observability" / "dashboard" / "app.py"
-    if not app_path.exists():
+    try:
+        app_path = get_dashboard_app_path()
+    except FileNotFoundError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not app_path.is_file():
         print(f"错误: Dashboard 应用未找到: {app_path}", file=sys.stderr)
         sys.exit(1)
 

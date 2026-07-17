@@ -4,18 +4,29 @@ LLM Providers 冒烟测试
 使用 mock HTTP 测试各个 LLM provider 的实现，不走真实网络。
 """
 import json
-from unittest.mock import patch, MagicMock
-import pytest
 import urllib.error
+from unittest.mock import MagicMock, patch
 
-from src.core.settings import Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig
-from src.core.settings import VectorStoreConfig, RetrievalConfig, RerankConfig
-from src.core.settings import EvaluationConfig, ObservabilityConfig, IngestionConfig
-from src.core.settings import LoggingConfig, DashboardConfig
-from src.libs.llm.llm_factory import LLMFactory
-from src.libs.llm.openai_llm import OpenAILLM
-from src.libs.llm.azure_llm import AzureLLM
-from src.libs.llm.deepseek_llm import DeepSeekLLM
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
+from modular_rag_mcp_server.libs.llm.azure_llm import AzureLLM
+from modular_rag_mcp_server.libs.llm.deepseek_llm import DeepSeekLLM
+from modular_rag_mcp_server.libs.llm.llm_factory import LLMFactory
+from modular_rag_mcp_server.libs.llm.openai_llm import OpenAILLM
 
 
 def test_factory_creates_openai_llm():

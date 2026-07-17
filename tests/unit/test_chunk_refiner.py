@@ -3,19 +3,27 @@ ChunkRefiner 单元测试
 
 验证规则去噪、LLM 重写和失败降级功能。
 """
-import pytest
-from unittest.mock import MagicMock, patch
-from pathlib import Path
+from unittest.mock import MagicMock
 
-from src.ingestion.models import Chunk
-from src.ingestion.transform.base_transform import BaseTransform
-from src.ingestion.transform.chunk_refiner import ChunkRefiner
-from src.core.settings import (
-    Settings, LLMConfig, VisionLLMConfig, EmbeddingConfig,
-    VectorStoreConfig, RetrievalConfig, RerankConfig,
-    EvaluationConfig, ObservabilityConfig, IngestionConfig,
-    LoggingConfig, DashboardConfig
+import pytest
+
+from modular_rag_mcp_server.core.settings import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
 )
+from modular_rag_mcp_server.ingestion.models import Chunk
+from modular_rag_mcp_server.ingestion.transform.base_transform import BaseTransform
+from modular_rag_mcp_server.ingestion.transform.chunk_refiner import ChunkRefiner
 
 
 def _create_test_settings(
@@ -227,7 +235,7 @@ class TestChunkRefinerRuleBased:
         # 因为 Chunk 模型不允许空文本
         # 所以应该抛出错误
         with pytest.raises(ValueError, match="不能为空"):
-            refined = refiner.transform(chunk)
+            refiner.transform(chunk)
     
     def test_rule_based_preserves_metadata(self):
         """测试保留元数据"""
@@ -316,7 +324,7 @@ class TestChunkRefinerLLM:
             metadata={}
         )
         
-        refined = refiner.transform(chunk)
+        refiner.transform(chunk)
         
         # 验证使用了自定义 Prompt
         call_args = mock_llm.chat.call_args[0][0]
@@ -397,13 +405,10 @@ class TestChunkRefinerEdgeCases:
     
     def test_transform_empty_chunk(self):
         """测试空 Chunk 抛出错误"""
-        settings = _create_test_settings()
-        refiner = ChunkRefiner(settings.ingestion)
-        
         # Chunk 模型在初始化时就会验证 text 不能为空
         # 所以我们需要在创建 Chunk 时就捕获错误
         with pytest.raises(ValueError, match="不能为空"):
-            chunk = Chunk(
+            Chunk(
                 id="test_chunk_13",
                 text="",
                 metadata={}

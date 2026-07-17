@@ -3,9 +3,8 @@ ContentEvaluator 单元测试
 
 验证 L2 内容评估：content_non_empty、citations_ok、images_ok、keywords_ok。
 """
-import pytest
 
-from src.observability.evaluation.content_evaluator import (
+from modular_rag_mcp_server.observability.evaluation.content_evaluator import (
     ContentEvaluator,
     evaluate_content,
 )

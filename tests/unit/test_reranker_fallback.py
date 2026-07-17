@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.core.query_engine.reranker import RerankerOrchestrator
-from src.libs.vector_store.base_vector_store import QueryResult
+from modular_rag_mcp_server.core.query_engine.reranker import RerankerOrchestrator
+from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
 
 @pytest.fixture
