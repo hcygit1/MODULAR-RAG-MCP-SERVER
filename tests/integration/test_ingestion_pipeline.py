@@ -291,14 +291,6 @@ class TestIngestionPipelineWithFixtures:
         """创建测试用的 Settings"""
         return create_test_settings(temp_dir)
     
-    @pytest.fixture
-    def sample_pdf_path(self):
-        """获取 fixtures 中的 PDF 文件路径"""
-        pdf_path = Path(__file__).parent.parent / "fixtures" / "sample_documents" / "sample.pdf"
-        if pdf_path.exists():
-            return str(pdf_path)
-        pytest.skip("sample.pdf 不存在，跳过测试")
-    
     def test_pipeline_with_sample_pdf(self, temp_dir, test_settings, sample_pdf_path):
         """测试使用 fixtures 样例 PDF 运行完整 pipeline"""
         # 使用 Fake Embedding 和 VectorStore 进行测试

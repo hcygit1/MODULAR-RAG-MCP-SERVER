@@ -108,15 +108,6 @@ def e2e_runtime(tmp_path):
 
 
 @pytest.fixture
-def sample_pdf_path():
-    """返回仓库内稳定的样例 PDF。"""
-    pdf_path = PROJECT_ROOT / "tests" / "fixtures" / "sample_documents" / "sample.pdf"
-    if not pdf_path.exists():
-        pytest.skip("sample.pdf 不存在，跳过测试")
-    return pdf_path
-
-
-@pytest.fixture
 def ingested_e2e_runtime(e2e_runtime, sample_pdf_path):
     """在隔离库中预先摄取样例 PDF，供 MCP 查询测试使用。"""
     result = subprocess.run(

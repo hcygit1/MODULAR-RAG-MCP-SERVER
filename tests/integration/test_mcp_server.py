@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.support.mcp_process import jsonrpc_response, send_until_response
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -53,9 +55,12 @@ def _send_initialize(proc: subprocess.Popen) -> tuple[str, str]:
             "clientInfo": {"name": "test-client", "version": "0.1.0"},
         },
     }
-    req_line = json.dumps(request) + "\n"
-    stdout_data, stderr_data = proc.communicate(input=req_line, timeout=5)
-    return stdout_data, stderr_data
+    return send_until_response(
+        proc,
+        json.dumps(request) + "\n",
+        response_id=1,
+        timeout=10,
+    )
 
 
 class TestMCPServerE1:
@@ -68,10 +73,7 @@ class TestMCPServerE1:
 
         assert proc.returncode == 0, f"Server exited with {proc.returncode}, stderr: {stderr_data}"
 
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        assert len(lines) >= 1, f"Expected at least 1 response line, got: {stdout_data}"
-
-        resp = json.loads(lines[0])
+        resp = jsonrpc_response(stdout_data, 1)
         assert resp.get("jsonrpc") == "2.0"
         assert resp.get("id") == 1
         assert "result" in resp
@@ -118,18 +120,15 @@ def _mcp_handshake() -> str:
     return json.dumps(init_req) + "\n" + json.dumps(notif) + "\n"
 
 
-def _send_request(proc: subprocess.Popen, request: dict) -> tuple[str, str]:
-    """发送单条 JSON-RPC 请求，返回 (stdout, stderr)。"""
-    req_line = json.dumps(request) + "\n"
-    stdout_data, stderr_data = proc.communicate(input=req_line, timeout=5)
-    return stdout_data, stderr_data
-
-
 def _send_with_handshake(proc: subprocess.Popen, request: dict) -> tuple[str, str]:
-    """发送 MCP 握手 + 请求，返回 (stdout, stderr)。响应最后一行为 request 的 result。"""
+    """发送 MCP 握手 + 请求，等待 request id 对应的响应。"""
     payload = _mcp_handshake() + json.dumps(request) + "\n"
-    stdout_data, stderr_data = proc.communicate(input=payload, timeout=5)
-    return stdout_data, stderr_data
+    return send_until_response(
+        proc,
+        payload,
+        response_id=request["id"],
+        timeout=10,
+    )
 
 
 class TestMCPServerE15:
@@ -141,9 +140,7 @@ class TestMCPServerE15:
         request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
         stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        assert len(lines) >= 2, "应至少有 initialize 与 tools/list 两条响应"
-        resp = json.loads(lines[-1])
+        resp = jsonrpc_response(stdout_data, 2)
         assert resp.get("jsonrpc") == "2.0"
         assert resp.get("id") == 2
         assert "result" in resp
@@ -161,8 +158,7 @@ class TestMCPServerE15:
         }
         stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[-1])
+        resp = jsonrpc_response(stdout_data, 3)
         assert "result" in resp
         result = resp["result"]
         assert result.get("isError") is True
@@ -177,8 +173,7 @@ class TestMCPServerE15:
         request = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {}}
         stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[-1])
+        resp = jsonrpc_response(stdout_data, 4)
         assert "error" in resp
         assert resp["error"]["code"] == -32602
 
@@ -192,8 +187,7 @@ class TestMCPServerE2:
         request = {"jsonrpc": "2.0", "id": 10, "method": "tools/list"}
         stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[-1])
+        resp = jsonrpc_response(stdout_data, 10)
         tools = resp["result"]["tools"]
         tools_by_name = {tool["name"]: tool for tool in tools}
         assert set(tools_by_name) == {
@@ -241,8 +235,7 @@ class TestMCPServerE2:
         request = {"jsonrpc": "2.0", "id": 11, "method": "tools/list"}
         stdout_data, _ = _send_with_handshake(proc, request)
         assert proc.returncode == 0
-        lines = [line.strip() for line in stdout_data.strip().split("\n") if line.strip()]
-        resp = json.loads(lines[-1])
+        resp = jsonrpc_response(stdout_data, 11)
         names = [t["name"] for t in resp["result"]["tools"]]
         assert "list_collections" in names
 

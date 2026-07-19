@@ -119,26 +119,11 @@ class TestPdfLoader:
 @pytest.mark.skipif(not MARKITDOWN_AVAILABLE, reason="MarkItDown 未安装")
 class TestPdfLoaderWithSampleFile:
     """使用样例文件测试 PdfLoader"""
-    
-    def test_load_sample_pdf_if_exists(self):
-        """如果存在样例 PDF，测试加载功能"""
-        # 检查是否有样例 PDF 文件
-        sample_pdf_paths = [
-            "tests/fixtures/sample_documents/sample.pdf",
-            "tests/fixtures/sample.pdf",
-        ]
-        
-        pdf_path = None
-        for path in sample_pdf_paths:
-            if os.path.exists(path):
-                pdf_path = path
-                break
-        
-        if pdf_path is None:
-            pytest.skip("未找到样例 PDF 文件")
-        
+
+    def test_load_sample_pdf(self, sample_pdf_path):
+        """动态样例 PDF 能被完整加载。"""
         loader = PdfLoader()
-        document = loader.load(pdf_path)
+        document = loader.load(sample_pdf_path)
         
         # 验证返回的是 Document 对象
         assert isinstance(document, Document)
@@ -151,7 +136,7 @@ class TestPdfLoaderWithSampleFile:
         
         # 验证 metadata 至少包含 source_path
         assert "source_path" in document.metadata
-        assert document.metadata["source_path"] == os.path.abspath(pdf_path)
+        assert document.metadata["source_path"] == os.path.abspath(sample_pdf_path)
         
         # 验证 metadata 包含 doc_type
         assert "doc_type" in document.metadata

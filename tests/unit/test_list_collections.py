@@ -3,6 +3,7 @@ list_collections 单元测试
 
 验证从 SQLite chunks 表能返回集合名列表。
 """
+import importlib
 import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,10 @@ from modular_rag_mcp_server.mcp_server.tools.list_collections import (
     _list_collections_from_sqlite,
     execute_list_collections,
     set_base_path,
+)
+
+list_collections_module = importlib.import_module(
+    "modular_rag_mcp_server.mcp_server.tools.list_collections"
 )
 
 
@@ -88,7 +93,7 @@ def test_execute_list_collections_with_injection(tmp_path: Path) -> None:
 
 
 @patch("modular_rag_mcp_server.libs.vector_store.vector_store_factory.VectorStoreFactory.create")
-@patch("modular_rag_mcp_server.mcp_server.tools.list_collections.load_mcp_settings")
+@patch.object(list_collections_module, "load_mcp_settings")
 def test_execute_list_collections_routes_to_configured_backend(
     mock_load_settings: MagicMock,
     mock_create: MagicMock,

@@ -45,6 +45,8 @@ dev = [
     "types-PyYAML>=6.0.12",
     "types-requests>=2.31.0",
     "build>=1.2.0",
+    "setuptools>=77.0",
+    "wheel>=0.45.0",
 ]
 dashboard = [
     "streamlit>=1.30.0",  # F4: Observability Dashboard
@@ -91,7 +93,7 @@ filterwarnings = [
     "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
     "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
     "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
-    "ignore:pkg_resources is deprecated as an API.*:UserWarning:jieba\\._compat",
+    "ignore:pkg_resources is deprecated as an API.*:Warning:jieba\\._compat",
 ]
 
 [tool.black]

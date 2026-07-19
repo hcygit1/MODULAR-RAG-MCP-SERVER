@@ -392,7 +392,7 @@ def test_cancelled_wrapper_waits_for_sync_operation_to_finish(
     assert calls == [expected_arguments]
 
 
-def test_cancelled_wrapper_preserves_sync_failure_as_cause(monkeypatch) -> None:
+def test_cancelled_wrapper_propagates_sync_failure(monkeypatch) -> None:
     module = importlib.import_module(
         "modular_rag_mcp_server.mcp_server.tools.ingest_document_normal"
     )
@@ -418,10 +418,8 @@ def test_cancelled_wrapper_preserves_sync_failure_as_cause(monkeypatch) -> None:
         await _wait_for_thread_event(started)
         task.cancel()
         release.set()
-        with pytest.raises(asyncio.CancelledError) as exc_info:
+        with pytest.raises(RuntimeError, match="write failed"):
             await task
-        assert isinstance(exc_info.value.__cause__, RuntimeError)
-        assert str(exc_info.value.__cause__) == "write failed"
 
     try:
         asyncio.run(scenario())
