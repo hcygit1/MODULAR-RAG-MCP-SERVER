@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "A modular, pluggable RAG (Retrieval-Augmented Generation) service framework with MCP protocol support"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["rag", "mcp", "llm", "retrieval", "embedding"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -21,17 +21,14 @@ classifiers = [
 ]
 
 dependencies = [
-    # Core dependencies will be added in later stages
     "pyyaml>=6.0",
-    "langchain>=0.1.0",  # B7.5: Recursive Splitter
     "langchain-text-splitters>=0.1.0",  # B7.5: RecursiveCharacterTextSplitter
-    "chromadb>=0.4.0",  # B7.6: Chroma VectorStore
-    "qdrant-client>=1.7.0",  # Qdrant VectorStore（支持 list 等复杂 metadata）
     "markitdown[pdf]>=0.0.1a26",  # C3: PDF Loader (需要 PDF 支持)
     "pymupdf>=1.23.0",  # 图片提取：从 PDF 中提取图片数据和位置信息
-    "mcp[cli]>=1.0.0",  # 官方 MCP SDK (FastMCP + Stdio/HTTP)
+    "mcp>=1.0.0",  # 官方 MCP SDK (FastMCP + Stdio/HTTP)
     "jieba>=0.42.1",  # 中英文分词（SparseEncoder / BM25 检索）
     "sqlite-vec>=0.1.0",  # SQLite 向量扩展，用于 chunks_vec 虚拟表
+    "requests>=2.31.0",  # MinerU 云端 API
 ]
 
 [project.scripts]
@@ -46,15 +43,25 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "types-PyYAML>=6.0.12",
+    "types-requests>=2.31.0",
+    "build>=1.2.0",
 ]
 dashboard = [
     "streamlit>=1.30.0",  # F4: Observability Dashboard
+    "altair>=5.0.0",
+    "pandas>=2.0.0",
 ]
 reranker = [
     "sentence-transformers>=2.2.0",  # B7.8: Cross-Encoder Reranker
 ]
 docling = [
     "docling>=2.0.0",  # Structured document parsing and HybridChunker
+]
+chroma = [
+    "chromadb>=0.4.0",
+]
+qdrant = [
+    "qdrant-client>=1.7.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -80,6 +87,12 @@ markers = [
     "slow: Slow running tests",
 ]
 addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+    "ignore:pkg_resources is deprecated as an API.*:UserWarning:jieba\\._compat",
+]
 
 [tool.black]
 line-length = 100
@@ -99,3 +112,12 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "docling.*",
+    "fitz",
+    "jieba",
+    "langchain.text_splitter",
+]
+ignore_missing_imports = true

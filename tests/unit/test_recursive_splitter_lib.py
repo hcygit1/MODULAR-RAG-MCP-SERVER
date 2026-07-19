@@ -229,30 +229,14 @@ def test_recursive_splitter_trace_parameter():
     assert len(chunks) > 0
 
 
-@pytest.mark.skipif(LANGCHAIN_AVAILABLE, reason="LangChain 已安装，跳过此测试")
-def test_recursive_splitter_langchain_not_installed():
+def test_recursive_splitter_langchain_not_installed(monkeypatch):
     """测试 LangChain 未安装时的错误处理"""
-    # 临时模拟 LangChain 未安装的情况
     import modular_rag_mcp_server.libs.splitter.recursive_splitter as rs_module
-    
-    # 保存原始值
-    original_splitter = rs_module.RecursiveCharacterTextSplitter
-    
-    try:
-        # 临时设置为 None 模拟未安装
-        rs_module.RecursiveCharacterTextSplitter = None
-        
-        # 重新加载模块以触发检查
-        import importlib
-        importlib.reload(rs_module)
-        
-        # 尝试创建 RecursiveSplitter
-        with pytest.raises(RuntimeError, match="LangChain Text Splitters 未安装"):
-            rs_module.RecursiveSplitter(_create_ingestion_config())
-    finally:
-        # 恢复原始值
-        rs_module.RecursiveCharacterTextSplitter = original_splitter
-        importlib.reload(rs_module)
+
+    monkeypatch.setattr(rs_module, "RecursiveCharacterTextSplitter", None)
+
+    with pytest.raises(RuntimeError, match="LangChain Text Splitters 未安装"):
+        rs_module.RecursiveSplitter(_create_ingestion_config())
 
 
 def _create_recursive_splitter(

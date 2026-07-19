@@ -24,9 +24,9 @@ Discovery → Check History → User Intent → Select Domain → Select Sub-top
 Autonomously build project understanding. Do NOT ask user anything yet.
 
 1. Read `DEV_SPEC.md` — project goals, architecture, tech stack, module design
-2. Read `config/settings.yaml` — configuration system
-3. List `src/` directory tree — module structure (core/, ingestion/, libs/, mcp_server/, observability/)
-4. Read key entry points: `main.py`, `scripts/ingest.py`, `scripts/ingest_mineru.py`, `scripts/retrieve.py`
+2. Read `src/modular_rag_mcp_server/resources/settings.yaml` — configuration system
+3. List `src/modular_rag_mcp_server/` directory tree — module structure (core/, ingestion/, libs/, mcp_server/, observability/)
+4. Read key entry points: `src/modular_rag_mcp_server/cli.py`, `scripts/ingest.py`, `scripts/ingest_mineru.py`, `scripts/retrieve.py`
 5. List `tests/` — testing strategy overview
 
 Build an internal mental model covering these **10 Knowledge Domains**, each containing **3-5 Sub-topics** (知识点), totaling **45 interview knowledge points**:
@@ -36,60 +36,60 @@ Build an internal mental model covering these **10 Knowledge Domains**, each con
 | ID | 知识域 / 知识点 | Key Code Areas |
 |----|----------------|---------------|
 | **D1** | **RAG Pipeline 整体架构** | |
-| D1.1 | 端到端数据流：从文档上传到生成回答的完整链路 | `DEV_SPEC.md`, `main.py`, `scripts/` |
-| D1.2 | 三层架构设计：core/ingestion/libs 各层职责与依赖方向 | `src/core/`, `src/ingestion/`, `src/libs/` |
-| D1.3 | Pipeline 组装：配置驱动的组件组合机制 | `main.py`, `config/settings.yaml`, `src/core/settings.py` |
-| D1.4 | 核心数据类型：Document、Chunk、QueryResult 等类型系统 | `src/ingestion/models.py`, `src/libs/vector_store/base_vector_store.py` |
+| D1.1 | 端到端数据流：从文档上传到生成回答的完整链路 | `DEV_SPEC.md`, `src/modular_rag_mcp_server/cli.py`, `scripts/` |
+| D1.2 | 三层架构设计：core/ingestion/libs 各层职责与依赖方向 | `src/modular_rag_mcp_server/core/`, `src/modular_rag_mcp_server/ingestion/`, `src/modular_rag_mcp_server/libs/` |
+| D1.3 | Pipeline 组装：配置驱动的组件组合机制 | `src/modular_rag_mcp_server/cli.py`, `src/modular_rag_mcp_server/resources/settings.yaml`, `src/modular_rag_mcp_server/core/settings.py` |
+| D1.4 | 核心数据类型：Document、Chunk、QueryResult 等类型系统 | `src/modular_rag_mcp_server/ingestion/models.py`, `src/modular_rag_mcp_server/libs/vector_store/base_vector_store.py` |
 | D1.5 | 入口脚本设计：离线入库与在线检索脚本的职责边界与参数设计 | `scripts/ingest.py`, `scripts/ingest_mineru.py`, `scripts/retrieve.py`, `scripts/evaluate.py` |
 | **D2** | **Ingestion Pipeline** | |
-| D2.1 | Pipeline 整体流程：从文档加载到向量存储的阶段设计 | `src/ingestion/pipeline.py` |
-| D2.2 | Chunking 策略：Heading/Recursive 切分与 parent_id 结构化 metadata 设计 | `src/libs/splitter/`, `src/ingestion/pipeline.py` |
-| D2.3 | Transform 链：ChunkRefiner、MetadataEnricher 的职责与执行顺序 | `src/ingestion/transform/` |
-| D2.4 | Embedding 编码：Dense/Sparse 双编码与 BatchProcessor 批处理 | `src/ingestion/embedding/` |
-| D2.5 | 存储层：文档级替换写入（delete_by_source_doc_id + upsert）与统一存储协同 | `src/ingestion/storage/vector_upserter.py`, `src/libs/vector_store/sqlite_store.py`, `src/ingestion/pipeline.py` |
+| D2.1 | Pipeline 整体流程：从文档加载到向量存储的阶段设计 | `src/modular_rag_mcp_server/ingestion/pipeline.py` |
+| D2.2 | Chunking 策略：Heading/Recursive 切分与 parent_id 结构化 metadata 设计 | `src/modular_rag_mcp_server/libs/splitter/`, `src/modular_rag_mcp_server/ingestion/pipeline.py` |
+| D2.3 | Transform 链：ChunkRefiner、MetadataEnricher 的职责与执行顺序 | `src/modular_rag_mcp_server/ingestion/transform/` |
+| D2.4 | Embedding 编码：Dense/Sparse 双编码与 BatchProcessor 批处理 | `src/modular_rag_mcp_server/ingestion/embedding/` |
+| D2.5 | 存储层：文档级替换写入（delete_by_source_doc_id + upsert）与统一存储协同 | `src/modular_rag_mcp_server/ingestion/storage/vector_upserter.py`, `src/modular_rag_mcp_server/libs/vector_store/sqlite_store.py`, `src/modular_rag_mcp_server/ingestion/pipeline.py` |
 | **D3** | **Hybrid Search & Retrieval** | |
-| D3.1 | Dense Retrieval：向量检索原理与 DenseRetriever 实现 | `src/core/query_engine/dense_retriever.py` |
-| D3.2 | Sparse Retrieval：BM25 稀疏检索与 SparseRetriever 实现 | `src/core/query_engine/sparse_retriever.py` |
-| D3.3 | Hybrid Search 融合：RRF 算法与 Fusion 模块设计 | `src/core/query_engine/hybrid_search.py`, `fusion.py` |
-| D3.4 | Parent 聚合检索：parent_aggregator、aggregate_by_parent、top_m 候选裁剪机制 | `src/core/query_engine/parent_aggregator.py`, `src/core/query_engine/retrieval_pipeline.py`, `config/settings.yaml` |
-| D3.5 | Query 到响应链路：QueryProcessor 与 ResponseBuilder/CitationGenerator/MultimodalAssembler 协同 | `src/core/query_engine/query_processor.py`, `src/core/response/` |
+| D3.1 | Dense Retrieval：向量检索原理与 DenseRetriever 实现 | `src/modular_rag_mcp_server/core/query_engine/dense_retriever.py` |
+| D3.2 | Sparse Retrieval：BM25 稀疏检索与 SparseRetriever 实现 | `src/modular_rag_mcp_server/core/query_engine/sparse_retriever.py` |
+| D3.3 | Hybrid Search 融合：RRF 算法与 Fusion 模块设计 | `src/modular_rag_mcp_server/core/query_engine/hybrid_search.py`, `fusion.py` |
+| D3.4 | Parent 聚合检索：parent_aggregator、aggregate_by_parent、top_m 候选裁剪机制 | `src/modular_rag_mcp_server/core/query_engine/parent_aggregator.py`, `src/modular_rag_mcp_server/core/query_engine/retrieval_pipeline.py`, `src/modular_rag_mcp_server/resources/settings.yaml` |
+| D3.5 | Query 到响应链路：QueryProcessor 与 ResponseBuilder/CitationGenerator/MultimodalAssembler 协同 | `src/modular_rag_mcp_server/core/query_engine/query_processor.py`, `src/modular_rag_mcp_server/core/response/` |
 | **D4** | **Rerank 机制** | |
-| D4.1 | Reranker 抽象与工厂模式：BaseReranker 与 RerankerFactory 设计 | `src/libs/reranker/base_reranker.py`, `reranker_factory.py` |
-| D4.2 | CrossEncoder Reranker：模型原理与实现细节 | `src/libs/reranker/cross_encoder_reranker.py` |
-| D4.3 | LLM Reranker：基于大语言模型的重排序方案与 Prompt 设计 | `src/libs/reranker/llm_reranker.py` |
-| D4.4 | Rerank 在检索 Pipeline 中的集成位置与效果分析 | `src/core/query_engine/reranker.py` |
+| D4.1 | Reranker 抽象与工厂模式：BaseReranker 与 RerankerFactory 设计 | `src/modular_rag_mcp_server/libs/reranker/base_reranker.py`, `reranker_factory.py` |
+| D4.2 | CrossEncoder Reranker：模型原理与实现细节 | `src/modular_rag_mcp_server/libs/reranker/cross_encoder_reranker.py` |
+| D4.3 | LLM Reranker：基于大语言模型的重排序方案与 Prompt 设计 | `src/modular_rag_mcp_server/libs/reranker/llm_reranker.py` |
+| D4.4 | Rerank 在检索 Pipeline 中的集成位置与效果分析 | `src/modular_rag_mcp_server/core/query_engine/reranker.py` |
 | **D5** | **MCP Server 协议** | |
-| D5.1 | MCP 协议概述：JSON-RPC 交互模型与标准规范 | `src/mcp_server/server.py` |
-| D5.2 | Tool 注册机制：四个工具的定义、参数与执行逻辑（query/list/normal/mineru） | `src/mcp_server/tools/`, `src/mcp_server/server.py` |
-| D5.3 | Tool 执行链路：参数解析、错误模型、structuredContent 约定与可测试性设计 | `src/mcp_server/tools/mcp_utils.py`, `src/mcp_server/tools/error_utils.py`, `src/mcp_server/tools/config_utils.py` |
-| D5.4 | Server 生命周期管理与工具注册：FastMCP 启动、日志与 Trace 初始化 | `src/mcp_server/server.py`, `main.py` |
+| D5.1 | MCP 协议概述：JSON-RPC 交互模型与标准规范 | `src/modular_rag_mcp_server/mcp_server/server.py` |
+| D5.2 | Tool 注册机制：四个工具的定义、参数与执行逻辑（query/list/normal/mineru） | `src/modular_rag_mcp_server/mcp_server/tools/`, `src/modular_rag_mcp_server/mcp_server/server.py` |
+| D5.3 | Tool 执行链路：参数解析、错误模型、structuredContent 约定与可测试性设计 | `src/modular_rag_mcp_server/mcp_server/tools/mcp_utils.py`, `src/modular_rag_mcp_server/mcp_server/tools/error_utils.py`, `src/modular_rag_mcp_server/mcp_server/tools/config_utils.py` |
+| D5.4 | Server 生命周期管理与工具注册：FastMCP 启动、日志与 Trace 初始化 | `src/modular_rag_mcp_server/mcp_server/server.py`, `src/modular_rag_mcp_server/cli.py` |
 | **D6** | **可插拔架构 & 配置系统** | |
-| D6.1 | 工厂模式全景：LLM/Embedding/Reranker/VectorStore/Evaluator 五大工厂 | `src/libs/*/factory*.py` |
-| D6.2 | settings.yaml 配置结构与 Settings 类加载机制 | `config/settings.yaml`, `src/core/settings.py` |
-| D6.3 | LLM Provider 多厂商支持：Azure/OpenAI/DeepSeek/Ollama 切换逻辑 | `src/libs/llm/` |
-| D6.4 | Embedding Provider 抽象：多后端实现对比与选型策略 | `src/libs/embedding/` |
-| D6.5 | Base 类设计哲学：接口抽象、继承层次与扩展点 | `src/libs/*/base_*.py` |
+| D6.1 | 工厂模式全景：LLM/Embedding/Reranker/VectorStore/Evaluator 五大工厂 | `src/modular_rag_mcp_server/libs/*/factory*.py` |
+| D6.2 | settings.yaml 配置结构与 Settings 类加载机制 | `src/modular_rag_mcp_server/resources/settings.yaml`, `src/modular_rag_mcp_server/core/settings.py` |
+| D6.3 | LLM Provider 多厂商支持：Azure/OpenAI/DeepSeek/Ollama 切换逻辑 | `src/modular_rag_mcp_server/libs/llm/` |
+| D6.4 | Embedding Provider 抽象：多后端实现对比与选型策略 | `src/modular_rag_mcp_server/libs/embedding/` |
+| D6.5 | Base 类设计哲学：接口抽象、继承层次与扩展点 | `src/modular_rag_mcp_server/libs/*/base_*.py` |
 | **D7** | **多模态处理** | |
-| D7.1 | PDF 解析与版面恢复：页指纹匹配、相对位置图片占位与 FileIntegrity 协同 | `src/libs/loader/pdf_loader.py`, `src/libs/loader/file_integrity.py` |
-| D7.2 | Vision LLM：Qwen/DashScope Vision 图片理解能力集成与调用链路 | `src/libs/llm/dashscope_vision_llm.py`, `src/libs/llm/llm_factory.py` |
-| D7.3 | ImageCaptioner：图片描述生成流程与 Prompt 模板设计 | `src/ingestion/transform/image_captioner.py`, `config/prompts/` |
-| D7.4 | 多模态统一存储与返回：SQLite images 表、ResponseBuilder 与 MultimodalAssembler 协同 | `src/libs/vector_store/sqlite_store.py`, `src/core/response/response_builder.py`, `src/core/response/multimodal_assembler.py` |
+| D7.1 | PDF 解析与版面恢复：页指纹匹配、相对位置图片占位与 FileIntegrity 协同 | `src/modular_rag_mcp_server/libs/loader/pdf_loader.py`, `src/modular_rag_mcp_server/libs/loader/file_integrity.py` |
+| D7.2 | Vision LLM：Qwen/DashScope Vision 图片理解能力集成与调用链路 | `src/modular_rag_mcp_server/libs/llm/dashscope_vision_llm.py`, `src/modular_rag_mcp_server/libs/llm/llm_factory.py` |
+| D7.3 | ImageCaptioner：图片描述生成流程与 Prompt 模板设计 | `src/modular_rag_mcp_server/ingestion/transform/image_captioner.py`, `src/modular_rag_mcp_server/resources/prompts/` |
+| D7.4 | 多模态统一存储与返回：SQLite images 表、ResponseBuilder 与 MultimodalAssembler 协同 | `src/modular_rag_mcp_server/libs/vector_store/sqlite_store.py`, `src/modular_rag_mcp_server/core/response/response_builder.py`, `src/modular_rag_mcp_server/core/response/multimodal_assembler.py` |
 | **D8** | **可观测性 & 评估体系** | |
-| D8.1 | Trace 系统：TraceCollector 与 TraceContext 的采集与关联设计 | `src/core/trace/` |
-| D8.2 | Dashboard 架构：Streamlit App 分页、Services 层数据流 | `src/observability/dashboard/` |
-| D8.3 | 评估指标体系：Recall、Precision、MRR 等核心指标定义与计算 | `src/observability/evaluation/`, `scripts/evaluate.py` |
-| D8.4 | 评估执行链路：content_evaluator、eval_runner、e2e_runner 与评分落地（当前以 MCP 实战与 custom 评估为主） | `src/observability/evaluation/content_evaluator.py`, `src/observability/evaluation/eval_runner.py`, `src/observability/evaluation/e2e_runner.py` |
-| D8.5 | 日志系统：Logger 设计、日志分级与调试支持 | `src/observability/logger.py` |
+| D8.1 | Trace 系统：TraceCollector 与 TraceContext 的采集与关联设计 | `src/modular_rag_mcp_server/core/trace/` |
+| D8.2 | Dashboard 架构：Streamlit App 分页、Services 层数据流 | `src/modular_rag_mcp_server/observability/dashboard/` |
+| D8.3 | 评估指标体系：Recall、Precision、MRR 等核心指标定义与计算 | `src/modular_rag_mcp_server/observability/evaluation/`, `scripts/evaluate.py` |
+| D8.4 | 评估执行链路：content_evaluator、eval_runner、e2e_runner 与评分落地（当前以 MCP 实战与 custom 评估为主） | `src/modular_rag_mcp_server/observability/evaluation/content_evaluator.py`, `src/modular_rag_mcp_server/observability/evaluation/eval_runner.py`, `src/modular_rag_mcp_server/observability/evaluation/e2e_runner.py` |
+| D8.5 | 日志系统：Logger 设计、日志分级与调试支持 | `src/modular_rag_mcp_server/observability/logger.py` |
 | **D9** | **测试策略 & 工程化** | |
 | D9.1 | 测试分层策略：Unit/Integration/E2E 各层覆盖范围与边界 | `tests/unit/`, `tests/integration/`, `tests/e2e/` |
 | D9.2 | Test Fixtures 与 conftest.py：Mock 策略与测试数据管理 | `tests/conftest.py`, `tests/fixtures/` |
 | D9.3 | pyproject.toml 工程配置：依赖管理、构建配置、工具链集成 | `pyproject.toml` |
 | D9.4 | 关键能力单测覆盖：heading 切分、parent 聚合、按父取块、内容评估等新增能力的测试设计 | `tests/unit/test_heading_splitter.py`, `tests/unit/test_parent_aggregator.py`, `tests/unit/test_get_chunks_by_parent_id.py`, `tests/unit/test_content_evaluator.py` |
 | **D10** | **幂等性 & 文档级增量更新** | |
-| D10.1 | 文件完整性检查：SHA256、should_skip、mark_success 机制与 force 语义 | `src/libs/loader/file_integrity.py`, `src/mcp_server/tools/ingest_document_normal.py`, `src/mcp_server/tools/ingest_document_mineru.py` |
-| D10.2 | 文档级替换写入：按 source_doc_id 先删旧块再写新块，避免旧块残留 | `src/ingestion/storage/vector_upserter.py`, `src/libs/vector_store/sqlite_store.py`, `src/ingestion/pipeline.py` |
-| D10.3 | source_doc_id 稳定性设计：路径哈希的优缺点与重命名场景影响 | `src/libs/loader/pdf_loader.py`, `src/libs/loader/mineru_result_adapter.py`, `src/ingestion/pipeline.py` |
-| D10.4 | 不同入库路径一致性：CLI 与 MCP 在 skip/force/replace 流程上的对齐 | `scripts/ingest.py`, `src/mcp_server/tools/ingest_document_normal.py`, `src/mcp_server/tools/ingest_document_mineru.py` |
+| D10.1 | 文件完整性检查：SHA256、should_skip、mark_success 机制与 force 语义 | `src/modular_rag_mcp_server/libs/loader/file_integrity.py`, `src/modular_rag_mcp_server/mcp_server/tools/ingest_document_normal.py`, `src/modular_rag_mcp_server/mcp_server/tools/ingest_document_mineru.py` |
+| D10.2 | 文档级替换写入：按 source_doc_id 先删旧块再写新块，避免旧块残留 | `src/modular_rag_mcp_server/ingestion/storage/vector_upserter.py`, `src/modular_rag_mcp_server/libs/vector_store/sqlite_store.py`, `src/modular_rag_mcp_server/ingestion/pipeline.py` |
+| D10.3 | source_doc_id 稳定性设计：路径哈希的优缺点与重命名场景影响 | `src/modular_rag_mcp_server/libs/loader/pdf_loader.py`, `src/modular_rag_mcp_server/libs/loader/mineru_result_adapter.py`, `src/modular_rag_mcp_server/ingestion/pipeline.py` |
+| D10.4 | 不同入库路径一致性：CLI 与 MCP 在 skip/force/replace 流程上的对齐 | `scripts/ingest.py`, `src/modular_rag_mcp_server/mcp_server/tools/ingest_document_normal.py`, `src/modular_rag_mcp_server/mcp_server/tools/ingest_document_mineru.py` |
 
 ### D10 High-score Answer Anchors (for evaluator)
 
@@ -327,7 +327,7 @@ Immediately after evaluation, provide targeted study resources (中文):
 
 ### 📄 相关文档
 - [DEV_SPEC.md 对应章节](DEV_SPEC.md) — 设计原理
-- [config/settings.yaml](config/settings.yaml) — 相关配置项
+- [src/modular_rag_mcp_server/resources/settings.yaml](src/modular_rag_mcp_server/resources/settings.yaml) — 相关配置项
 
 ### 🔗 参考资料
 - [External concept name] — 1-sentence explanation of relevance
@@ -405,7 +405,7 @@ After persisting, ask the user (中文):
 |------|---------|
 | `.cursor/skills/project-learner/references/LEARNING_PROGRESS.md` | Persistent learning state (45 sub-topics) |
 | `DEV_SPEC.md` | Project specification & architecture |
-| `config/settings.yaml` | Configuration reference |
-| `src/` | All source code modules |
+| `src/modular_rag_mcp_server/resources/settings.yaml` | Configuration reference |
+| `src/modular_rag_mcp_server/` | All source code modules |
 | `tests/` | Test suite for understanding test strategy |
 | `scripts/` | CLI entry points (ingest/ingest_mineru/retrieve/evaluate) |

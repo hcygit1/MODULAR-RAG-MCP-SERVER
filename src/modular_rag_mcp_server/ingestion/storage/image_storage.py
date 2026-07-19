@@ -6,7 +6,7 @@ Image Storage 实现
 import json
 from base64 import b64decode
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 
 class ImageStorage:
@@ -141,7 +141,7 @@ class ImageStorage:
             Optional[str]: 图片文件路径，如果不存在则返回 None
         """
         if image_id in self._image_index:
-            return self._image_index[image_id]["file_path"]
+            return cast(str, self._image_index[image_id]["file_path"])
         return None
     
     def get_image_info(self, image_id: str) -> Optional[Dict[str, Any]]:

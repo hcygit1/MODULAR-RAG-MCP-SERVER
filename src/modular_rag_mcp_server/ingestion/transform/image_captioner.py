@@ -8,6 +8,7 @@ Image Captioner 实现
 """
 import logging
 import tempfile
+from importlib import import_module
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from modular_rag_mcp_server.core.settings import IngestionConfig, VisionLLMConfig
@@ -22,9 +23,12 @@ if TYPE_CHECKING:
 
 # 尝试导入 BaseLLM（Vision LLM 可能也使用类似的接口）
 try:
-    from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
+    BaseLLM = getattr(
+        import_module("modular_rag_mcp_server.libs.llm.base_llm"),
+        "BaseLLM",
+    )
     LLM_AVAILABLE = True
-except ImportError:
+except (AttributeError, ImportError):
     LLM_AVAILABLE = False
     BaseLLM = None
 

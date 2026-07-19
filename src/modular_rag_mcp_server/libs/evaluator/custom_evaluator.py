@@ -18,7 +18,7 @@ class CustomEvaluator(BaseEvaluator):
     - MRR（Mean Reciprocal Rank，平均倒数排名）：第一个标准答案在检索结果中的排名倒数
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化 Custom Evaluator"""
         self._backend = "custom"
     

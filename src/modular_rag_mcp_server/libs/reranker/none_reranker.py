@@ -18,7 +18,7 @@ class NoneReranker(BaseReranker):
     作为默认回退选项，当不需要重排序时使用。
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化 None Reranker"""
         self._backend = "none"
     

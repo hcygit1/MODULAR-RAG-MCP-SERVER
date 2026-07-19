@@ -158,7 +158,7 @@ class Chunk:
         Returns:
             Dict[str, Any]: 包含 id, text, metadata, start_offset, end_offset 的字典
         """
-        result = {
+        result: Dict[str, Any] = {
             "id": self.id,
             "text": self.text,
             "metadata": self.metadata

@@ -1,7 +1,7 @@
 # 项目技术知识库 — 面试官参考手册
 
 > 本文件供面试官（AI Agent）使用，包含本项目的关键实现细节、高频面试题及参考答案。  
-> **对齐版本**：与当前仓库 `src/` + `config/settings.yaml` 一致（2026-03）。若 DEV_SPEC 与代码不一致，**以代码为准**。
+> **对齐版本**：与当前仓库 `src/modular_rag_mcp_server/` + `src/modular_rag_mcp_server/resources/settings.yaml` 一致（2026-07）。若 DEV_SPEC 与代码不一致，**以代码为准**。
 
 ---
 
@@ -10,7 +10,7 @@
 ### 核心实现
 - **双路并行召回**：Dense（向量语义）+ Sparse（关键词/全文）同时执行
 - **融合算法**：RRF（Reciprocal Rank Fusion）  
-  公式：`Score = 1/(k + Rank_Dense) + 1/(k + Rank_Sparse)`，k 通常取 60（与 `config/settings.yaml` 中 `fusion_algorithm: rrf` 一致）
+  公式：`Score = 1/(k + Rank_Dense) + 1/(k + Rank_Sparse)`，k 通常取 60（与 `src/modular_rag_mcp_server/resources/settings.yaml` 中 `fusion_algorithm: rrf` 一致）
 - **为什么用 RRF 而不是线性加权**：RRF 无需对不同路的分数值做归一化，对排名稳健，不依赖各路分数的绝对尺度
 - **Dense Route**：Query Embedding → 向量相似度检索 → Top-N
 - **Sparse Route（默认 SQLite 后端）**：**FTS5** 与 chunk 同库（`retrieval.sparse_backend: fts5` 时）；非 SQLite 后端时可能走其他稀疏实现。口语上仍可称「稀疏/关键词一路」，但不要硬说成「独立 pickle BM25 目录」除非候选人明确用的是旧架构
@@ -75,11 +75,11 @@ A: Caption 等进入 chunk 文本或 metadata；检索命中后，**SQLite 统�
 ## 模块四：可插拔架构
 
 ### 核心设计
-- **工厂 + Base**：Embedding / VectorStore / Reranker / LLM 等按 `config/settings.yaml` 选择实现
+- **工厂 + Base**：Embedding / VectorStore / Reranker / LLM 等按 `src/modular_rag_mcp_server/resources/settings.yaml` 选择实现
 - **配置驱动**：换 backend 主要改 YAML + 必要时新增 `libs` 下实现并在 Factory 注册
 
 ### 当前支持（以 settings 注释与代码为准）
-- **LLM / Vision**：含 **Qwen / DashScope** 等（见 `src/libs/llm/`）
+- **LLM / Vision**：含 **Qwen / DashScope** 等（见 `src/modular_rag_mcp_server/libs/llm/`）
 - **Embedding**：含 **Qwen、OpenAI、Ollama、local** 等
 - **Vector Store**：**sqlite（推荐统一存储）**、chroma、qdrant、pinecone 等
 - **Reranker**：none / cross_encoder / llm
@@ -96,11 +96,11 @@ A: Caption 等进入 chunk 文本或 metadata；检索命中后，**SQLite 统�
 | `ingest_document_normal` | 本地 PDF / MD / TXT 入库 | `file_path`, `collection_name?`, `force?` |
 | `ingest_document_mineru` | MinerU 云端解析 PDF 入库 | `file_path`, `collection_name?`, `force?` |
 
-> **注意**：`get_document_summary` 若出现在 DEV_SPEC 中为规划项，**当前 `src/mcp_server/server.py` 未注册**，面试中勿当作已实现能力。
+> **注意**：`get_document_summary` 若出现在 DEV_SPEC 中为规划项，**当前 `src/modular_rag_mcp_server/mcp_server/server.py` 未注册**，面试中勿当作已实现能力。
 
 ### 检索返回形态
 - 顶层：**`content`**、**`structuredContent`**（如 **`citations`**）、**`isError`**
-- 注册位置：`src/mcp_server/server.py`（FastMCP + stdio）
+- 注册位置：`src/modular_rag_mcp_server/mcp_server/server.py`（FastMCP + stdio）
 
 ---
 
@@ -120,14 +120,14 @@ A: 有 `source_doc_id` 时 **`replace_document_chunks`**：先删该文档下旧
 ## 模块七：可观测性与追踪系统
 
 - **Trace**：`TraceContext` + `logs/traces.jsonl`（由 `observability.logging.log_file` 配置）
-- **Dashboard**：Streamlit（`src/observability/dashboard/`）
+- **Dashboard**：Streamlit（`src/modular_rag_mcp_server/observability/dashboard/`）
 - **评估面板**：若展示 Ragas，需说明 **当前 evaluator 中 ragas backend 可能未实现**（以 `EvaluatorFactory` 为准）
 
 ---
 
 ## 模块八：评估体系
 
-- **脚本/模块**：`scripts/evaluate.py`、`src/observability/evaluation/`（如 `content_evaluator`、`eval_runner`、`e2e_runner`）
+- **脚本/模块**：`scripts/evaluate.py`、`src/modular_rag_mcp_server/observability/evaluation/`（如 `content_evaluator`、`eval_runner`、`e2e_runner`）
 - **Golden Test Set**：`tests/fixtures/golden_test_set.json`（配置项 `evaluation.golden_test_set`）
 - **Ragas**：配置里可出现 `evaluation.backends: [ragas, custom]`，但 **工厂内 ragas 可能仍为 NotImplementedError** —— 面试要问「是否已落地」而非默认已跑 Ragas
 

@@ -13,16 +13,43 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
 
 logger = logging.getLogger(__name__)
 
+
+class _Response(Protocol):
+    status_code: int
+    content: bytes
+
+    def json(self) -> Any: ...
+
+    def raise_for_status(self) -> None: ...
+
+
+class _RequestsModule(Protocol):
+    def post(self, url: str, **kwargs: Any) -> _Response: ...
+
+    def put(self, url: str, **kwargs: Any) -> _Response: ...
+
+    def get(self, url: str, **kwargs: Any) -> _Response: ...
+
+
+requests: Optional[_RequestsModule]
 try:
-    import requests
+    requests = cast(_RequestsModule, import_module("requests"))
     REQUESTS_AVAILABLE = True
 except ImportError:
+    requests = None
     REQUESTS_AVAILABLE = False
+
+
+def _require_requests() -> _RequestsModule:
+    if requests is None:
+        raise RuntimeError("requests 未安装，请安装: pip install requests")
+    return requests
 
 
 @dataclass
@@ -133,7 +160,7 @@ class MinerUCloudClient:
             "model_version": self._model_version,
         }
 
-        resp = requests.post(
+        resp = _require_requests().post(
             url,
             headers=self._headers,
             json=payload,
@@ -160,7 +187,7 @@ class MinerUCloudClient:
 
     def _upload_file(self, upload_url: str, data: bytes) -> None:
         """PUT 上传文件，不设置 Content-Type"""
-        resp = requests.put(
+        resp = _require_requests().put(
             upload_url,
             data=data,
             timeout=self._request_timeout,
@@ -175,7 +202,11 @@ class MinerUCloudClient:
         deadline = time.time() + self._poll_timeout
 
         while time.time() < deadline:
-            resp = requests.get(url, headers=self._headers, timeout=self._request_timeout)
+            resp = _require_requests().get(
+                url,
+                headers=self._headers,
+                timeout=self._request_timeout,
+            )
             resp.raise_for_status()
 
             data = resp.json()
@@ -195,7 +226,7 @@ class MinerUCloudClient:
                 if state == "done":
                     zip_url = item.get("full_zip_url")
                     if zip_url:
-                        return zip_url
+                        return cast(str, zip_url)
 
             time.sleep(self._poll_interval)
 
@@ -203,7 +234,7 @@ class MinerUCloudClient:
 
     def _download_and_parse_zip(self, zip_url: str, source_path: str) -> MinerURawResult:
         """下载 zip，解压，读取 md 和 images"""
-        resp = requests.get(zip_url, timeout=self._request_timeout)
+        resp = _require_requests().get(zip_url, timeout=self._request_timeout)
         resp.raise_for_status()
 
         with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
@@ -282,7 +313,7 @@ class MinerUCloudClient:
                     if item.get("type") == "image":
                         path = item.get("img_path", "") or item.get("image_path", "")
                         if path and (img_rel_path in path or path in img_rel_path):
-                            return item.get("page_idx", page_idx)
+                            return cast(int, item.get("page_idx", page_idx))
                 elif isinstance(item, list):
                     found = _search_items(item, page_idx)
                     if found is not None:

@@ -135,7 +135,7 @@
 **参考答案**：
 MCP（Model Context Protocol）基于 JSON-RPC 2.0；本项目 **Stdio Transport**（stdout 仅 MCP 消息，日志 stderr）。
 
-当前 **`src/mcp_server/server.py` 注册 4 个 Tool**：
+当前 **`src/modular_rag_mcp_server/mcp_server/server.py` 注册 4 个 Tool**：
 
 | Tool | 功能 | 关键参数 |
 |------|------|---------|
@@ -204,9 +204,9 @@ $$HitRate@K = \frac{\text{Top-K 结果中至少命中一条 Golden Answer 的查
 **参考答案**：
 只需改 **3 处**，已有代码零修改（开闭原则）：
 
-1. **新建** `src/libs/embedding/your_provider.py`：继承 `BaseEmbedding`，实现 `embed_texts()` 等接口方法
-2. **修改** `src/libs/embedding/factory.py`：在 `provider_map` 中注册 `"your_provider": YourProviderClass`
-3. **修改** `config/settings.yaml`：将 `embedding.provider` 改为 `"your_provider"`
+1. **新建** `src/modular_rag_mcp_server/libs/embedding/your_provider.py`：继承 `BaseEmbedding`，实现 `embed_texts()` 等接口方法
+2. **修改** `src/modular_rag_mcp_server/libs/embedding/factory.py`：在 `provider_map` 中注册 `"your_provider": YourProviderClass`
+3. **修改** `src/modular_rag_mcp_server/resources/settings.yaml`：将 `embedding.provider` 改为 `"your_provider"`
 
 其他组件（LLM / Reranker / VectorStore / Loader / Splitter）遵循同一套三步流程。
 

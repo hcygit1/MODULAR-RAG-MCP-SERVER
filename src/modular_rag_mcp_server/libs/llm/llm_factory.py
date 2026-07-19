@@ -47,16 +47,16 @@ class LLMFactory:
             config = settings.llm
         
         provider = config.provider.lower()
-        is_vision = isinstance(config, VisionLLMConfig)
-        
         # 处理 Vision LLM 的特殊情况
-        if is_vision and (provider == "dashscope" or provider == "qwen"):
+        if isinstance(config, VisionLLMConfig) and (
+            provider == "dashscope" or provider == "qwen"
+        ):
             # DashScope/Qwen Vision LLM 实现
             from modular_rag_mcp_server.libs.llm.dashscope_vision_llm import DashScopeVisionLLM
             return DashScopeVisionLLM(config)
         
         # 对于需要 LLMConfig 的实现，如果传入的是 VisionLLMConfig，需要适配
-        if is_vision and provider == "azure":
+        if isinstance(config, VisionLLMConfig) and provider == "azure":
             # Azure Vision LLM：将 VisionLLMConfig 适配为 LLMConfig
             llm_config = LLMConfig(
                 provider="azure",
@@ -70,7 +70,7 @@ class LLMFactory:
             return AzureLLM(llm_config)
         
         # 普通 LLM 实现（需要 LLMConfig）
-        if is_vision:
+        if isinstance(config, VisionLLMConfig):
             raise ValueError(
                 f"Vision LLM provider '{provider}' 暂不支持，"
                 f"支持的 Vision LLM provider: azure, dashscope, qwen"

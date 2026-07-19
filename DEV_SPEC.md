@@ -511,7 +511,7 @@ LlamaIndex 为向量数据库定义了统一的 `VectorStore` 抽象接口，所
 
 #### 3.3.5 配置管理与切换流程
 
-- **配置文件结构示例** (`config/settings.yaml`)：
+- **配置文件结构示例** (`src/modular_rag_mcp_server/resources/settings.yaml`)：
 	```yaml
 	llm:
 	  provider: azure  # azure | openai | ollama | deepseek
@@ -1211,14 +1211,15 @@ Hybrid Search 命中 Chunk（正文含 "[图片描述: 系统采用三层架构.
 ```
 smart-knowledge-hub/
 │
-├── config/                              # 配置文件目录
-│   ├── settings.yaml                    # 主配置文件 (LLM/Embedding/VectorStore 配置)
-│   └── prompts/                         # Prompt 模板目录
-│       ├── image_captioning.txt         # 图片描述生成 Prompt
-│       ├── chunk_refinement.txt         # Chunk 重写 Prompt
-│       └── rerank.txt                   # LLM Rerank Prompt
-│
-├── src/                                 # 源代码主目录
+├── src/modular_rag_mcp_server/          # 正式 Python 包
+│   │
+│   ├── resources/                       # wheel 内置默认配置与 Prompt
+│   │   ├── settings.yaml
+│   │   └── prompts/
+│   │       ├── image_captioning.txt
+│   │       ├── chunk_refinement.txt
+│   │       ├── boundary_repair.txt
+│   │       └── rerank.txt
 │   │
 │   ├── mcp_server/                      # MCP Server 层 (接口层)
 │   │   ├── __init__.py
@@ -1382,7 +1383,7 @@ smart-knowledge-hub/
 │   ├── evaluate.py                      # 评估运行脚本
 │   └── start_dashboard.py               # Dashboard 启动脚本
 │
-├── main.py                              # MCP Server 启动入口
+├── main.py                              # 兼容启动转发；正式入口为 console script
 ├── pyproject.toml                       # Python 项目配置
 ├── requirements.txt                     # 依赖列表
 └── README.md                            # 项目说明
@@ -1402,7 +1403,7 @@ smart-knowledge-hub/
 
 | 模块 | 职责 | 关键技术点 |
 |-----|-----|----------|
-| `settings.py` | 配置加载与校验 | 读取 `config/settings.yaml`，解析为 `Settings`，必填字段校验（fail-fast） |
+| `settings.py` | 配置加载与校验 | 读取 `src/modular_rag_mcp_server/resources/settings.yaml`，解析为 `Settings`，必填字段校验（fail-fast） |
 | `query_processor.py` | 查询预处理 | 关键词提取、同义词扩展、Metadata 解析 |
 | `hybrid_search.py` | 混合检索编排 | 并行 Dense/Sparse 召回，结果融合 |
 | `dense_retriever.py` | 语义向量检索 | Query Embedding，Cosine Similarity |
@@ -1541,10 +1542,10 @@ smart-knowledge-hub/
 
 ### 5.5 配置驱动设计
 
-系统通过 `config/settings.yaml` 统一配置各组件实现，支持零代码切换：
+系统提供 wheel 内置的 `src/modular_rag_mcp_server/resources/settings.yaml` 默认配置，并支持通过 `--config` 或 `MODULAR_RAG_CONFIG_PATH` 指定外部配置，实现零代码切换：
 
 ```yaml
-# config/settings.yaml 示例
+# src/modular_rag_mcp_server/resources/settings.yaml 示例
 
 # LLM 配置
 llm:
@@ -1750,24 +1751,25 @@ observability:
 ### A1：初始化目录树与最小可运行入口 ✅
 - **目标**：在 repo 根目录创建第 5.2 节所述目录骨架与空模块文件（可 import）。
 - **修改文件**：
-  - `main.py`
+  - `src/modular_rag_mcp_server/cli.py`
+  - `main.py`（兼容转发）
   - `pyproject.toml`
   - `README.md`
   - `.gitignore`（Python 项目标准忽略规则：`__pycache__`、`.venv`、`.env`、`*.pyc`、IDE 配置等）
-  - `src/**/__init__.py`（按目录树补齐）
-  - `config/settings.yaml`（最小可解析配置）
-  - `config/prompts/image_captioning.txt`（可先放占位内容，后续阶段补充 Prompt）
-  - `config/prompts/chunk_refinement.txt`（可先放占位内容，后续阶段补充 Prompt）
-  - `config/prompts/rerank.txt`（可先放占位内容，后续阶段补充 Prompt）
+  - `src/modular_rag_mcp_server/**/__init__.py`（按目录树补齐）
+  - `src/modular_rag_mcp_server/resources/settings.yaml`（最小可解析配置）
+  - `src/modular_rag_mcp_server/resources/prompts/image_captioning.txt`（可先放占位内容，后续阶段补充 Prompt）
+  - `src/modular_rag_mcp_server/resources/prompts/chunk_refinement.txt`（可先放占位内容，后续阶段补充 Prompt）
+  - `src/modular_rag_mcp_server/resources/prompts/rerank.txt`（可先放占位内容，后续阶段补充 Prompt）
 - **实现类/函数**：无（仅骨架）。
 - **实现类/函数**：无（仅骨架，不实现业务逻辑）。
 - **实现类/函数**：为当前项目创建一个虚拟环境模块。
  - **验收标准**：
   - 目录结构与 DEV_SPEC 5.2 一致（至少把对应目录创建出来）。
-  - `config/prompts/` 目录存在，且三个 prompt 文件可被读取（即使只是占位文本）。
-  - 能导入关键顶层包（与目录结构一一对应）：
-    - `python -c "import mcp_server; import core; import ingestion; import libs; import observability"`
-  - 可以启动虚拟环境模块
+  - `src/modular_rag_mcp_server/resources/prompts/` 目录存在，且三个 prompt 文件可被读取（即使只是占位文本）。
+  - 能导入正式顶层包：
+    - `python -c "import modular_rag_mcp_server"`
+  - `modular-rag-mcp-server --check-config` 可验证内置配置
 - **测试方法**：运行 `python -m compileall src`（仅做语法/可导入性检查；pytest 基座在 A2 建立）。
 
 ### A2：引入 pytest 并建立测试目录约定 ✅
@@ -1784,19 +1786,19 @@ observability:
 - **测试方法**：`pytest -q tests/unit/test_smoke_imports.py`。
 
 ### A3：配置加载与校验（Settings）
-- **目标**：实现读取 `config/settings.yaml` 的配置加载器，并在启动时校验关键字段存在。
+- **目标**：实现读取包内默认配置或显式外部配置的加载器，并在启动时校验关键字段存在。
 - **修改文件**：
-  - `main.py`（启动时调用 `load_settings()`，缺字段直接 fail-fast 退出）
-  - `src/observability/logger.py`（先占位：提供 get_logger，stderr 输出）
-  - `src/core/settings.py`（新增：集中放 Settings 数据结构与加载/校验逻辑）
-  - `config/settings.yaml`（补齐字段：llm/embedding/vector_store/retrieval/rerank/evaluation/observability）
+  - `src/modular_rag_mcp_server/cli.py`（启动时调用 `load_settings()`，缺字段直接 fail-fast 退出）
+  - `src/modular_rag_mcp_server/observability/logger.py`（先占位：提供 get_logger，stderr 输出）
+  - `src/modular_rag_mcp_server/core/settings.py`（新增：集中放 Settings 数据结构与加载/校验逻辑）
+  - `src/modular_rag_mcp_server/resources/settings.yaml`（补齐字段：llm/embedding/vector_store/retrieval/rerank/evaluation/observability）
   - `tests/unit/test_config_loading.py`
 - **实现类/函数**：
   - `Settings`（dataclass：只做结构与最小校验；不在这里做任何网络/IO 的“业务初始化”）
   - `load_settings(path: str) -> Settings`（读取 YAML -> 解析为 Settings -> 校验必填字段）
   - `validate_settings(settings: Settings) -> None`（把“必填字段检查”集中化，错误信息包含字段路径，例如 `embedding.provider`）
 - **验收标准**：
-  - `main.py` 启动时能成功加载 `config/settings.yaml` 并拿到 `Settings` 对象。
+  - `modular-rag-mcp-server --check-config` 能加载包内默认配置并完成校验。
   - 删除/缺失关键字段时（例如 `embedding.provider`），启动或 `load_settings()` 抛出“可读错误”（明确指出缺的是哪个字段）。
 - **测试方法**：`pytest -q tests/unit/test_config_loading.py`。
 
@@ -1807,8 +1809,8 @@ observability:
 ### B1：LLM 抽象接口与工厂 ✅
 - **目标**：定义 `BaseLLM` 与 `LLMFactory`，支持按配置选择 provider。
 - **修改文件**：
-  - `src/libs/llm/base_llm.py`
-  - `src/libs/llm/llm_factory.py`
+  - `src/modular_rag_mcp_server/libs/llm/base_llm.py`
+  - `src/modular_rag_mcp_server/libs/llm/llm_factory.py`
   - `tests/unit/test_llm_factory.py`
 - **实现类/函数**：
   - `BaseLLM.chat(messages) -> str`（或统一 response 对象）
@@ -1819,8 +1821,8 @@ observability:
 ### B2：Embedding 抽象接口与工厂 ✅
 - **目标**：定义 `BaseEmbedding` 与 `EmbeddingFactory`，支持批量 embed。
 - **修改文件**：
-  - `src/libs/embedding/base_embedding.py`
-  - `src/libs/embedding/embedding_factory.py`
+  - `src/modular_rag_mcp_server/libs/embedding/base_embedding.py`
+  - `src/modular_rag_mcp_server/libs/embedding/embedding_factory.py`
   - `tests/unit/test_embedding_factory.py`
 - **实现类/函数**：
   - `BaseEmbedding.embed(texts: list[str], trace: TraceContext | None = None) -> list[list[float]]`
@@ -1831,8 +1833,8 @@ observability:
 ### B3：Splitter 抽象接口与工厂 ✅
 - **目标**：定义 `BaseSplitter` 与 `SplitterFactory`，支持不同切分策略（Recursive/Semantic/Fixed）。
 - **修改文件**：
-  - `src/libs/splitter/base_splitter.py`
-  - `src/libs/splitter/splitter_factory.py`
+  - `src/modular_rag_mcp_server/libs/splitter/base_splitter.py`
+  - `src/modular_rag_mcp_server/libs/splitter/splitter_factory.py`
   - `tests/unit/test_splitter_factory.py`
 - **实现类/函数**：
   - `BaseSplitter.split_text(text: str, trace: TraceContext | None = None) -> List[str]`
@@ -1843,8 +1845,8 @@ observability:
 ### B4：VectorStore 抽象接口与工厂（先定义契约） ✅
 - **目标**：定义 `BaseVectorStore` 与 `VectorStoreFactory`，先不接真实 DB。
 - **修改文件**：
-  - `src/libs/vector_store/base_vector_store.py`
-  - `src/libs/vector_store/vector_store_factory.py`
+  - `src/modular_rag_mcp_server/libs/vector_store/base_vector_store.py`
+  - `src/modular_rag_mcp_server/libs/vector_store/vector_store_factory.py`
   - `tests/unit/test_vector_store_contract.py`
 - **实现类/函数**：
   - `BaseVectorStore.upsert(records, trace: TraceContext | None = None)`
@@ -1855,8 +1857,8 @@ observability:
 ### B5：Reranker 抽象接口与工厂（含 None 回退） ✅
 - **目标**：实现 `BaseReranker`、`RerankerFactory`，提供 `NoneReranker` 作为默认回退。
 - **修改文件**：
-  - `src/libs/reranker/base_reranker.py`
-  - `src/libs/reranker/reranker_factory.py`
+  - `src/modular_rag_mcp_server/libs/reranker/base_reranker.py`
+  - `src/modular_rag_mcp_server/libs/reranker/reranker_factory.py`
   - `tests/unit/test_reranker_factory.py`
 - **实现类/函数**：
   - `BaseReranker.rerank(query, candidates, trace: TraceContext | None = None) -> ranked_candidates`
@@ -1867,9 +1869,9 @@ observability:
 ### B6：Evaluator 抽象接口与工厂（先做自定义轻量指标） ✅
 - **目标**：定义 `BaseEvaluator`、`EvaluatorFactory`，实现最小 `CustomEvaluator`（例如 hit_rate/mrr）。
 - **修改文件**：
-  - `src/libs/evaluator/base_evaluator.py`
-  - `src/libs/evaluator/evaluator_factory.py`
-  - `src/libs/evaluator/custom_evaluator.py`
+  - `src/modular_rag_mcp_server/libs/evaluator/base_evaluator.py`
+  - `src/modular_rag_mcp_server/libs/evaluator/evaluator_factory.py`
+  - `src/modular_rag_mcp_server/libs/evaluator/custom_evaluator.py`
   - `tests/unit/test_custom_evaluator.py`
 - **验收标准**：输入 query + retrieved_ids + golden_ids 能输出稳定 metrics。
 - **测试方法**：`pytest -q tests/unit/test_custom_evaluator.py`。
@@ -1881,9 +1883,9 @@ observability:
 ### B7.1：OpenAI-Compatible LLM（OpenAI/Azure/DeepSeek） ✅
 - **目标**：补齐 OpenAI-compatible 的 LLM 实现，确保通过 `LLMFactory` 可创建并可被 mock 测试。
 - **修改文件**：
-  - `src/libs/llm/openai_llm.py`
-  - `src/libs/llm/azure_llm.py`
-  - `src/libs/llm/deepseek_llm.py`
+  - `src/modular_rag_mcp_server/libs/llm/openai_llm.py`
+  - `src/modular_rag_mcp_server/libs/llm/azure_llm.py`
+  - `src/modular_rag_mcp_server/libs/llm/deepseek_llm.py`
   - `tests/unit/test_llm_providers_smoke.py`（mock HTTP，不走真实网络）
 - **验收标准**：
   - 配置不同 `provider` 时工厂路由正确。
@@ -1893,7 +1895,7 @@ observability:
 ### B7.2：Ollama LLM（本地后端） ✅
 - **目标**：补齐 `ollama_llm.py`，支持本地 HTTP endpoint（默认 `base_url` + `model`），并可被 mock 测试。
 - **修改文件**：
-  - `src/libs/llm/ollama_llm.py`
+  - `src/modular_rag_mcp_server/libs/llm/ollama_llm.py`
   - `tests/unit/test_ollama_llm.py`（mock HTTP）
 - **验收标准**：
   - provider=ollama 时可由 `LLMFactory` 创建。
@@ -1903,7 +1905,7 @@ observability:
 ### B7.3：OpenAI Embedding 实现 ✅
 - **目标**：补齐 `openai_embedding.py`，支持批量 `embed(texts)`，并可被 mock 测试。
 - **修改文件**：
-  - `src/libs/embedding/openai_embedding.py`
+  - `src/modular_rag_mcp_server/libs/embedding/openai_embedding.py`
   - `tests/unit/test_embedding_providers_smoke.py`（mock HTTP）
 - **验收标准**：
   - provider=openai 时 `EmbeddingFactory` 可创建。
@@ -1913,7 +1915,7 @@ observability:
 ### B7.4：Local Embedding 实现（BGE/Ollama 占位） ✅
 - **目标**：补齐 `local_embedding.py` 的默认实现路径（可先做占位/适配层），并在测试中用 Fake 向量保证链路可跑。
 - **修改文件**：
-  - `src/libs/embedding/local_embedding.py`
+  - `src/modular_rag_mcp_server/libs/embedding/local_embedding.py`
   - `tests/unit/test_local_embedding.py`
 - **验收标准**：
   - provider=local 时 `EmbeddingFactory` 可创建。
@@ -1923,7 +1925,7 @@ observability:
 ### B7.5：Recursive Splitter 默认实现 ✅
 - **目标**：补齐 `recursive_splitter.py`，封装 LangChain 的切分逻辑，作为默认切分器。
 - **修改文件**：
-  - `src/libs/splitter/recursive_splitter.py`
+  - `src/modular_rag_mcp_server/libs/splitter/recursive_splitter.py`
   - `tests/unit/test_recursive_splitter_lib.py`
 - **验收标准**：
   - provider=recursive 时 `SplitterFactory` 可创建。
@@ -1933,7 +1935,7 @@ observability:
 ### B7.6：ChromaStore（VectorStore 默认后端） ✅
 - **目标**：补齐 `chroma_store.py`，支持最小 `upsert(records)` 与 `query(vector, top_k, filters)`，并支持本地持久化目录（例如 `data/db/chroma/`）。
 - **修改文件**：
-  - `src/libs/vector_store/chroma_store.py`
+  - `src/modular_rag_mcp_server/libs/vector_store/chroma_store.py`
   - `tests/integration/test_chroma_store_roundtrip.py`（可选：标记为 integration，允许跳过）
 - **验收标准**：
   - provider=chroma 时 `VectorStoreFactory` 可创建。
@@ -1941,9 +1943,9 @@ observability:
 - **测试方法**：`pytest -q tests/integration/test_chroma_store_roundtrip.py`（可选）。
 
 ### B7.7：LLM Reranker（读取 rerank prompt） ✅
-- **目标**：补齐 `llm_reranker.py`，读取 `config/prompts/rerank.txt` 构造 prompt（测试中可注入替代文本），并可在失败时返回可回退信号。
+- **目标**：补齐 `llm_reranker.py`，读取 `src/modular_rag_mcp_server/resources/prompts/rerank.txt` 构造 prompt（测试中可注入替代文本），并可在失败时返回可回退信号。
 - **修改文件**：
-  - `src/libs/reranker/llm_reranker.py`
+  - `src/modular_rag_mcp_server/libs/reranker/llm_reranker.py`
   - `tests/unit/test_llm_reranker.py`（mock LLM）
 - **验收标准**：
   - backend=llm 时 `RerankerFactory` 可创建。
@@ -1953,7 +1955,7 @@ observability:
 ### B7.8：Cross-Encoder Reranker（本地/托管模型，占位可跑） ✅
 - **目标**：补齐 `cross_encoder_reranker.py`，支持对 Top-M candidates 打分排序；测试中用 mock scorer 保证 deterministic。
 - **修改文件**：
-  - `src/libs/reranker/cross_encoder_reranker.py`
+  - `src/modular_rag_mcp_server/libs/reranker/cross_encoder_reranker.py`
   - `tests/unit/test_cross_encoder_reranker.py`（mock scorer）
 - **验收标准**：
   - backend=cross_encoder 时 `RerankerFactory` 可创建。
@@ -1969,7 +1971,7 @@ observability:
 ### C1：定义核心数据模型（Document/Chunk/Record） ✅
 - **目标**：定义 ingestion 与 retrieval 共用的数据结构（最少字段：text、metadata、ids）。
 - **修改文件**：
-  - `src/ingestion/__init__.py`（若需新增 `src/ingestion/models.py`，需同步在 5.2 目录结构中补充）
+  - `src/modular_rag_mcp_server/ingestion/__init__.py`（若需新增 `src/modular_rag_mcp_server/ingestion/models.py`，需同步在 5.2 目录结构中补充）
   - `tests/unit/test_models.py`
 - **实现类/函数**（建议）：
   - `Document(id, text, metadata)`
@@ -1980,7 +1982,7 @@ observability:
 ### C2：文件完整性检查（SHA256） ✅
 - **目标**：在Libs中实现 `file_integrity.py`：计算文件 hash，并提供“是否跳过”的判定接口（先用本地 cache 文件/SQLite 任一实现，后续可替换）。
 - **修改文件**：
-  - `src/libs/loader/file_integrity.py`
+  - `src/modular_rag_mcp_server/libs/loader/file_integrity.py`
   - `tests/unit/test_file_integrity.py`
 - **实现类/函数**：
   - `compute_sha256(path) -> str`
@@ -1992,8 +1994,8 @@ observability:
 ### C3：Loader 抽象基类与 PDF Loader 壳子 ✅
 - **目标**：在Libs中定义 `BaseLoader`，并实现 `PdfLoader` 的最小行为。
 - **修改文件**：
-  - `src/libs/loader/base_loader.py`
-  - `src/libs/loader/pdf_loader.py`
+  - `src/modular_rag_mcp_server/libs/loader/base_loader.py`
+  - `src/modular_rag_mcp_server/libs/loader/pdf_loader.py`
   - `tests/unit/test_loader_pdf_contract.py`
 - **实现类/函数**：
   - `BaseLoader.load(path) -> Document`
@@ -2004,7 +2006,7 @@ observability:
 ### C4：Splitter 集成（调用 Libs） ✅
 - **目标**：在 Pipeline 中集成 `libs.splitter`，验证 Splitter 工厂配置是否生效。
 - **修改文件**：
-  - `src/ingestion/pipeline.py`
+  - `src/modular_rag_mcp_server/ingestion/pipeline.py`
   - `tests/unit/test_ingestion_splitter_integration.py`
 - **验收标准**：通过配置切换（例如改变 chunk_size），Ingestion Pipeline 产出的 chunk 长度发生相应变化。
 - **测试方法**：`pytest -q tests/unit/test_ingestion_splitter_integration.py`。
@@ -2012,9 +2014,9 @@ observability:
 ### C5：Transform 抽象基类 + ChunkRefiner（规则去噪 + 可选 LLM 重写） ✅
 - **目标**：定义 `BaseTransform`；实现 `ChunkRefiner`：先做规则去噪，再支持（可选）LLM 重写/规范化，并提供可配置开关与失败降级（LLM 不可用/异常时不阻塞 ingestion）。
 - **修改文件**：
-  - `src/ingestion/transform/base_transform.py`
-  - `src/ingestion/transform/chunk_refiner.py`
-  - `config/prompts/chunk_refinement.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
+  - `src/modular_rag_mcp_server/ingestion/transform/base_transform.py`
+  - `src/modular_rag_mcp_server/ingestion/transform/chunk_refiner.py`
+  - `src/modular_rag_mcp_server/resources/prompts/chunk_refinement.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
   - `tests/unit/test_chunk_refiner.py`
 - **验收标准**：
   - 规则模式：能去掉空白/页眉页脚样式噪声（用 fixtures 字符串断言）。
@@ -2025,7 +2027,7 @@ observability:
 ### C6：MetadataEnricher（规则增强 + 可选 LLM 增强 + 降级） ✅
 - **目标**：实现元数据增强模块：提供规则增强的默认实现（例如从 chunk 文本抽取/推断 title、生成简短 summary、打 tags），并支持可选 LLM 增强（可配置开关 + 失败降级，不阻塞 ingestion）。
 - **修改文件**：
-  - `src/ingestion/transform/metadata_enricher.py`
+  - `src/modular_rag_mcp_server/ingestion/transform/metadata_enricher.py`
   - `tests/unit/test_metadata_enricher_contract.py`
 - **验收标准**：
   - 规则模式：输出 metadata 必须包含 `title/summary/tags`，且 `title`/`summary` 至少为非空字符串（fixtures 断言）。
@@ -2036,8 +2038,8 @@ observability:
 ### C7：ImageCaptioner（可选生成 caption + 降级不阻塞） ✅
 - **目标**：实现 `image_captioner.py`：当启用 Vision LLM 且存在 image_refs 时生成 caption 并写回 chunk metadata；当禁用/不可用/异常时走降级路径，不阻塞 ingestion。
 - **修改文件**：
-  - `src/ingestion/transform/image_captioner.py`
-  - `config/prompts/image_captioning.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
+  - `src/modular_rag_mcp_server/ingestion/transform/image_captioner.py`
+  - `src/modular_rag_mcp_server/resources/prompts/image_captioning.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
   - `tests/unit/test_image_captioner_fallback.py`
 - **验收标准**：
   - 启用模式：存在 image_refs 时会生成 caption 并写入 metadata（测试中用 mock Vision LLM 断言调用与输出）。
@@ -2047,7 +2049,7 @@ observability:
 ### C8：DenseEncoder（依赖 libs.embedding） ✅
 - **目标**：实现 `dense_encoder.py`，把 chunks.text 批量送入 `BaseEmbedding`。
 - **修改文件**：
-  - `src/ingestion/embedding/dense_encoder.py`
+  - `src/modular_rag_mcp_server/ingestion/embedding/dense_encoder.py`
   - `tests/unit/test_dense_encoder.py`
 - **验收标准**：encoder 输出向量数量与 chunks 数量一致，维度一致。
 - **测试方法**：`pytest -q tests/unit/test_dense_encoder.py`。
@@ -2055,7 +2057,7 @@ observability:
 ### C9：SparseEncoder（BM25 统计与输出契约） ✅
 - **目标**：实现 `sparse_encoder.py`：对 chunks 建立 BM25 所需统计（可先仅输出 term weights 结构，索引落地下一步做）。
 - **修改文件**：
-  - `src/ingestion/embedding/sparse_encoder.py`
+  - `src/modular_rag_mcp_server/ingestion/embedding/sparse_encoder.py`
   - `tests/unit/test_sparse_encoder.py`
 - **验收标准**：输出结构可用于稀疏索引（FTS5 或 sparse_vector）；对空文本有明确行为。
 - **测试方法**：`pytest -q tests/unit/test_sparse_encoder.py`。
@@ -2063,7 +2065,7 @@ observability:
 ### C10：BatchProcessor（批处理编排） ✅
 - **目标**：实现 `batch_processor.py`：将 chunks 分 batch，驱动 dense/sparse 编码，记录批次耗时（为 trace 预留）。
 - **修改文件**：
-  - `src/ingestion/embedding/batch_processor.py`
+  - `src/modular_rag_mcp_server/ingestion/embedding/batch_processor.py`
   - `tests/unit/test_batch_processor.py`
 - **验收标准**：batch_size=2 时对 5 chunks 分成 3 批，且顺序稳定。
 - **测试方法**：`pytest -q tests/unit/test_batch_processor.py`。
@@ -2071,14 +2073,14 @@ observability:
 ### C11：VectorUpserter（幂等 upsert 契约） ✅
 - **目标**：实现 `vector_upserter.py`，生成稳定 `chunk_id`（hash(source_path + section_path + content_hash)）。
 - **修改文件**：
-  - `src/ingestion/storage/vector_upserter.py`
+  - `src/modular_rag_mcp_server/ingestion/storage/vector_upserter.py`
   - `tests/unit/test_vector_upserter_idempotency.py`
 - **验收标准**：同一 chunk 两次 upsert 产生相同 id；内容变更 id 变更。
 - **测试方法**：`pytest -q tests/unit/test_vector_upserter_idempotency.py`。
 
 ### C12：BM25Indexer / FTS5（稀疏索引落地） ✅
 - **目标**：稀疏索引由 VectorStore 在其容器内完成。SQLite 使用 `fts5_bm25_indexer.py` + `chunks_fts` 表；不再使用独立 `data/db/bm25/`。
-- **当前实现**：`src/ingestion/storage/fts5_bm25_indexer.py`，由 `SQLiteVectorStore` 内部调用。
+- **当前实现**：`src/modular_rag_mcp_server/ingestion/storage/fts5_bm25_indexer.py`，由 `SQLiteVectorStore` 内部调用。
 
 ### C13：ImageStorage / 图片统一存储 ✅
 - **目标**：图片由 VectorStore 在其容器内存储。SQLite 使用 `images` 表；不再使用 `data/images/` 文件目录。
@@ -2087,7 +2089,7 @@ observability:
 ### C14：Pipeline 编排（MVP 串起来） ✅
 - **目标**：实现 `pipeline.py`：串行执行（integrity→load→split→transform→encode→store），并对失败步骤做清晰异常。
 - **修改文件**：
-  - `src/ingestion/pipeline.py`
+  - `src/modular_rag_mcp_server/ingestion/pipeline.py`
   - `tests/integration/test_ingestion_pipeline.py`
 - **验收标准**：对 fixtures 样例文档跑完整 pipeline，输出向量与稀疏索引（统一存于 VectorStore）。
 - **测试方法**：`pytest -q tests/integration/test_ingestion_pipeline.py`。
@@ -2107,7 +2109,7 @@ observability:
 ### D1：QueryProcessor（关键词提取 + filters 结构）
 - **目标**：实现 `query_processor.py`：关键词提取（先规则/分词），并解析通用 filters 结构（可空实现）。
 - **修改文件**：
-  - `src/core/query_engine/query_processor.py`
+  - `src/modular_rag_mcp_server/core/query_engine/query_processor.py`
   - `tests/unit/test_query_processor.py`
 - **验收标准**：对输入 query 输出 `keywords` 非空（可根据停用词策略），filters 为 dict。
 - **测试方法**：`pytest -q tests/unit/test_query_processor.py`。
@@ -2115,19 +2117,19 @@ observability:
 ### D2：DenseRetriever（调用 VectorStore.query）
 - **目标**：实现 `dense_retriever.py`，把 query embedding 与 filters 交给 VectorStore。
 - **修改文件**：
-  - `src/core/query_engine/dense_retriever.py`
+  - `src/modular_rag_mcp_server/core/query_engine/dense_retriever.py`
   - `tests/unit/test_dense_retriever.py`
 - **验收标准**：当 VectorStore 返回候选列表时，dense retriever 透传并规范化 score。
 - **测试方法**：`pytest -q tests/unit/test_dense_retriever.py`（mock vector store）。
 
 ### D3：SparseRetriever（稀疏检索） ✅
 - **目标**：`sparse_retriever.py` 调用 VectorStore.sparse_query 或传入 sqlite_path 使用 FTS5，从 VectorStore 容器内检索。
-- **当前实现**：`src/core/query_engine/sparse_retriever.py`，与 `SQLiteVectorStore` / FTS5 集成。
+- **当前实现**：`src/modular_rag_mcp_server/core/query_engine/sparse_retriever.py`，与 `SQLiteVectorStore` / FTS5 集成。
 
 ### D4：Fusion（RRF 实现）
 - **目标**：实现 `fusion.py`：RRF 融合 dense/sparse 排名并输出统一排序。
 - **修改文件**：
-  - `src/core/query_engine/fusion.py`
+  - `src/modular_rag_mcp_server/core/query_engine/fusion.py`
   - `tests/unit/test_fusion_rrf.py`
 - **验收标准**：对构造的排名输入输出 deterministic；k 参数可配置。
 - **测试方法**：`pytest -q tests/unit/test_fusion_rrf.py`。
@@ -2135,7 +2137,7 @@ observability:
 ### D5：HybridSearch 编排
 - **目标**：实现 `hybrid_search.py`：并行/串行均可（先串行），调用 dense+sparse+fusion。
 - **修改文件**：
-  - `src/core/query_engine/hybrid_search.py`
+  - `src/modular_rag_mcp_server/core/query_engine/hybrid_search.py`
   - `tests/integration/test_hybrid_search.py`
 - **验收标准**：对 fixtures 数据，能返回 Top-K（包含 chunk 文本与 metadata）。
 - **测试方法**：`pytest -q tests/integration/test_hybrid_search.py`。
@@ -2143,8 +2145,8 @@ observability:
 ### D6：Reranker（Core 层编排 + fallback）
 - **目标**：实现 `core/query_engine/reranker.py`：接入 `libs.reranker` 后端，失败/超时回退 fusion 排名。
 - **修改文件**：
-  - `src/core/query_engine/reranker.py`
-  - `config/prompts/rerank.txt`（仅当启用 LLM Rerank 后端时使用）
+  - `src/modular_rag_mcp_server/core/query_engine/reranker.py`
+  - `src/modular_rag_mcp_server/resources/prompts/rerank.txt`（仅当启用 LLM Rerank 后端时使用）
   - `tests/unit/test_reranker_fallback.py`
 - **验收标准**：模拟后端异常时不影响最终返回，且标记 fallback=true。
 - **测试方法**：`pytest -q tests/unit/test_reranker_fallback.py`。
@@ -2152,8 +2154,8 @@ observability:
 ### D7：RetrievalPipeline 编排
 - **目标**：实现完整检索流水线，串联 QueryProcessor → HybridSearch → Reranker；并集成 MetadataFilter（filters 解析与 Pre/Post-filter）。
 - **修改文件**：
-  - `src/core/query_engine/retrieval_pipeline.py`（或同类编排模块）
-  - `src/core/query_engine/metadata_filter.py`（可选，可并入 query_processor）
+  - `src/modular_rag_mcp_server/core/query_engine/retrieval_pipeline.py`（或同类编排模块）
+  - `src/modular_rag_mcp_server/core/query_engine/metadata_filter.py`（可选，可并入 query_processor）
   - `tests/integration/test_retrieval_pipeline.py`
 - **验收标准**：端到端 query 能返回 Top-K；filters 在 Pre/Post 阶段生效。
 - **测试方法**：`pytest -q tests/integration/test_retrieval_pipeline.py`。
@@ -2165,7 +2167,7 @@ observability:
 ### E1：MCP Server 入口与 Stdio 约束 ✅
 - **目标**：实现 `mcp_server/server.py`：遵循"stdout 只输出 MCP 消息，日志到 stderr"。
 - **修改文件**：
-  - `src/mcp_server/server.py`
+  - `src/modular_rag_mcp_server/mcp_server/server.py`
   - `tests/integration/test_mcp_server.py`
 - **验收标准**：启动 server 能完成 initialize；stderr 有日志但 stdout 不污染。
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py`（子进程方式）。
@@ -2183,9 +2185,9 @@ observability:
 ### E2：实现 tool：query_knowledge_hub ✅
 - **目标**：实现 `tools/query_knowledge_hub.py`：调用 query engine，返回 Markdown + structured citations。
 - **修改文件**：
-  - `src/mcp_server/tools/query_knowledge_hub.py`
-  - `src/core/response/response_builder.py`
-  - `src/core/response/citation_generator.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/query_knowledge_hub.py`
+  - `src/modular_rag_mcp_server/core/response/response_builder.py`
+  - `src/modular_rag_mcp_server/core/response/citation_generator.py`
   - `tests/integration/test_mcp_server.py`（补用例）
 - **验收标准**：tool 返回 content[0] 为可读 Markdown；structuredContent.citations 含 source/page/chunk_id/score。
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py -k query_knowledge_hub`。
@@ -2193,7 +2195,7 @@ observability:
 ### E3：实现 tool：list_collections ✅
 - **目标**：实现 `tools/list_collections.py`：列出 `data/documents/` 下集合并附带统计（可延后到下一步）。
 - **修改文件**：
-  - `src/mcp_server/tools/list_collections.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/list_collections.py`
   - `tests/unit/test_list_collections.py`
 - **验收标准**：对 fixtures 中的目录结构能返回集合名列表。
 - **测试方法**：`pytest -q tests/unit/test_list_collections.py`。
@@ -2201,7 +2203,7 @@ observability:
 ### E4：实现 tool：get_document_summary ✅
 - **目标**：实现 `tools/get_document_summary.py`：按 doc_id 返回 title/summary/tags（可先从 metadata/缓存取）。
 - **修改文件**：
-  - `src/mcp_server/tools/get_document_summary.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/get_document_summary.py`
   - `tests/unit/test_get_document_summary.py`
 - **验收标准**：对不存在 doc_id 返回规范错误；存在时返回结构化信息。
 - **测试方法**：`pytest -q tests/unit/test_get_document_summary.py`。
@@ -2209,7 +2211,7 @@ observability:
 ### E5：多模态返回组装（Text + Image） ✅
 - **目标**：实现 `multimodal_assembler.py`：命中 chunk 含 image_refs 时读取图片并 base64 返回 ImageContent。
 - **修改文件**：
-  - `src/core/response/multimodal_assembler.py`
+  - `src/modular_rag_mcp_server/core/response/multimodal_assembler.py`
   - `tests/integration/test_mcp_server.py`（补图像返回用例）
 - **验收标准**：返回 content 中包含 image type，mimeType 正确，data 为 base64 字符串。
 - **测试方法**：`pytest -q tests/integration/test_mcp_server.py -k image`。
@@ -2217,10 +2219,10 @@ observability:
 ### E6：错误处理与协议合规 ✅
 - **目标**：为 MCP Tools 建立统一的错误处理与返回格式，确保协议合规、错误信息可被 Client 正确解析，并覆盖无效参数、资源不存在、服务不可用等异常场景。
 - **修改文件**：
-  - `src/mcp_server/tools/error_utils.py`（新建：统一错误构造与错误码映射）
-  - `src/mcp_server/tools/query_knowledge_hub.py`
-  - `src/mcp_server/tools/list_collections.py`
-  - `src/mcp_server/tools/get_document_summary.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/error_utils.py`（新建：统一错误构造与错误码映射）
+  - `src/modular_rag_mcp_server/mcp_server/tools/query_knowledge_hub.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/list_collections.py`
+  - `src/modular_rag_mcp_server/mcp_server/tools/get_document_summary.py`
   - `tests/integration/test_mcp_server.py`（补错误场景用例）
 - **实现要点**：
   1. **统一错误返回格式**：所有 tool 错误返回结构一致：
@@ -2250,8 +2252,8 @@ observability:
 ### F1：TraceContext 数据结构与 record_stage/finish
 - **目标**：实现请求级 trace：trace_id、stages、metrics，并能写入 jsonl。
 - **修改文件**：
-  - `src/core/trace/trace_context.py`
-  - `src/core/trace/trace_collector.py`
+  - `src/modular_rag_mcp_server/core/trace/trace_context.py`
+  - `src/modular_rag_mcp_server/core/trace/trace_collector.py`
   - `tests/unit/test_trace_context.py`
 - **验收标准**：record_stage 追加阶段；finish 输出 dict 可 JSON 序列化。
 - **测试方法**：`pytest -q tests/unit/test_trace_context.py`。
@@ -2259,7 +2261,7 @@ observability:
 ### F2：结构化日志 logger（JSON Lines）
 - **目标**：实现 `observability/logger.py`：把 trace 写入 `logs/traces.jsonl`。
 - **修改文件**：
-  - `src/observability/logger.py`
+  - `src/modular_rag_mcp_server/observability/logger.py`
   - `tests/unit/test_jsonl_logger.py`
 - **验收标准**：写入一条 trace 后文件新增一行合法 JSON。
 - **测试方法**：`pytest -q tests/unit/test_jsonl_logger.py`。
@@ -2267,9 +2269,9 @@ observability:
 ### F3：在关键路径打点（Query 与 Ingestion）
 - **目标**：在 Pipeline 与 HybridSearch/Rerank 中注入 TraceContext，利用 B 阶段抽象接口中预留的 `trace` 参数，显式调用 `trace.record_stage()` 记录各阶段数据。
 - **修改文件**：
-  - `src/ingestion/pipeline.py`
-  - `src/core/query_engine/hybrid_search.py`
-  - `src/core/query_engine/reranker.py`
+  - `src/modular_rag_mcp_server/ingestion/pipeline.py`
+  - `src/modular_rag_mcp_server/core/query_engine/hybrid_search.py`
+  - `src/modular_rag_mcp_server/core/query_engine/reranker.py`
   - `tests/integration/test_hybrid_search.py`（断言 trace 中存在阶段）
 - **说明**：B 阶段的 `BaseEmbedding`、`BaseSplitter`、`BaseVectorStore`、`BaseReranker` 接口已预留 `trace: TraceContext | None = None` 参数，本任务负责在调用这些组件时传入实际的 TraceContext 实例。
 - **验收标准**：一次查询/一次摄取都会生成 trace，包含 dense/sparse/fusion/rerank 阶段耗时字段。
@@ -2278,7 +2280,7 @@ observability:
 ### F4：Dashboard MVP（Streamlit）
 - **目标**：实现 `dashboard/app.py`：读取 traces.jsonl，展示请求列表与单条详情（最小可用）。
 - **修改文件**：
-  - `src/observability/dashboard/app.py`
+  - `src/modular_rag_mcp_server/observability/dashboard/app.py`
   - `scripts/start_dashboard.py`
 - **验收标准**：本地可启动并看到列表（手动验收）。
 - **测试方法**：手动运行 `python scripts/start_dashboard.py`（或 `streamlit run ...`）。
@@ -2286,7 +2288,7 @@ observability:
 ### F5：Evaluation Runner + Golden Test Set 回归
 - **目标**：实现 `eval_runner.py`：读取 `tests/fixtures/golden_test_set.json`，跑 retrieval 并产出 metrics。
 - **修改文件**：
-  - `src/observability/evaluation/eval_runner.py`
+  - `src/modular_rag_mcp_server/observability/evaluation/eval_runner.py`
   - `scripts/evaluate.py`
   - `tests/integration/test_hybrid_search.py`（可增加黄金集 smoke）
 - **验收标准**：evaluate 脚本可运行，输出 metrics（至少 custom 指标）。
@@ -2380,5 +2382,4 @@ RAG 系统的上限取决于其对特定业务数据的理解深度。未来的�
     - **未来演进**：不再硬编码使用混合检索。Server 可以将 `keyword_search` 和 `semantic_search` 作为独立工具暴露。Agent 可以根据用户意图自主判断：如果是搜人名，只用关键词搜；如果是搜概念，通过语义搜。这种工具使用的灵活性正是 Agentic RAG 的核心魅力。
 
 这种演进方向将把本项目从一个“智能搜索引擎”升级为一个“智能研究助理”的基础设施底座。
-
 

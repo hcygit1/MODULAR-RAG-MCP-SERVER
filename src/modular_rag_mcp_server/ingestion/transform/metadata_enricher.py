@@ -7,6 +7,7 @@ Metadata Enricher 实现
 3. 失败降级：LLM 不可用时回退到规则结果
 """
 import re
+from importlib import import_module
 from typing import Any, Dict, List, Optional
 
 from modular_rag_mcp_server.core.settings import IngestionConfig
@@ -15,9 +16,12 @@ from modular_rag_mcp_server.ingestion.transform.base_transform import BaseTransf
 
 # 尝试导入 BaseLLM
 try:
-    from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
+    BaseLLM = getattr(
+        import_module("modular_rag_mcp_server.libs.llm.base_llm"),
+        "BaseLLM",
+    )
     LLM_AVAILABLE = True
-except ImportError:
+except (AttributeError, ImportError):
     LLM_AVAILABLE = False
     BaseLLM = None
 
@@ -121,7 +125,7 @@ class MetadataEnricher(BaseTransform):
         Returns:
             Dict[str, Any]: 增强后的元数据
         """
-        enriched = {}
+        enriched: Dict[str, Any] = {}
         
         # 1. 提取 Title
         title = self._extract_title(text, existing_metadata)

@@ -118,7 +118,7 @@ class SparseEncoder:
         Returns:
             Dict[str, int]: 词到文档频率的映射
         """
-        doc_freqs = {}
+        doc_freqs: Dict[str, int] = {}
         
         for chunk in chunks:
             # 获取该 chunk 的唯一词集合

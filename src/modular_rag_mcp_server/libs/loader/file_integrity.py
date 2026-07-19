@@ -9,7 +9,7 @@ import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 # 默认数据库路径（在 cache 目录下）
 DEFAULT_DB_PATH = Path("cache/processing/file_integrity.db")
@@ -18,7 +18,7 @@ LEGACY_PROCESSING_PROFILE = "__legacy__"
 PROCESSING_PROFILE_VERSION = 1
 
 
-def _runtime_model_profile(config: Any) -> dict:
+def _runtime_model_profile(config: Any) -> Dict[str, Any]:
     """提取影响模型实际路由的非敏感配置。"""
     profile = {
         "provider": config.provider,
@@ -42,7 +42,7 @@ def _runtime_model_profile(config: Any) -> dict:
 def build_processing_profile(settings: Any, loader_name: str) -> str:
     """为会影响入库结果的配置生成稳定处理指纹。"""
     ingestion = settings.ingestion
-    payload = {
+    payload: Dict[str, Any] = {
         "version": PROCESSING_PROFILE_VERSION,
         "loader": str(loader_name or "").strip().lower(),
         "embedding": _runtime_model_profile(settings.embedding),

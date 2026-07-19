@@ -8,29 +8,54 @@ import hashlib
 import logging
 import os
 import re
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
 
 from modular_rag_mcp_server.ingestion.models import Document
 from modular_rag_mcp_server.libs.loader.base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
-# 尝试导入 MarkItDown
-try:
-    from markitdown import MarkItDown  # type: ignore
-    MARKITDOWN_AVAILABLE = True
-except ImportError:
-    MARKITDOWN_AVAILABLE = False
-    MarkItDown = None
+ImageMetadata = Dict[str, Any]
+PageImage = Tuple[str, float, bytes, ImageMetadata]
+PageImages = Dict[int, List[PageImage]]
 
-# 尝试导入 PyMuPDF（可选依赖，用于图片提取）
-try:
-    import fitz  # PyMuPDF
-    PYMUPDF_AVAILABLE = True
-except ImportError:
-    PYMUPDF_AVAILABLE = False
-    fitz = None
+
+class _MarkItDownConverter(Protocol):
+    def convert(self, path: str) -> Any: ...
+
+
+class _MarkItDownFactory(Protocol):
+    def __call__(self) -> _MarkItDownConverter: ...
+
+
+class _FitzModule(Protocol):
+    def open(self, path: str) -> Any: ...
+
+
+def _load_optional_attr(module_name: str, attr_name: str) -> Any:
+    try:
+        return getattr(import_module(module_name), attr_name)
+    except (AttributeError, ImportError):
+        return None
+
+
+MarkItDown = cast(
+    Optional[_MarkItDownFactory],
+    _load_optional_attr("markitdown", "MarkItDown"),
+)
+MARKITDOWN_AVAILABLE = MarkItDown is not None
+fitz = cast(Optional[_FitzModule], _load_optional_attr("fitz", "open"))
+if fitz is not None:
+    fitz = cast(_FitzModule, import_module("fitz"))
+PYMUPDF_AVAILABLE = fitz is not None
+
+
+def _require_fitz() -> _FitzModule:
+    if fitz is None:
+        raise RuntimeError("PyMuPDF 未安装。请安装: pip install pymupdf")
+    return fitz
 
 
 class PdfLoader(BaseLoader):
@@ -42,14 +67,15 @@ class PdfLoader(BaseLoader):
     如果安装了 PyMuPDF，会提取图片并在 Markdown 中插入占位符。
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化 PDF Loader"""
-        if not MARKITDOWN_AVAILABLE:
+        converter_factory = MarkItDown
+        if not MARKITDOWN_AVAILABLE or converter_factory is None:
             raise RuntimeError(
                 "MarkItDown 未安装。请安装: pip install markitdown"
             )
-        self._md = MarkItDown()
-        self._supported_extensions = [".pdf"]
+        self._md = converter_factory()
+        self._supported_extensions: List[str] = [".pdf"]
     
     def load(self, path: str, trace: Optional[Any] = None) -> Document:
         """
@@ -93,9 +119,9 @@ class PdfLoader(BaseLoader):
             doc_id = self._generate_doc_id(path)
             
             # 2. 提取图片（如果 PyMuPDF 可用）
-            image_data_dict = {}  # {image_id: bytes}
-            image_metadata_list = []  # [{image_id, page, y_position, ...}]
-            page_images = {}  # {page_num: [(image_id, y_position, bytes, metadata), ...]}
+            image_data_dict: Dict[str, bytes] = {}
+            image_metadata_list: List[ImageMetadata] = []
+            page_images: PageImages = {}
             
             if PYMUPDF_AVAILABLE:
                 try:
@@ -201,7 +227,7 @@ class PdfLoader(BaseLoader):
         self,
         pdf_path: str,
         doc_id: str
-    ) -> Tuple[Dict[str, bytes], List[Dict[str, Any]], Dict[int, List[Tuple[str, float, bytes, Dict[str, Any]]]]]:
+    ) -> Tuple[Dict[str, bytes], List[ImageMetadata], PageImages]:
         """
         从 PDF 中提取图片数据和位置信息
         
@@ -221,12 +247,12 @@ class PdfLoader(BaseLoader):
         if not PYMUPDF_AVAILABLE:
             return {}, [], {}
         
-        image_data_dict = {}  # {image_id: bytes}
-        image_metadata_list = []  # [{image_id, page, y_position, ...}]
-        page_images = {}  # {page_num: [(image_id, y_position, bytes, metadata), ...]}
+        image_data_dict: Dict[str, bytes] = {}
+        image_metadata_list: List[ImageMetadata] = []
+        page_images: PageImages = {}
         
         # 打开 PDF 文件
-        doc = fitz.open(pdf_path)
+        doc = _require_fitz().open(pdf_path)
         
         try:
             # 遍历每一页
@@ -367,11 +393,11 @@ class PdfLoader(BaseLoader):
         if not PYMUPDF_AVAILABLE:
             return {}
         
-        page_to_markdown = {}  # {page_num: (start_line, end_line)}
+        page_to_markdown: Dict[int, Tuple[int, int]] = {}
         markdown_lines = markdown_text.split("\n")
         window_lines = 40  # 滑动窗口行数，指纹可能跨多行
 
-        doc = fitz.open(pdf_path)
+        doc = _require_fitz().open(pdf_path)
         try:
             # 1. 提取每页的文本指纹（缩短 + 标准化）
             page_fingerprints = {}
@@ -514,7 +540,7 @@ class PdfLoader(BaseLoader):
         insertions = []  # [(line_index, placeholder), ...]
         
         # 打开 PDF 获取页面高度
-        doc = fitz.open(pdf_path)
+        doc = _require_fitz().open(pdf_path)
         
         try:
             # 为每页的图片计算插入位置

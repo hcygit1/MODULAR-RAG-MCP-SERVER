@@ -171,30 +171,35 @@ class TestIngestionPipelineIntegration:
     
     def test_pipeline_integrity_check_skips_processed_file(self, temp_dir, test_settings):
         """测试文件完整性检查能跳过已处理的文件"""
-        from modular_rag_mcp_server.libs.loader.file_integrity import FileIntegrityChecker
-        
-        # 创建一个测试文件
-        test_file = Path(temp_dir) / "test.txt"
-        test_file.write_text("Test content")
-        
-        # 计算哈希并标记为成功
-        integrity_checker = FileIntegrityChecker()
+        test_file = Path(temp_dir) / "test.pdf"
+        test_file.write_bytes(b"%PDF-1.4\n")
+        integrity_checker = FileIntegrityChecker(
+            db_path=Path(temp_dir) / "file_integrity.db"
+        )
         file_hash = integrity_checker.compute_sha256(str(test_file))
-        integrity_checker.mark_success(file_hash)
-        
-        # 创建 Pipeline（使用 Fake 组件）
+        processing_profile = build_processing_profile(
+            test_settings,
+            loader_name="pdf",
+        )
+        integrity_checker.mark_success(
+            file_hash,
+            "test_collection",
+            processing_profile,
+        )
+
         fake_embedding = FakeEmbedding(dimension=128)
         fake_vector_store = FakeVectorStore()
-        _pipeline = IngestionPipeline(
+        pipeline = IngestionPipeline(
             test_settings,
             embedding=fake_embedding,
-            vector_store=fake_vector_store
+            vector_store=fake_vector_store,
+            integrity_checker=integrity_checker,
         )
-        
-        # 尝试处理文件（应该被跳过）
-        # 注意：由于当前 Pipeline 只支持 PDF，这里简化测试
-        # 实际应该测试 PDF 文件的跳过逻辑
-        assert integrity_checker.should_skip(file_hash)
+
+        result = pipeline.process(str(test_file), "test_collection")
+
+        assert result is None
+        assert fake_vector_store._records == {}
     
     def test_pipeline_stores_results(self, temp_dir, test_settings):
         """测试 Pipeline 存储结果（向量和索引）"""

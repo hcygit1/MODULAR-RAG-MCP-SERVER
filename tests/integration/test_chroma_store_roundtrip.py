@@ -400,25 +400,18 @@ def test_chroma_store_top_k_limit():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_chroma_store_not_installed():
+def test_chroma_store_not_installed(monkeypatch):
     """测试 ChromaDB 未安装时的错误处理"""
-    if CHROMADB_AVAILABLE:
-        pytest.skip("ChromaDB 已安装，跳过此测试")
-    
-    # 临时模拟 ChromaDB 未安装
     import modular_rag_mcp_server.libs.vector_store.chroma_store as cs_module
-    original_available = cs_module.CHROMADB_AVAILABLE
-    cs_module.CHROMADB_AVAILABLE = False
-    
-    try:
-        with pytest.raises(RuntimeError, match="ChromaDB 未安装"):
-            ChromaStore(VectorStoreConfig(
-                backend="chroma",
-                persist_path="./test",
-                collection_name="test"
-            ))
-    finally:
-        cs_module.CHROMADB_AVAILABLE = original_available
+
+    monkeypatch.setattr(cs_module, "CHROMADB_AVAILABLE", False)
+
+    with pytest.raises(RuntimeError, match="ChromaDB 未安装"):
+        ChromaStore(VectorStoreConfig(
+            backend="chroma",
+            persist_path="./test",
+            collection_name="test"
+        ))
 
 
 def _create_test_settings(vector_store_config: VectorStoreConfig) -> Settings:

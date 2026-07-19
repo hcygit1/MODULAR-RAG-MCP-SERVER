@@ -73,12 +73,18 @@ class SQLiteVectorStore(BaseVectorStore):
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(str(self._path))
-            self._conn.enable_load_extension(True)
-            sqlite_vec.load(self._conn)
-            self._conn.enable_load_extension(False)
-            self._conn.row_factory = sqlite3.Row
-            self._ensure_tables()
+            conn = sqlite3.connect(str(self._path))
+            self._conn = conn
+            try:
+                conn.enable_load_extension(True)
+                sqlite_vec.load(conn)
+                conn.enable_load_extension(False)
+                conn.row_factory = sqlite3.Row
+                self._ensure_tables()
+            except Exception:
+                self._conn = None
+                conn.close()
+                raise
         return self._conn
 
     def _ensure_tables(self) -> None:

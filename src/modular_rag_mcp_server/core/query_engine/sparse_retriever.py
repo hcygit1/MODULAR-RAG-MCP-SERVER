@@ -7,10 +7,24 @@ SparseRetriever 实现
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Protocol, Union, cast
 
 from modular_rag_mcp_server.libs.tokenizer import tokenize_for_search
 from modular_rag_mcp_server.libs.vector_store.base_vector_store import BaseVectorStore, QueryResult
+
+
+class _SparseQueryProtocol(Protocol):
+    def sparse_query(
+        self,
+        terms: List[str],
+        collection_name: str,
+        top_k: int,
+        trace: Optional[Any] = None,
+    ) -> List[QueryResult]: ...
+
+
+class _SparseIndexProtocol(Protocol):
+    def sparse_index_exists(self, collection_name: str) -> bool: ...
 
 
 class SparseRetriever:
@@ -98,7 +112,8 @@ class SparseRetriever:
         if self._vector_store is not None and hasattr(
             self._vector_store, "sparse_query"
         ):
-            return self._vector_store.sparse_query(
+            sparse_store = cast(_SparseQueryProtocol, self._vector_store)
+            return sparse_store.sparse_query(
                 terms=terms,
                 collection_name=collection_name,
                 top_k=top_k,
@@ -169,7 +184,8 @@ class SparseRetriever:
         if self._vector_store is not None and hasattr(
             self._vector_store, "sparse_index_exists"
         ):
-            return self._vector_store.sparse_index_exists(collection_name)
+            sparse_store = cast(_SparseIndexProtocol, self._vector_store)
+            return sparse_store.sparse_index_exists(collection_name)
         if self._sqlite_path:
             from modular_rag_mcp_server.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
 

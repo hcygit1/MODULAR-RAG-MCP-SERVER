@@ -3,7 +3,18 @@ jieba 分词实现
 
 统一的中英文分词，供 SparseEncoder、SparseRetriever、QueryProcessor 共用。
 """
-from typing import List, Optional, Set
+from importlib import import_module
+from typing import Iterable, List, Optional, Protocol, Set, cast
+
+
+class _JiebaModule(Protocol):
+    def lcut(self, text: str) -> List[str]: ...
+
+    def cut_for_search(self, text: str) -> Iterable[str]: ...
+
+
+def _load_jieba() -> _JiebaModule:
+    return cast(_JiebaModule, import_module("jieba"))
 
 
 def _get_default_stopwords() -> Set[str]:
@@ -47,7 +58,7 @@ def tokenize(
     Returns:
         过滤后的 token 列表（保持顺序，去重由调用方决定）
     """
-    import jieba
+    jieba = _load_jieba()
 
     if not text or not text.strip():
         return []
@@ -84,7 +95,7 @@ def tokenize_for_search(
     Returns:
         过滤后的 token 列表
     """
-    import jieba
+    jieba = _load_jieba()
 
     if not text or not text.strip():
         return []

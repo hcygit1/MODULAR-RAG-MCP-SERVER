@@ -43,9 +43,20 @@ class QueryFailureConnection:
             if self._count_error is not None:
                 raise self._count_error
             return SimpleNamespace(fetchone=lambda: (1,))
-        if "FROM chunks_vec" in sql and self._query_error is not None:
+        if "chunks_vec" in sql and self._query_error is not None:
             raise self._query_error
         raise AssertionError(f"unexpected SQL: {sql}")
+
+
+class RecordingQueryConnection:
+    def __init__(self) -> None:
+        self.sql = ""
+        self.params = ()
+
+    def execute(self, sql, params=()):
+        self.sql = sql
+        self.params = params
+        return SimpleNamespace(fetchall=list)
 
 
 class LateFailingSchemaManager(SQLiteSchemaManager):
@@ -114,6 +125,18 @@ def _vector_store(tmp_path) -> SQLiteVectorStore:
     return SQLiteVectorStore(config, write_fts=True)
 
 
+def _vector_store_with_dim(db_path, embedding_dim: int) -> SQLiteVectorStore:
+    return SQLiteVectorStore(
+        VectorStoreConfig(
+            backend="sqlite",
+            persist_path="",
+            collection_name="dimension_collection",
+            sqlite_path=str(db_path),
+            embedding_dim=embedding_dim,
+        )
+    )
+
+
 def _image_chunk(image_id: str, image_data: bytes):
     return SimpleNamespace(
         metadata={
@@ -149,6 +172,50 @@ def test_schema_creates_joint_primary_key_and_optional_tables():
         assert {"chunks", "chunks_vec", "chunks_fts", "images"} <= tables
     finally:
         conn.close()
+
+
+def test_empty_vector_index_rebuilds_when_embedding_dimension_changes(tmp_path):
+    db_path = tmp_path / "empty-dimension.sqlite"
+    original = _vector_store_with_dim(db_path, 4)
+    original._get_conn()
+    original.close()
+
+    migrated = _vector_store_with_dim(db_path, 8)
+    try:
+        conn = migrated._get_conn()
+        ddl = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'chunks_vec'"
+        ).fetchone()[0]
+        assert "float[8]" in ddl.lower()
+    finally:
+        migrated.close()
+
+
+def test_nonempty_vector_index_rejects_dimension_change_without_data_loss(
+    tmp_path,
+):
+    db_path = tmp_path / "nonempty-dimension.sqlite"
+    original = _vector_store_with_dim(db_path, 4)
+    original.upsert(
+        [_record("kept", [1.0, 0.0, 0.0, 0.0], "kept")],
+        collection_name="dimension_collection",
+    )
+    original.close()
+
+    incompatible = _vector_store_with_dim(db_path, 8)
+    with pytest.raises(
+        RuntimeError,
+        match="数据库=4.*配置=8.*备份.*重新入库",
+    ):
+        incompatible._get_conn()
+    assert incompatible._conn is None
+
+    reopened = _vector_store_with_dim(db_path, 4)
+    try:
+        count = reopened._get_conn().execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        assert count == 1
+    finally:
+        reopened.close()
 
 
 def test_schema_migrates_legacy_primary_key_and_preserves_rowid():
@@ -479,11 +546,44 @@ def test_search_builds_parameterized_equality_and_in_filters():
     assert params == ["$.source", "guide", "$.kind", json.dumps(["api", "tutorial"])]
 
 
-def test_facade_preserves_candidate_count_operational_error():
-    marker = sqlite3.OperationalError("candidate count marker")
-    store = _query_store(QueryFailureConnection(count_error=marker))
+def test_filtered_dense_plan_does_not_count_the_full_collection():
+    service = SQLiteSearchService()
 
-    with pytest.raises(sqlite3.OperationalError) as caught:
+    plan = service.prepare_dense_query(
+        QueryFailureConnection(
+            count_error=sqlite3.OperationalError("full count must not run")
+        ),
+        top_k=3,
+        collection_name="search_collection",
+        filters={"source": "guide"},
+    )
+
+    assert plan.candidate_k == 3
+
+
+def test_filtered_dense_query_prefilters_before_scalar_distance():
+    service = SQLiteSearchService()
+    conn = RecordingQueryConnection()
+    plan = DenseQueryPlan(
+        collection_name="search_collection",
+        top_k=2,
+        filter_sql="WHERE json_extract(c.metadata_json, ?) = ?",
+        filter_params=("$.source", "guide"),
+        candidate_k=2,
+    )
+
+    service.execute_dense_query(conn, [1.0, 0.0, 0.0, 0.0], plan)
+
+    assert "vec_distance_cosine" in conn.sql
+    assert "embedding MATCH" not in conn.sql
+    assert "json_extract(c.metadata_json, ?) = ?" in conn.sql
+
+
+def test_facade_wraps_filtered_vector_query_operational_error():
+    marker = sqlite3.OperationalError("filtered vector query marker")
+    store = _query_store(QueryFailureConnection(query_error=marker))
+
+    with pytest.raises(RuntimeError, match="SQLite query 失败") as caught:
         store.query(
             vector=[1.0, 0.0, 0.0, 0.0],
             top_k=1,
@@ -491,8 +591,7 @@ def test_facade_preserves_candidate_count_operational_error():
             collection_name="search_collection",
         )
 
-    assert caught.value is marker
-    assert caught.value.__cause__ is None
+    assert caught.value.__cause__ is marker
 
 
 def test_facade_wraps_final_vector_query_operational_error():

@@ -37,7 +37,7 @@ class EvaluatorFactory:
         config = settings.evaluation
         backends = config.backends
         
-        evaluators = []
+        evaluators: List[BaseEvaluator] = []
         
         for backend in backends:
             backend_lower = backend.lower()

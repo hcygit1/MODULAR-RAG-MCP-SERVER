@@ -10,9 +10,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-import altair as alt
-import pandas as pd
-import streamlit as st
+import altair as alt  # type: ignore[import-not-found]
+import pandas as pd  # type: ignore[import-untyped]
+import streamlit as st  # type: ignore[import-not-found]
 
 DEFAULT_LOG_FILE = "./logs/traces.jsonl"
 

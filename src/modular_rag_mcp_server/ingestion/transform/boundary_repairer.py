@@ -7,6 +7,7 @@
 与 BaseTransform 不同，本组件需要看到相邻块，因此以批处理方式运行。
 """
 import logging
+from importlib import import_module
 from typing import Any, List, Optional
 
 from modular_rag_mcp_server.core.settings import IngestionConfig
@@ -16,9 +17,12 @@ from modular_rag_mcp_server.package_resources import read_prompt
 logger = logging.getLogger(__name__)
 
 try:
-    from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
+    BaseLLM = getattr(
+        import_module("modular_rag_mcp_server.libs.llm.base_llm"),
+        "BaseLLM",
+    )
     _LLM_AVAILABLE = True
-except ImportError:
+except (AttributeError, ImportError):
     _LLM_AVAILABLE = False
     BaseLLM = None
 

@@ -83,8 +83,9 @@ class RetrievalPipeline:
 
         # 父聚合模式下，子层需要更多候选才能覆盖足够的父节点
         cfg = self._retrieval_config
+        parent_aggregator = self._parent_aggregator
         use_parent = (
-            self._parent_aggregator is not None
+            parent_aggregator is not None
             and cfg is not None
             and getattr(cfg, "aggregate_by_parent", False)
         )
@@ -132,8 +133,8 @@ class RetrievalPipeline:
             trace=trace,
         )
 
-        if use_parent:
-            final = self._parent_aggregator.aggregate(
+        if use_parent and parent_aggregator is not None:
+            final = parent_aggregator.aggregate(
                 child_results=results,
                 top_k=top_k,
                 collection_name=eff_collection or "",

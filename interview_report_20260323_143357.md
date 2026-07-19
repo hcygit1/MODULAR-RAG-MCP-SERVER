@@ -65,9 +65,9 @@
 
 <a id="a-可插拔架构"></a>
 
-1. **新建** `src/libs/embedding/<your_provider>.py`：继承 `BaseEmbedding`，实现约定方法（如 `embed_texts`）。  
-2. **修改** `src/libs/embedding/embedding_factory.py`：按现有写法为 `provider` 增加分支或映射（模板中写 `factory.py` 以你仓库文件名为准）。  
-3. **修改** `config/settings.yaml` 中 `embedding` 段（如 `provider`、密钥、模型名）。  
+1. **新建** `src/modular_rag_mcp_server/libs/embedding/<your_provider>.py`：继承 `BaseEmbedding`，实现约定方法（如 `embed_texts`）。
+2. **修改** `src/modular_rag_mcp_server/libs/embedding/embedding_factory.py`：按现有写法为 `provider` 增加分支或映射（模板中写 `factory.py` 以你仓库文件名为准）。
+3. **修改**外部 `--config` 配置的 `embedding` 段；包内默认模板位于 `src/modular_rag_mcp_server/resources/settings.yaml`。
 
 ---
 

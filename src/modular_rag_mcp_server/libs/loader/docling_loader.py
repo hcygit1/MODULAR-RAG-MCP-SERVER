@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,9 +18,12 @@ class DoclingLoader:
 
     def load_chunks(self, path: str, doc_id: Optional[str] = None) -> List[Chunk]:
         try:
-            from docling.chunking import HybridChunker
-            from docling.document_converter import DocumentConverter
-        except ImportError as exc:
+            HybridChunker = getattr(import_module("docling.chunking"), "HybridChunker")
+            DocumentConverter = getattr(
+                import_module("docling.document_converter"),
+                "DocumentConverter",
+            )
+        except (AttributeError, ImportError) as exc:
             raise RuntimeError(
                 "Docling 未安装，请先安装可选依赖: pip install 'docling>=2.0.0'"
             ) from exc

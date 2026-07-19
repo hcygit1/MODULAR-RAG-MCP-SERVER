@@ -116,6 +116,20 @@ def _run_cancellation_script(script: str) -> None:
     )
 
 
+def test_mcp_utils_imports_without_content_block_type_alias(monkeypatch) -> None:
+    import mcp.types as mcp_types
+
+    import modular_rag_mcp_server.mcp_server.tools.mcp_utils as mcp_utils
+
+    content_block = mcp_types.ContentBlock
+    monkeypatch.delattr(mcp_types, "ContentBlock")
+    try:
+        importlib.reload(mcp_utils)
+    finally:
+        monkeypatch.setattr(mcp_types, "ContentBlock", content_block, raising=False)
+        importlib.reload(mcp_utils)
+
+
 def test_run_sync_callable_propagates_inner_cancelled_error() -> None:
     _run_cancellation_script(
         """

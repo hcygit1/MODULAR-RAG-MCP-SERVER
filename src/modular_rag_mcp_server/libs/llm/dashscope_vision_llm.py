@@ -9,7 +9,7 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from modular_rag_mcp_server.core.settings import VisionLLMConfig
 from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
@@ -127,7 +127,7 @@ class DashScopeVisionLLM(BaseLLM):
         image_value = f"data:image/{mime_type};base64,{image_base64}"
 
         # 复制消息列表
-        new_messages = messages.copy()
+        new_messages = cast(List[Dict[str, Any]], messages.copy())
 
         # 找到最后一个 user 消息，添加图片
         if new_messages and new_messages[-1]["role"] == "user":
@@ -148,7 +148,7 @@ class DashScopeVisionLLM(BaseLLM):
                 ]
             })
 
-        return new_messages
+        return cast(List[Dict[str, str]], new_messages)
     
     def _call_api(self, messages: List[Dict[str, str]]) -> str:
         """
@@ -246,11 +246,11 @@ class DashScopeVisionLLM(BaseLLM):
             error_data = json.loads(error_body)
             
             if "message" in error_data:
-                return error_data["message"]
+                return str(error_data["message"])
             if "error" in error_data:
                 error_info = error_data["error"]
                 if isinstance(error_info, dict) and "message" in error_info:
-                    return error_info["message"]
+                    return str(error_info["message"])
                 return str(error_info)
             
             return f"HTTP {error.code}: {error.reason}"

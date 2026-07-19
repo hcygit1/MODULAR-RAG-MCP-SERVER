@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Executor
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, TypeVar
 
 from mcp.types import CallToolResult, ImageContent, TextContent
+
+if TYPE_CHECKING:
+    from mcp.types import ContentBlock
 
 T = TypeVar("T")
 
@@ -70,7 +73,7 @@ def dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
     Returns:
         CallToolResult 供 FastMCP 序列化返回给 Client
     """
-    content_blocks = []
+    content_blocks: list[ContentBlock] = []
     for c in d.get("content", []):
         ctype = c.get("type", "text")
         if ctype == "image":

@@ -28,6 +28,7 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     source_dir.mkdir()
     shutil.copy2(PROJECT_ROOT / "pyproject.toml", source_dir / "pyproject.toml")
     shutil.copy2(PROJECT_ROOT / "README.md", source_dir / "README.md")
+    shutil.copy2(PROJECT_ROOT / "LICENSE", source_dir / "LICENSE")
     shutil.copytree(
         PROJECT_ROOT / "src",
         source_dir / "src",
@@ -45,6 +46,7 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
             "wheel",
             str(source_dir),
             "--no-deps",
+            "--no-build-isolation",
             "--wheel-dir",
             str(wheel_dir),
         ],
@@ -85,6 +87,40 @@ def test_pytest_is_only_a_development_dependency(built_wheel: Path) -> None:
     ]
     assert pytest_requirements
     assert all('extra == "dev"' in line for line in pytest_requirements)
+
+
+def test_runtime_and_optional_backend_dependencies_are_partitioned(
+    built_wheel: Path,
+) -> None:
+    with zipfile.ZipFile(built_wheel) as archive:
+        metadata_name = next(
+            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+        )
+        metadata = archive.read(metadata_name).decode("utf-8").lower()
+
+    requirement_lines = [
+        line for line in metadata.splitlines() if line.startswith("requires-dist:")
+    ]
+    runtime = [line for line in requirement_lines if "extra ==" not in line]
+    optional = [line for line in requirement_lines if "extra ==" in line]
+
+    assert any("requests" in line for line in runtime)
+    assert not any("chromadb" in line or "qdrant-client" in line for line in runtime)
+    assert any("chromadb" in line and 'extra == "chroma"' in line for line in optional)
+    assert any(
+        "qdrant-client" in line and 'extra == "qdrant"' in line
+        for line in optional
+    )
+    assert any("docling" in line and 'extra == "docling"' in line for line in optional)
+    assert any(
+        "sentence-transformers" in line and 'extra == "reranker"' in line
+        for line in optional
+    )
+    for dependency in ("streamlit", "altair", "pandas"):
+        assert any(
+            dependency in line and 'extra == "dashboard"' in line
+            for line in optional
+        )
 
 
 def test_wheel_imports_mcp_server_outside_repository(

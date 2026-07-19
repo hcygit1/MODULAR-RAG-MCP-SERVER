@@ -168,7 +168,7 @@ class QwenLLM(BaseLLM):
             if "message" not in choice or "content" not in choice["message"]:
                 raise RuntimeError("API 响应格式错误：缺少 message.content 字段")
             
-            return choice["message"]["content"]
+            return str(choice["message"]["content"])
     
     def _parse_error_response(self, error: urllib.error.HTTPError) -> str:
         """解析 HTTP 错误响应"""
@@ -177,11 +177,11 @@ class QwenLLM(BaseLLM):
             error_data = json.loads(error_body)
             
             if "message" in error_data:
-                return error_data["message"]
+                return str(error_data["message"])
             if "error" in error_data:
                 error_info = error_data["error"]
                 if isinstance(error_info, dict) and "message" in error_info:
-                    return error_info["message"]
+                    return str(error_info["message"])
                 return str(error_info)
             
             return f"HTTP {error.code}: {error.reason}"

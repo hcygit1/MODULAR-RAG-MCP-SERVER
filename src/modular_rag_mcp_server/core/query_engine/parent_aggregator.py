@@ -82,16 +82,17 @@ class ParentAggregator:
             return []
 
         # 步骤 2：选分数函数，按父分数降序取 top_k
+        scored: List[tuple[str, float]]
         if self._score_strategy == "count":
-            sorted_parents = sorted(
+            sorted_counts = sorted(
                 parent_hit_count.items(), key=lambda x: x[1], reverse=True
             )
-            scored = [(pid, float(cnt)) for pid, cnt in sorted_parents[:top_k]]
+            scored = [(pid, float(cnt)) for pid, cnt in sorted_counts[:top_k]]
         else:  # sum（默认）
-            sorted_parents = sorted(
+            sorted_scores = sorted(
                 parent_scores.items(), key=lambda x: x[1], reverse=True
             )
-            scored = sorted_parents[:top_k]
+            scored = sorted_scores[:top_k]
 
         # 步骤 3：对每个父拉全部子块，拼合正文
         results: List[QueryResult] = []

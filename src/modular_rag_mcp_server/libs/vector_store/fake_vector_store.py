@@ -67,6 +67,7 @@ class FakeVectorStore(BaseVectorStore):
         records: List[VectorRecord],
         trace: Optional[Any] = None,
         collection_name: Optional[str] = None,
+        chunks_for_images: Optional[List[Any]] = None,
     ) -> None:
         """
         批量插入或更新向量记录（内存存储）
@@ -74,6 +75,8 @@ class FakeVectorStore(BaseVectorStore):
         Args:
             records: 向量记录列表
             trace: 追踪上下文（可选，Fake 实现中不使用）
+            collection_name: 集合名称（可选，Fake 实现中不使用）
+            chunks_for_images: 原始 Chunk 列表（可选，Fake 实现中不使用）
             
         Raises:
             ValueError: 当记录格式不正确时

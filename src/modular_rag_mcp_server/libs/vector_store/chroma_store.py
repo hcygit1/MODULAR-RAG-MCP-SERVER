@@ -4,9 +4,11 @@ Chroma VectorStore 实现
 使用 ChromaDB 作为向量存储后端。
 支持本地持久化目录，无需额外数据库服务。
 """
+from __future__ import annotations
+
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional
 
 from modular_rag_mcp_server.core.settings import VectorStoreConfig
 from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
@@ -17,17 +19,21 @@ from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
 
 try:
     import chromadb
+
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from chromadb.api.types import Metadata, PyEmbeddings
 
 
 _JSON_METADATA_PREFIX = "__modular_rag_json__:"
 
 
-def _encode_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+def _encode_metadata(metadata: Dict[str, Any]) -> Metadata:
     """将 Chroma 不支持的复合值编码为带类型标记的 JSON 字符串。"""
-    encoded: Dict[str, Any] = {}
+    encoded: Dict[str, str | int | float | bool | None] = {}
     for key, value in metadata.items():
         if isinstance(value, bytes):
             continue
@@ -42,7 +48,7 @@ def _encode_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return encoded
 
 
-def _decode_metadata(metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _decode_metadata(metadata: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """恢复由 `_encode_metadata` 编码的复合 metadata。"""
     decoded: Dict[str, Any] = {}
     for key, value in (metadata or {}).items():
@@ -103,6 +109,7 @@ class ChromaStore(BaseVectorStore):
         records: List[VectorRecord],
         trace: Optional[Any] = None,
         collection_name: Optional[str] = None,
+        chunks_for_images: Optional[List[Any]] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
@@ -111,6 +118,7 @@ class ChromaStore(BaseVectorStore):
             records: 向量记录列表
             trace: 追踪上下文（可选）
             collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+            chunks_for_images: 原始 Chunk 列表（可选），Chroma 后端不使用
 
         Raises:
             ValueError: 当记录格式不正确时
@@ -136,9 +144,11 @@ class ChromaStore(BaseVectorStore):
         try:
             coll = self._client.get_or_create_collection(name=eff_name)
             ids = [record.id for record in records]
-            embeddings = [record.vector for record in records]
+            embeddings: PyEmbeddings = [record.vector for record in records]
             documents = [record.text for record in records]
-            metadatas = [_encode_metadata(record.metadata) for record in records]
+            metadatas: List[Metadata] = [
+                _encode_metadata(record.metadata) for record in records
+            ]
             coll.upsert(
                 ids=ids,
                 embeddings=embeddings,
@@ -190,8 +200,9 @@ class ChromaStore(BaseVectorStore):
             where = None
             if filters:
                 where = filters
+            query_embeddings: PyEmbeddings = [vector]
             results = coll.query(
-                query_embeddings=[vector],
+                query_embeddings=query_embeddings,
                 n_results=top_k,
                 where=where
             )
@@ -206,11 +217,14 @@ class ChromaStore(BaseVectorStore):
             #     "documents": [[doc1, doc2, ...]],
             #     "metadatas": [[meta1, meta2, ...]]
             # }
-            if results["ids"] and len(results["ids"]) > 0:
+            if results["ids"]:
                 ids = results["ids"][0]
-                distances = results["distances"][0] if results.get("distances") else []
-                documents = results["documents"][0] if results.get("documents") else []
-                metadatas = results["metadatas"][0] if results.get("metadatas") else []
+                distance_batches = results.get("distances")
+                document_batches = results.get("documents")
+                metadata_batches = results.get("metadatas")
+                distances = distance_batches[0] if distance_batches else []
+                documents = document_batches[0] if document_batches else []
+                metadatas = metadata_batches[0] if metadata_batches else []
                 
                 for i, record_id in enumerate(ids):
                     # ChromaDB 返回的是距离（distance），需要转换为相似度分数（score）

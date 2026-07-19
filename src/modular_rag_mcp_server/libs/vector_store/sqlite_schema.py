@@ -1,5 +1,11 @@
+import re
 import sqlite3
-from typing import Any
+from typing import Any, Optional
+
+_EMBEDDING_DIMENSION_PATTERN = re.compile(
+    r"\bembedding\s+float\s*\[\s*(\d+)\s*\]",
+    re.IGNORECASE,
+)
 
 
 class SQLiteSchemaManager:
@@ -74,6 +80,44 @@ class SQLiteSchemaManager:
         conn.execute("DROP TABLE chunks")
         conn.execute("ALTER TABLE chunks_migrated RENAME TO chunks")
 
+    @staticmethod
+    def embedding_dimension(conn: sqlite3.Connection) -> Optional[int]:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'chunks_vec'"
+        ).fetchone()
+        if row is None:
+            return None
+        ddl = str(row[0] or "")
+        match = _EMBEDDING_DIMENSION_PATTERN.search(ddl)
+        if match is None:
+            raise RuntimeError("无法识别现有 chunks_vec 的 embedding 维度")
+        return int(match.group(1))
+
+    def ensure_vector_table(self, conn: sqlite3.Connection) -> None:
+        existing_dim = self.embedding_dimension(conn)
+        if existing_dim == self._dim:
+            return
+        if existing_dim is not None:
+            row = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()
+            chunk_count = int(row[0] if row else 0)
+            if chunk_count:
+                raise RuntimeError(
+                    "SQLite embedding_dim 不匹配: "
+                    f"数据库={existing_dim}, 配置={self._dim}。"
+                    f"现有 {chunk_count} 条 chunk，无法自动迁移；"
+                    "请备份数据库后清空并重新入库。"
+                )
+            conn.execute("DROP TABLE chunks_vec")
+
+        vec0_ddl = f"""
+            CREATE VIRTUAL TABLE chunks_vec USING vec0(
+                chunk_rowid INTEGER PRIMARY KEY,
+                embedding float[{self._dim}] distance_metric=cosine,
+                collection_name TEXT
+            )
+            """.strip()
+        conn.execute(vec0_ddl)
+
     def ensure_tables(self, conn: sqlite3.Connection) -> None:
         self.ensure_chunks_table(conn)
         conn.execute(
@@ -82,18 +126,7 @@ class SQLiteSchemaManager:
 
         if self._dim <= 0 or self._dim > 32768:
             raise ValueError(f"非法 embedding_dim: {self._dim}")
-        try:
-            vec0_ddl = f"""
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
-                    chunk_rowid INTEGER PRIMARY KEY,
-                    embedding float[{self._dim}] distance_metric=cosine,
-                    collection_name TEXT
-                )
-                """.strip()
-            conn.execute(vec0_ddl)
-        except sqlite3.OperationalError as exc:
-            if "already exists" not in str(exc).lower():
-                raise
+        self.ensure_vector_table(conn)
 
         if not self._write_fts:
             return

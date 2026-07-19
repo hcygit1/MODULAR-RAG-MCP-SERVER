@@ -101,7 +101,7 @@ def _replace_image_refs(markdown_text: str, path_to_id: Dict[str, str]) -> str:
     # 匹配 ![alt](path) 或 ![](path)
     pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
 
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         path = m.group(2).strip()
         path_norm = _normalize_path(path)
         # 尝试多种匹配：完整 path、含 images/ 前缀、相对路径

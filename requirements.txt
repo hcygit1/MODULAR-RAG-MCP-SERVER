@@ -1,2 +1,2 @@
-# Core dependencies will be added in later stages
-# This file is a placeholder for now
+# Compatibility entry point for repository-based pip workflows.
+-e .

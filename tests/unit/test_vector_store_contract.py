@@ -3,6 +3,8 @@ VectorStore 契约测试
 
 测试 VectorStore 接口的输入输出 shape 和契约约束。
 """
+import inspect
+
 import pytest
 
 from modular_rag_mcp_server.core.settings import (
@@ -24,8 +26,16 @@ from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
     QueryResult,
     VectorRecord,
 )
+from modular_rag_mcp_server.libs.vector_store.chroma_store import ChromaStore
 from modular_rag_mcp_server.libs.vector_store.fake_vector_store import FakeVectorStore
+from modular_rag_mcp_server.libs.vector_store.qdrant_store import QdrantStore
 from modular_rag_mcp_server.libs.vector_store.vector_store_factory import VectorStoreFactory
+
+
+@pytest.mark.parametrize("store_type", [BaseVectorStore, ChromaStore, QdrantStore])
+def test_upsert_contract_accepts_optional_image_chunks(store_type):
+    """所有正式后端的 upsert 都接受 SQLite 使用的可选图片块上下文。"""
+    assert "chunks_for_images" in inspect.signature(store_type.upsert).parameters
 
 
 def test_factory_creates_fake_vector_store():

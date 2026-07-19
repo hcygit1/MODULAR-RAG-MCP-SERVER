@@ -99,6 +99,7 @@ class BaseVectorStore(ABC):
         records: List[VectorRecord],
         trace: Optional[Any] = None,
         collection_name: Optional[str] = None,
+        chunks_for_images: Optional[List[Any]] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
@@ -107,6 +108,7 @@ class BaseVectorStore(ABC):
             records: 向量记录列表，每个记录包含 id、vector、text、metadata
             trace: 追踪上下文（可选），用于记录性能指标和调试信息
             collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+            chunks_for_images: 原始 Chunk 列表（可选），供支持图片持久化的后端使用
 
         Raises:
             ValueError: 当记录格式不正确时

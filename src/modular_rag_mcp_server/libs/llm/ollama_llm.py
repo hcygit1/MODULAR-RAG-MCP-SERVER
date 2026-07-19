@@ -152,7 +152,7 @@ class OllamaLLM(BaseLLM):
             if "content" not in message:
                 raise RuntimeError("API 响应格式错误：缺少 message.content 字段")
             
-            return message["content"]
+            return str(message["content"])
     
     def _parse_error_response(self, error: urllib.error.HTTPError) -> str:
         """解析 HTTP 错误响应，不泄露敏感配置"""
@@ -165,7 +165,7 @@ class OllamaLLM(BaseLLM):
                 if isinstance(error_info, str):
                     return error_info
                 elif isinstance(error_info, dict) and "message" in error_info:
-                    return error_info["message"]
+                    return str(error_info["message"])
                 return str(error_info)
             
             return f"HTTP {error.code}: {error.reason}"

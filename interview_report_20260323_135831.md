@@ -66,7 +66,7 @@
 
 1. MCP：背一句 **「协议边界 + Stdio 适用场景」**，少只强调 schema。
 2. 延迟：能说出 **P50 vs P99 选型**（长尾敏感业务更看 P99）。
-3. 检索数字：**融合去重**后再谈进入精排的规模；对照 `config/settings.yaml` 的 `top_k_dense/sparse/final`、`rerank.top_m`。
+3. 检索数字：**融合去重**后再谈进入精排的规模；对照包内默认 `src/modular_rag_mcp_server/resources/settings.yaml`（或 `--config` 外部配置）的 `top_k_dense/sparse/final`、`rerank.top_m`。
 
 ---
 

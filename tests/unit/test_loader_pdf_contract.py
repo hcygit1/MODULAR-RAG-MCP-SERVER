@@ -5,9 +5,11 @@ Loader PDF 契约测试
 """
 import os
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
+import modular_rag_mcp_server.libs.loader.pdf_loader as pdf_loader_module
 from modular_rag_mcp_server.ingestion.models import Document
 from modular_rag_mcp_server.libs.loader.base_loader import BaseLoader
 from modular_rag_mcp_server.libs.loader.pdf_loader import MARKITDOWN_AVAILABLE, PdfLoader
@@ -67,28 +69,51 @@ class TestPdfLoader:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
     
-    def test_pdf_loader_returns_document(self):
+    def test_pdf_loader_returns_document(self, tmp_path, monkeypatch):
         """测试 PdfLoader.load() 返回 Document 对象"""
-        _loader = PdfLoader()
-        
-        # 创建一个最小的 PDF 文件（实际测试中需要真实的 PDF）
-        # 这里我们测试接口契约，实际 PDF 解析需要真实文件
-        # 如果 MarkItDown 可用，我们可以创建一个简单的测试 PDF
-        
-        # 注意：这个测试需要真实的 PDF 文件
-        # 在 fixtures 目录中应该有 sample PDF
-        pass
+        loader = PdfLoader()
+        pdf_path = tmp_path / "contract.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4\n")
+        converted_paths = []
+
+        def fake_convert(path):
+            converted_paths.append(path)
+            return SimpleNamespace(text_content="# Contract\n\nBody")
+
+        monkeypatch.setattr(loader._md, "convert", fake_convert)
+        monkeypatch.setattr(pdf_loader_module, "PYMUPDF_AVAILABLE", False)
+
+        document = loader.load(str(pdf_path))
+
+        assert isinstance(document, Document)
+        assert document.text == "# Contract\n\nBody"
+        assert converted_paths == [str(pdf_path)]
     
-    def test_pdf_loader_document_has_required_fields(self):
+    def test_pdf_loader_document_has_required_fields(self, tmp_path, monkeypatch):
         """测试返回的 Document 包含必需字段"""
-        _loader = PdfLoader()
-        
-        # 这个测试需要真实的 PDF 文件
-        # 验证 Document 包含：
-        # - id: 非空字符串
-        # - text: 字符串（可能是空字符串）
-        # - metadata: 字典，至少包含 source_path
-        pass
+        loader = PdfLoader()
+        pdf_path = tmp_path / "metadata-contract.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4\n")
+        conversion_result = SimpleNamespace(
+            text_content="metadata contract",
+            metadata={"author": "test-author"},
+        )
+
+        monkeypatch.setattr(loader._md, "convert", lambda _path: conversion_result)
+        monkeypatch.setattr(pdf_loader_module, "PYMUPDF_AVAILABLE", False)
+
+        document = loader.load(str(pdf_path))
+
+        assert isinstance(document.id, str)
+        assert document.id
+        assert document.text == "metadata contract"
+        assert document.metadata == {
+            "source_path": str(pdf_path.resolve()),
+            "doc_type": "pdf",
+            "title": "metadata-contract",
+            "images": [],
+            "author": "test-author",
+        }
 
 
 @pytest.mark.skipif(not MARKITDOWN_AVAILABLE, reason="MarkItDown 未安装")
@@ -137,12 +162,13 @@ class TestPdfLoaderWithSampleFile:
         assert isinstance(document.metadata["images"], list)
 
 
-@pytest.mark.skipif(MARKITDOWN_AVAILABLE, reason="MarkItDown 已安装，跳过此测试")
 class TestPdfLoaderWithoutMarkItDown:
     """测试 MarkItDown 未安装时的行为"""
     
-    def test_pdf_loader_raises_error_without_markitdown(self):
+    def test_pdf_loader_raises_error_without_markitdown(self, monkeypatch):
         """测试 MarkItDown 未安装时初始化抛出错误"""
+        monkeypatch.setattr(pdf_loader_module, "MARKITDOWN_AVAILABLE", False)
+
         with pytest.raises(RuntimeError, match="MarkItDown 未安装"):
             PdfLoader()
 

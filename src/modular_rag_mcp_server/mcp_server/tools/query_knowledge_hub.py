@@ -172,6 +172,7 @@ def _execute_query_knowledge_hub_core(arguments: Dict[str, Any]) -> Dict[str, An
         vs_backend = getattr(getattr(settings, "vector_store", None), "backend", "")
         sparse_backend = getattr(getattr(settings, "retrieval", None), "sparse_backend", "bm25")
         use_sqlite_images = vs_backend == "sqlite" and sparse_backend == "fts5"
+        sqlite_path: Optional[str]
         if _sqlite_path_override is not None:
             sqlite_path = _sqlite_path_override
         elif use_sqlite_images:

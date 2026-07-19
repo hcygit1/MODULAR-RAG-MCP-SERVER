@@ -4,21 +4,34 @@ Recursive Splitter 实现
 封装 LangChain 的 RecursiveCharacterTextSplitter，作为默认切分器。
 能够正确处理 Markdown 结构（标题/代码块不被打断）。
 """
-from typing import Any, List, Optional
+from importlib import import_module
+from typing import Any, List, Optional, Protocol, cast
 
 from modular_rag_mcp_server.core.settings import IngestionConfig
 from modular_rag_mcp_server.libs.splitter.base_splitter import BaseSplitter
 
-try:
-    # 新版本 LangChain 使用独立的 langchain-text-splitters 包
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-except ImportError:
-    try:
-        # 兼容旧版本 LangChain
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-    except ImportError:
-        # 如果 LangChain 未安装，提供一个占位实现
-        RecursiveCharacterTextSplitter = None
+
+class _TextSplitter(Protocol):
+    def split_text(self, text: str) -> List[str]: ...
+
+
+class _TextSplitterFactory(Protocol):
+    def __call__(self, **kwargs: Any) -> _TextSplitter: ...
+
+
+def _load_splitter_factory() -> Optional[_TextSplitterFactory]:
+    for module_name in ("langchain_text_splitters", "langchain.text_splitter"):
+        try:
+            return cast(
+                _TextSplitterFactory,
+                getattr(import_module(module_name), "RecursiveCharacterTextSplitter"),
+            )
+        except (AttributeError, ImportError):
+            continue
+    return None
+
+
+RecursiveCharacterTextSplitter = _load_splitter_factory()
 
 
 class RecursiveSplitter(BaseSplitter):
@@ -36,7 +49,8 @@ class RecursiveSplitter(BaseSplitter):
         Args:
             config: Ingestion 配置对象，包含 chunk_size 和 chunk_overlap
         """
-        if RecursiveCharacterTextSplitter is None:
+        splitter_factory = RecursiveCharacterTextSplitter
+        if splitter_factory is None:
             raise RuntimeError(
                 "LangChain Text Splitters 未安装。请安装: pip install langchain-text-splitters"
             )
@@ -48,7 +62,7 @@ class RecursiveSplitter(BaseSplitter):
         
         # 创建 LangChain RecursiveCharacterTextSplitter 实例
         # 默认分隔符优先级：\n\n, \n, " ", ""（按优先级尝试切分）
-        self._splitter = RecursiveCharacterTextSplitter(
+        self._splitter = splitter_factory(
             chunk_size=self._chunk_size,
             chunk_overlap=self._chunk_overlap,
             length_function=len,

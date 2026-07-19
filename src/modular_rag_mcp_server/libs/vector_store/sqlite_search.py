@@ -49,21 +49,6 @@ class SQLiteSearchService:
                 params.extend([json_path, value])
         return "WHERE " + " AND ".join(clauses), params
 
-    @staticmethod
-    def resolve_candidate_k(
-        conn: sqlite3.Connection,
-        top_k: int,
-        collection_name: str,
-        filter_sql: str,
-    ) -> int:
-        if not filter_sql:
-            return top_k
-        row = conn.execute(
-            "SELECT COUNT(*) FROM chunks WHERE collection_name = ?",
-            (collection_name,),
-        ).fetchone()
-        return max(top_k, int(row[0] if row else 0))
-
     def prepare_dense_query(
         self,
         conn: sqlite3.Connection,
@@ -80,18 +65,12 @@ class SQLiteSearchService:
     ) -> DenseQueryPlan:
         builder = filter_builder or self.build_filter_sql
         filter_sql, filter_params = builder(filters)
-        candidate_k = self.resolve_candidate_k(
-            conn,
-            top_k,
-            collection_name,
-            filter_sql,
-        )
         return DenseQueryPlan(
             collection_name=collection_name,
             top_k=top_k,
             filter_sql=filter_sql,
             filter_params=tuple(filter_params),
-            candidate_k=candidate_k,
+            candidate_k=top_k,
         )
 
     def execute_dense_query(
@@ -103,6 +82,32 @@ class SQLiteSearchService:
         from sqlite_vec import serialize_float32  # type: ignore[import-untyped]
 
         vector_blob = serialize_float32(vector)
+        if plan.filter_sql:
+            if not plan.filter_sql.startswith("WHERE "):
+                raise ValueError("SQLite metadata filter SQL 必须以 WHERE 开头")
+            filter_predicate = plan.filter_sql.removeprefix("WHERE ")
+            rows = conn.execute(
+                f"""
+                SELECT
+                    c.id,
+                    c.text,
+                    c.metadata_json,
+                    vec_distance_cosine(v.embedding, ?) AS distance
+                FROM chunks c
+                JOIN chunks_vec v ON v.chunk_rowid = c.rowid
+                WHERE c.collection_name = ? AND ({filter_predicate})
+                ORDER BY distance
+                LIMIT ?
+                """,
+                (
+                    vector_blob,
+                    plan.collection_name,
+                    *plan.filter_params,
+                    plan.top_k,
+                ),
+            ).fetchall()
+            return self._map_dense_rows(rows)
+
         rows = conn.execute(
             f"""
             SELECT c.id, c.text, c.metadata_json, v.distance
@@ -124,6 +129,9 @@ class SQLiteSearchService:
                 plan.top_k,
             ),
         ).fetchall()
+        return self._map_dense_rows(rows)
+
+    def _map_dense_rows(self, rows: List[Any]) -> List[QueryResult]:
         return [
             QueryResult(
                 id=row[0],

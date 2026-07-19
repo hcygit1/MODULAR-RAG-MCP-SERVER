@@ -7,7 +7,7 @@ Qdrant VectorStore 实现
 import hashlib
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from modular_rag_mcp_server.core.settings import VectorStoreConfig
 from modular_rag_mcp_server.libs.vector_store.base_vector_store import (
@@ -33,6 +33,9 @@ try:
     QDRANT_AVAILABLE = True
 except ImportError:
     QDRANT_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from qdrant_client.models import Condition, ExtendedPointId
 
 
 def _to_qdrant_id(record_id: str) -> str:
@@ -139,6 +142,7 @@ class QdrantStore(BaseVectorStore):
         records: List[VectorRecord],
         trace: Optional[Any] = None,
         collection_name: Optional[str] = None,
+        chunks_for_images: Optional[List[Any]] = None,
     ) -> None:
         """
         批量插入或更新向量记录（幂等操作）
@@ -147,6 +151,7 @@ class QdrantStore(BaseVectorStore):
             records: 向量记录列表
             trace: 追踪上下文（可选）
             collection_name: 集合名称（可选），为 None 时使用配置中的默认集合
+            chunks_for_images: 原始 Chunk 列表（可选），Qdrant 后端不使用
 
         Raises:
             ValueError: 当记录格式不正确时
@@ -233,7 +238,7 @@ class QdrantStore(BaseVectorStore):
         try:
             query_filter = None
             if filters and len(filters) > 0:
-                conditions = []
+                conditions: List[Condition] = []
                 for key, value in filters.items():
                     if isinstance(value, dict) and "$in" in value:
                         conditions.append(
@@ -286,7 +291,9 @@ class QdrantStore(BaseVectorStore):
             return 0
         eff_name = collection_name or self._collection_name
         try:
-            qdrant_ids = [_to_qdrant_id(rid) for rid in ids]
+            qdrant_ids: List[ExtendedPointId] = [
+                _to_qdrant_id(rid) for rid in ids
+            ]
             self._client.delete(
                 collection_name=eff_name,
                 points_selector=PointIdsList(points=qdrant_ids),
@@ -378,7 +385,7 @@ class QdrantStore(BaseVectorStore):
                 self._client.close()
             except Exception as e:
                 logger.debug("Qdrant 客户端关闭时异常（可忽略）: %s", e)
-            self._client = None
+            del self._client
 
     def get_backend(self) -> str:
         """获取后端名称"""

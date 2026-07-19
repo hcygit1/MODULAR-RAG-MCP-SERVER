@@ -120,7 +120,7 @@
 ## 亮点 7：自动化评估体系
 
 **技术要点**：
-- **默认主线**：`EvalRunner` 读取 **Golden Test Set**（`tests/fixtures/golden_test_set.json`，路径见 `config/settings.yaml` 的 `evaluation.golden_test_set`），对检索返回的 `retrieved_ids` 与 `golden_chunk_ids` 计算 **Hit Rate + MRR**（`CustomEvaluator`）
+- **默认主线**：`EvalRunner` 读取 **Golden Test Set**（`tests/fixtures/golden_test_set.json`，路径见 `src/modular_rag_mcp_server/resources/settings.yaml` 的 `evaluation.golden_test_set`），对检索返回的 `retrieved_ids` 与 `golden_chunk_ids` 计算 **Hit Rate + MRR**（`CustomEvaluator`）
 - **`python scripts/evaluate.py --e2e`**：L1 检索指标 + L2 内容规则检查（`content_non_empty`、`citations_ok`、`images_ok`、`keywords_ok`）
 - 可插拔评估框架可扩展 Ragas 等后端；简历中若未实际接入，勿写成默认已跑 Ragas
 
@@ -155,7 +155,7 @@
 - 分层测试金字塔：Unit → Integration → E2E
 - SQLite 轻量持久化（ingestion_history + image_index + BM25 索引），零外部数据库依赖
 - 配置驱动的零代码组件切换
-- Prompt 模板外置（config/prompts/），支持独立迭代
+- Prompt 模板外置（src/modular_rag_mcp_server/resources/prompts/），支持独立迭代
 
 **简历话术方向**：
 - "遵循 TDD 开发范式，累计编写 1200+ 自动化测试用例，覆盖单元/集成/E2E 三层"

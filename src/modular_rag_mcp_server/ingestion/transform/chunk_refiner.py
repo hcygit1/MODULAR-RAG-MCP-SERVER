@@ -7,6 +7,7 @@ Chunk Refiner 实现
 3. 失败降级：LLM 不可用时回退到规则结果
 """
 import re
+from importlib import import_module
 from typing import Any, Optional
 
 from modular_rag_mcp_server.core.settings import IngestionConfig
@@ -16,9 +17,12 @@ from modular_rag_mcp_server.package_resources import read_prompt
 
 # 尝试导入 BaseLLM
 try:
-    from modular_rag_mcp_server.libs.llm.base_llm import BaseLLM
+    BaseLLM = getattr(
+        import_module("modular_rag_mcp_server.libs.llm.base_llm"),
+        "BaseLLM",
+    )
     LLM_AVAILABLE = True
-except ImportError:
+except (AttributeError, ImportError):
     LLM_AVAILABLE = False
     BaseLLM = None
 

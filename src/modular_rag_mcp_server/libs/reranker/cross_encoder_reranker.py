@@ -7,19 +7,33 @@ Cross-Encoder Reranker 实现
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Any, Callable, List, Optional
+from importlib import import_module
+from typing import Any, Callable, List, Optional, Protocol, Tuple, cast
 
 from modular_rag_mcp_server.core.settings import RerankConfig
 from modular_rag_mcp_server.libs.reranker.base_reranker import BaseReranker
 from modular_rag_mcp_server.libs.vector_store.base_vector_store import QueryResult
 
-# 尝试导入 CrossEncoder
-try:
-    from sentence_transformers import CrossEncoder  # type: ignore
-    CROSS_ENCODER_AVAILABLE = True
-except ImportError:
-    CROSS_ENCODER_AVAILABLE = False
-    CrossEncoder = None
+
+class _CrossEncoderModel(Protocol):
+    def predict(self, pairs: List[Tuple[str, str]]) -> Any: ...
+
+
+class _CrossEncoderFactory(Protocol):
+    def __call__(self, model_name: str) -> _CrossEncoderModel: ...
+
+
+def _load_cross_encoder() -> Optional[_CrossEncoderFactory]:
+    try:
+        module = import_module("sentence_transformers")
+        cross_encoder = getattr(module, "CrossEncoder")
+    except (AttributeError, ImportError):
+        return None
+    return cast(_CrossEncoderFactory, cross_encoder)
+
+
+CrossEncoder = _load_cross_encoder()
+CROSS_ENCODER_AVAILABLE = CrossEncoder is not None
 
 
 class _RerankDeadlineExceeded(Exception):
@@ -62,28 +76,26 @@ class CrossEncoderReranker(BaseReranker):
         self._score_lock = threading.Lock()
         self._active_executor: Optional[ThreadPoolExecutor] = None
         self._active_future: Optional[Future[List[float]]] = None
-        
+        self._model: Optional[_CrossEncoderModel] = None
+        self._scorer: Optional[Callable[[str, str], float]] = scorer
+        self._use_mock = scorer is not None
+
         # 如果提供了 scorer（用于测试），使用它
-        if scorer is not None:
-            self._scorer = scorer
-            self._use_mock = True
-        else:
+        if scorer is None:
             # 检查 CrossEncoder 是否可用
-            if not CROSS_ENCODER_AVAILABLE:
+            model_factory = CrossEncoder
+            if not CROSS_ENCODER_AVAILABLE or model_factory is None:
                 raise RuntimeError(
                     "CrossEncoder 未安装。请安装: pip install sentence-transformers"
                 )
             
             # 初始化 CrossEncoder 模型
             try:
-                self._model = CrossEncoder(self._model_name)
+                self._model = model_factory(self._model_name)
             except Exception as e:
                 raise RuntimeError(
                     f"无法加载 Cross-Encoder 模型 '{self._model_name}': {str(e)}"
                 ) from e
-            
-            self._scorer = None
-            self._use_mock = False
 
     def _cleanup_completed_score(self, future: Future[List[float]]) -> None:
         """主动清理已经结束的评分任务。"""
@@ -184,18 +196,24 @@ class CrossEncoderReranker(BaseReranker):
         Raises:
             _RerankDeadlineExceeded: 当等待评分结果超时时
         """
-        def score_candidates():
+        def score_candidates() -> List[float]:
             """内部函数：执行打分操作"""
-            if self._use_mock and self._scorer:
+            scorer = self._scorer
+            if self._use_mock and scorer is not None:
                 # 使用 mock scorer（用于测试）
-                return [self._scorer(query, candidate.text) for candidate in candidates]
+                return [scorer(query, candidate.text) for candidate in candidates]
             else:
                 # 使用真实的 CrossEncoder 模型
                 # 准备输入对：[(query, candidate_text), ...]
                 pairs = [(query, candidate.text) for candidate in candidates]
-                scores = self._model.predict(pairs)
+                model = self._model
+                if model is None:
+                    raise RuntimeError("Cross-Encoder 模型未初始化")
+                scores = model.predict(pairs)
                 # CrossEncoder.predict 返回 numpy array，转换为 list
-                return scores.tolist() if hasattr(scores, 'tolist') else list(scores)
+                if hasattr(scores, "tolist"):
+                    return cast(List[float], scores.tolist())
+                return cast(List[float], list(scores))
         
         # 每个实例只允许一个不可中断的模型评分任务运行。
         while True:

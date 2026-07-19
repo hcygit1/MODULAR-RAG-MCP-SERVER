@@ -95,7 +95,7 @@ class QueryProcessor:
                 result.append(k)
         return result
 
-    def _parse_filters(self, query: str) -> Dict[str, any]:
+    def _parse_filters(self, query: str) -> Dict[str, Any]:
         """
         解析 filters 结构
 
