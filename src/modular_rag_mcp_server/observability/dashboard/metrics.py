@@ -6,6 +6,17 @@ from collections import defaultdict
 from typing import Any
 
 
+def format_duration_ms(duration_ms: float) -> str:
+    """Format latency compactly so KPI and list cells do not truncate."""
+    duration = float(duration_ms or 0)
+    if duration >= 60_000:
+        minutes, remainder = divmod(duration, 60_000)
+        return f"{int(minutes)}m {remainder / 1000:.1f}s"
+    if duration >= 1_000:
+        return f"{duration / 1000:.2f} s"
+    return f"{duration:.1f} ms"
+
+
 def summarize_trace_status(traces: list[dict]) -> dict[str, float | int]:
     """Summarize success from top-level and stage-level trace errors."""
     failed = 0

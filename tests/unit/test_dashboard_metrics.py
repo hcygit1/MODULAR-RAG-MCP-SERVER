@@ -1,6 +1,7 @@
 """Dashboard 指标计算测试。"""
 
 from modular_rag_mcp_server.observability.dashboard.metrics import (
+    format_duration_ms,
     summarize_overview,
     summarize_rag_metrics,
     summarize_trace_status,
@@ -62,3 +63,9 @@ def test_summarize_rag_metrics_reads_stage_and_metric_values():
         "tokens": 128,
         "cost_usd": 0.02,
     }
+
+
+def test_format_duration_ms_keeps_large_values_scannable():
+    assert format_duration_ms(1382.7) == "1.38 s"
+    assert format_duration_ms(86278.2) == "1m 26.3s"
+    assert format_duration_ms(42.5) == "42.5 ms"

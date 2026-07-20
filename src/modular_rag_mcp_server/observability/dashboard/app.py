@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 from datetime import date, datetime
+from importlib import import_module
 from pathlib import Path
 
 import altair as alt  # type: ignore[import-not-found]
@@ -13,6 +14,7 @@ import streamlit as st  # type: ignore[import-not-found]
 
 from modular_rag_mcp_server.core.runtime_paths import get_runtime_paths
 from modular_rag_mcp_server.observability.dashboard.metrics import (
+    format_duration_ms,
     summarize_overview,
     summarize_rag_metrics,
 )
@@ -91,7 +93,7 @@ def maybe_auto_refresh(enabled: bool, seconds: int) -> None:
     if not enabled:
         return
     try:
-        from streamlit_autorefresh import st_autorefresh  # type: ignore[import-not-found]
+        st_autorefresh = import_module("streamlit_autorefresh").st_autorefresh
     except ImportError:
         st.caption("自动刷新需要安装 dashboard extra 的刷新依赖。")
         return
@@ -108,9 +110,9 @@ def render_overview_kpis(traces: list[dict]) -> None:
     with columns[1]:
         st.metric("Error rate", f"{summary['error_rate']:.1f}%")
     with columns[2]:
-        st.metric("P50", f"{summary['p50_ms']:.1f} ms")
+        st.metric("P50", format_duration_ms(summary["p50_ms"]))
     with columns[3]:
-        st.metric("P95", f"{summary['p95_ms']:.1f} ms")
+        st.metric("P95", format_duration_ms(summary["p95_ms"]))
     with columns[4]:
         st.metric("Slowest stage", str(summary["slowest_stage"]))
 
@@ -235,7 +237,7 @@ def render_trace_detail(trace: dict) -> None:
     )
     columns = st.columns(4)
     with columns[0]:
-        st.metric("Duration", f"{float(trace.get('total_duration_ms', 0) or 0):.1f} ms")
+        st.metric("Duration", format_duration_ms(trace.get("total_duration_ms", 0)))
     with columns[1]:
         st.metric("Stages", len(trace.get("stages", [])))
     with columns[2]:
@@ -271,11 +273,11 @@ def _trace_option(trace: dict) -> str:
     operation = str(trace.get("operation", "unknown"))
     duration = float(trace.get("total_duration_ms", 0) or 0)
     trace_id = str(trace.get("trace_id", ""))[:12]
-    return f"{status:<5}  {operation:<16}  {duration:>8.1f} ms  {trace_id}"
+    return f"{status:<5}  {operation:<16}  {format_duration_ms(duration):>9}  {trace_id}"
 
 
 def main() -> None:
-    st.set_page_config(page_title="RAG Observability", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(page_title="RAG Observability", layout="wide", initial_sidebar_state="collapsed")
     inject_css()
     st.title("RAG Observability")
     st.caption("Trace Explorer / Retrieval, rerank and generation diagnostics")
@@ -347,7 +349,7 @@ def main() -> None:
                 {
                     "Status": trace_status(trace),
                     "Operation": trace.get("operation", "unknown"),
-                    "Duration": f"{float(trace.get('total_duration_ms', 0) or 0):.1f} ms",
+                    "Duration": format_duration_ms(trace.get("total_duration_ms", 0)),
                     "Trace": str(trace.get("trace_id", ""))[:12],
                 }
                 for trace in traces
