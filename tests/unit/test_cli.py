@@ -94,3 +94,16 @@ def test_cli_dispatches_packaged_ingest_command(monkeypatch) -> None:
     command_main.assert_called_once_with(
         ["--collection", "docs", "--path", "sample.pdf"]
     )
+
+
+def test_cli_extracts_data_dir_before_subcommand(monkeypatch) -> None:
+    cli = importlib.import_module("modular_rag_mcp_server.cli")
+    command = importlib.import_module("modular_rag_mcp_server.cli_commands.ingest")
+    command_main = MagicMock()
+    set_data_dir = MagicMock()
+    monkeypatch.setattr(command, "main", command_main)
+    monkeypatch.setattr(cli, "set_data_dir", set_data_dir)
+
+    assert cli.main(["--data-dir", "/tmp/rag", "ingest", "--help"]) == 0
+    set_data_dir.assert_called_once_with("/tmp/rag")
+    command_main.assert_called_once_with(["--help"])

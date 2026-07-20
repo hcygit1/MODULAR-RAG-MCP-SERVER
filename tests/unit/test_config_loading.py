@@ -221,6 +221,22 @@ def test_validate_settings_parent_aggregation_requires_enough_rerank_candidates(
         validate_settings(settings)
 
 
+def test_validate_settings_rejects_invalid_numeric_ranges():
+    settings = load_settings()
+    settings.ingestion.chunk_overlap = settings.ingestion.chunk_size
+
+    with pytest.raises(ValueError, match="chunk_overlap"):
+        validate_settings(settings)
+
+
+def test_load_settings_rejects_unknown_top_level_key(tmp_path: Path):
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text("unexpected: true\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="未知配置字段.*unexpected"):
+        load_settings(str(config_path))
+
+
 def test_load_settings_local_override():
     """测试 settings.local.yaml 覆盖敏感项"""
     with tempfile.TemporaryDirectory() as tmpdir:

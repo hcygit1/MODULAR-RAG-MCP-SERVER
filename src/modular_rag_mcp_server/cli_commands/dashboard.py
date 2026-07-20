@@ -72,11 +72,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--server.headless", "true",
     ]
 
-    if args.log_file:
-        cmd.extend(["--", f"--log-file={args.log_file}"])
+    log_file = args.log_file
+    if log_file is None:
+        from modular_rag_mcp_server.core.runtime_paths import get_runtime_paths
+
+        log_file = str(get_runtime_paths().log_path)
+    cmd.extend(["--", f"--log-file={log_file}"])
 
     print(f"启动 Dashboard: http://localhost:{port}")
-    print(f"Trace 日志: {args.log_file or './logs/traces.jsonl'}")
+    print(f"Trace 日志: {log_file}")
     print("按 Ctrl+C 停止\n")
 
     try:

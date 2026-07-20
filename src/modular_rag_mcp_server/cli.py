@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+from modular_rag_mcp_server.core.runtime_paths import set_data_dir
 from modular_rag_mcp_server.mcp_server.tools.config_utils import (
     load_mcp_settings,
     set_config_path,
@@ -42,7 +43,34 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Validate configuration and exit without starting the server.",
     )
+    parser.add_argument(
+        "--data-dir",
+        metavar="PATH",
+        help="Override the writable data, cache and log root.",
+    )
     return parser
+
+
+def _extract_data_dir(argv: Sequence[str]) -> tuple[list[str], str | None]:
+    """Remove a global data-dir option before dispatching a subcommand parser."""
+    normalized: list[str] = []
+    data_dir: str | None = None
+    index = 0
+    while index < len(argv):
+        item = argv[index]
+        if item == "--data-dir":
+            if index + 1 >= len(argv):
+                raise ValueError("--data-dir 需要一个路径")
+            data_dir = argv[index + 1]
+            index += 2
+            continue
+        if item.startswith("--data-dir="):
+            data_dir = item.split("=", 1)[1]
+            index += 1
+            continue
+        normalized.append(item)
+        index += 1
+    return normalized, data_dir
 
 
 def _configure_logging() -> None:
@@ -100,6 +128,12 @@ def _run_command(argv: Sequence[str]) -> int | None:
 def main(argv: Sequence[str] | None = None) -> int:
     """Validate configuration and optionally start the stdio MCP server."""
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    try:
+        raw_argv, data_dir = _extract_data_dir(raw_argv)
+    except ValueError as exc:
+        logger.error(str(exc))
+        return 2
+    set_data_dir(data_dir)
     command_exit_code = _run_command(raw_argv)
     if command_exit_code is not None:
         return command_exit_code

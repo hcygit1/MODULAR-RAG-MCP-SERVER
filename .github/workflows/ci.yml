@@ -61,3 +61,23 @@ jobs:
           "${RUNNER_TEMP}/wheel-smoke/bin/python" -m pip install dist/*.whl
           cd "${RUNNER_TEMP}"
           "${RUNNER_TEMP}/wheel-smoke/bin/modular-rag-mcp-server" --check-config
+
+  optional-dashboard:
+    name: Optional dashboard dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dashboard extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,dashboard]"
+
+      - name: Test dashboard metrics and app contracts
+        run: python -m pytest -q tests/unit/test_dashboard_metrics.py tests/unit/test_cli_commands.py

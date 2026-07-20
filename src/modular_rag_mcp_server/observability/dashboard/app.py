@@ -14,7 +14,10 @@ import altair as alt  # type: ignore[import-not-found]
 import pandas as pd  # type: ignore[import-untyped]
 import streamlit as st  # type: ignore[import-not-found]
 
-DEFAULT_LOG_FILE = "./logs/traces.jsonl"
+from modular_rag_mcp_server.core.runtime_paths import get_runtime_paths
+from modular_rag_mcp_server.observability.dashboard.metrics import summarize_trace_status
+
+DEFAULT_LOG_FILE = str(get_runtime_paths().log_path)
 
 STAGE_COLORS = {
     "query_processing": "#6366f1", # Indigo
@@ -52,6 +55,8 @@ def load_traces(log_file: str) -> list[dict]:
     # 按照 timestamp 降序排序，最新的在最前
     traces.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
     return traces
+
+
 
 
 def format_timestamp(ts: float | None) -> str:
@@ -175,18 +180,17 @@ def render_overview_kpis(traces: list[dict]) -> None:
     p95_dur = durations[int(len(durations) * 0.95)] if durations else 0
     p50_dur = durations[int(len(durations) * 0.50)] if durations else 0
     
-    # 假设如果 duration > 0 则成功（可以根据实际 status 字段扩展）
-    success_rate = 100.0
+    status = summarize_trace_status(traces)
     
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown(metric_card("Total Traces", f"{total:,}", "Last 30 days"), unsafe_allow_html=True)
+        st.markdown(metric_card("Total Traces", f"{total:,}", "Current filters"), unsafe_allow_html=True)
     with c2:
         st.markdown(metric_card("Avg Latency", f"{avg_dur:.1f} ms", f"Median: {p50_dur:.1f} ms"), unsafe_allow_html=True)
     with c3:
         st.markdown(metric_card("P95 Latency", f"{p95_dur:.1f} ms", "95th percentile"), unsafe_allow_html=True)
     with c4:
-        st.markdown(metric_card("Success Rate", f"{success_rate:.1f}%", "All operations"), unsafe_allow_html=True)
+        st.markdown(metric_card("Success Rate", f"{status['success_rate']:.1f}%", f"{status['failed']} failed"), unsafe_allow_html=True)
 
 
 def render_latency_chart(traces: list[dict]) -> None:

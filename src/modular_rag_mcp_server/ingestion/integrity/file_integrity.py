@@ -11,7 +11,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# 默认数据库路径（在 cache 目录下）
+from modular_rag_mcp_server.core.runtime_paths import get_runtime_paths
+
+# 默认数据库路径（在 cache 目录下）；显式数据目录通过 runtime_paths 解析。
 DEFAULT_DB_PATH = Path("cache/processing/file_integrity.db")
 LEGACY_COLLECTION_NAME = "__legacy__"
 LEGACY_PROCESSING_PROFILE = "__legacy__"
@@ -94,7 +96,7 @@ class FileIntegrityChecker:
         Args:
             db_path: SQLite 数据库路径（可选），默认使用 cache/processing/file_integrity.db
         """
-        self._db_path = db_path or DEFAULT_DB_PATH
+        self._db_path = db_path or get_runtime_paths().integrity_db_path
         self._ensure_db_directory()
         self._init_database()
 

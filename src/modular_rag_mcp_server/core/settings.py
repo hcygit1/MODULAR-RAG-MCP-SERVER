@@ -6,165 +6,41 @@
 """
 import logging
 import os
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import yaml
 
+from modular_rag_mcp_server.core.runtime_paths import resolve_runtime_path
+from modular_rag_mcp_server.core.settings_models import (
+    DashboardConfig,
+    EmbeddingConfig,
+    EvaluationConfig,
+    IngestionConfig,
+    LLMConfig,
+    LoggingConfig,
+    MinerUConfig,
+    ObservabilityConfig,
+    RerankConfig,
+    RetrievalConfig,
+    Settings,
+    VectorStoreConfig,
+    VisionLLMConfig,
+)
 from modular_rag_mcp_server.package_resources import read_resource_text
 
-
-@dataclass
-class LLMConfig:
-    """LLM 配置"""
-    provider: str
-    model: str
-    azure_endpoint: str = ""
-    azure_api_key: str = ""
-    azure_api_version: str = "2024-02-15-preview"
-    deployment_name: str = ""
-    openai_api_key: str = ""
-    ollama_base_url: str = "http://localhost:11434"
-    deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
-    dashscope_api_key: str = ""
-    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
-
-
-@dataclass
-class VisionLLMConfig:
-    """Vision LLM 配置"""
-    provider: str
-    model: str
-    azure_endpoint: str = ""
-    azure_api_key: str = ""
-    azure_api_version: str = "2024-02-15-preview"
-    deployment_name: str = ""
-    dashscope_api_key: str = ""
-    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
-
-
-@dataclass
-class EmbeddingConfig:
-    """Embedding 配置"""
-    provider: str
-    model: str
-    openai_api_key: str = ""
-    dashscope_api_key: str = ""
-    dashscope_base_url: str = "https://dashscope.aliyuncs.com"
-    local_model_path: str = ""
-    device: str = "cpu"
-
-
-@dataclass
-class VectorStoreConfig:
-    """向量存储配置"""
-    backend: str
-    persist_path: str
-    collection_name: str
-    # SQLite 专用配置
-    sqlite_path: str = "./data/db/rag.sqlite"
-    embedding_dim: int = 1536
-    # Qdrant 专用配置
-    qdrant_url: str = "http://localhost:6333"
-    qdrant_api_key: str = ""
-
-
-@dataclass
-class RetrievalConfig:
-    """检索配置"""
-    sparse_backend: str
-    fusion_algorithm: str
-    top_k_dense: int
-    top_k_sparse: int
-    top_k_final: int
-    aggregate_by_parent: bool = False
-    parent_id_metadata_key: str = "parent_id"
-    parent_score_strategy: str = "sum"
-    parent_aggregate_top_m: int = 30
-    # 父聚合（heading 子块等）时双路粗召可单独加大；未设则与 top_k_dense/sparse 相同
-    top_k_dense_parent: Optional[int] = None
-    top_k_sparse_parent: Optional[int] = None
-
-
-@dataclass
-class RerankConfig:
-    """重排配置"""
-    backend: str
-    model: str
-    top_m: int
-    timeout_seconds: int
-
-
-@dataclass
-class EvaluationConfig:
-    """评估配置"""
-    backends: List[str]
-    golden_test_set: str
-
-
-@dataclass
-class LoggingConfig:
-    """日志配置"""
-    log_file: str
-    log_level: str
-
-
-@dataclass
-class DashboardConfig:
-    """Dashboard 配置"""
-    enabled: bool
-    port: int
-
-
-@dataclass
-class ObservabilityConfig:
-    """可观测性配置"""
-    enabled: bool
-    logging: LoggingConfig
-    detail_level: str
-    dashboard: DashboardConfig
-
-
-@dataclass
-class MinerUConfig:
-    """MinerU 云端 API 配置"""
-    api_token: str = ""
-    model_version: str = "vlm"
-    poll_interval_seconds: int = 5
-    poll_timeout_seconds: int = 600
-
-
-@dataclass
-class IngestionConfig:
-    """Ingestion Pipeline 配置"""
-    chunk_size: int
-    chunk_overlap: int
-    enable_llm_refinement: bool
-    enable_metadata_enrichment: bool
-    enable_image_captioning: bool
-    batch_size: int
-    splitter_strategy: str = "recursive"
-    heading_split_level: int = 3
-    heading_parent_level: int = 2
-    enable_boundary_repair: bool = False
-    boundary_repair_mode: str = "rule"  # "rule" | "llm"
-
-
-@dataclass
-class Settings:
-    """主配置类，包含所有子系统配置"""
-    llm: LLMConfig
-    vision_llm: VisionLLMConfig
-    embedding: EmbeddingConfig
-    vector_store: VectorStoreConfig
-    retrieval: RetrievalConfig
-    rerank: RerankConfig
-    evaluation: EvaluationConfig
-    observability: ObservabilityConfig
-    ingestion: IngestionConfig
-    mineru: MinerUConfig = field(default_factory=lambda: MinerUConfig())
+_ALLOWED_TOP_LEVEL_KEYS = {
+    "llm",
+    "vision_llm",
+    "embedding",
+    "vector_store",
+    "retrieval",
+    "rerank",
+    "evaluation",
+    "observability",
+    "ingestion",
+    "mineru",
+}
 
 
 def _resolve_env_vars(value: str) -> str:
@@ -357,6 +233,34 @@ def validate_settings(settings: Settings) -> None:
     """
     errors = []
 
+    ingestion = settings.ingestion
+    if not isinstance(ingestion.chunk_size, int) or ingestion.chunk_size <= 0:
+        errors.append("ingestion.chunk_size: 必须大于 0")
+    if (
+        not isinstance(ingestion.chunk_overlap, int)
+        or ingestion.chunk_overlap < 0
+        or ingestion.chunk_overlap >= ingestion.chunk_size
+    ):
+        errors.append("ingestion.chunk_overlap: 必须满足 0 <= overlap < chunk_size")
+    if not isinstance(ingestion.batch_size, int) or ingestion.batch_size <= 0:
+        errors.append("ingestion.batch_size: 必须大于 0")
+
+    retrieval = settings.retrieval
+    for field_name in ("top_k_dense", "top_k_sparse", "top_k_final", "parent_aggregate_top_m"):
+        if not isinstance(getattr(retrieval, field_name), int) or getattr(retrieval, field_name) <= 0:
+            errors.append(f"retrieval.{field_name}: 必须大于 0")
+
+    if not isinstance(settings.rerank.top_m, int) or settings.rerank.top_m <= 0:
+        errors.append("rerank.top_m: 必须大于 0")
+    if not isinstance(settings.rerank.timeout_seconds, int) or settings.rerank.timeout_seconds < 0:
+        errors.append("rerank.timeout_seconds: 不能为负数")
+    dashboard_port = settings.observability.dashboard.port
+    if not isinstance(dashboard_port, int) or not 1 <= dashboard_port <= 65535:
+        errors.append("observability.dashboard.port: 必须在 1-65535 范围内")
+    for field_name in ("poll_interval_seconds", "poll_timeout_seconds"):
+        if not isinstance(getattr(settings.mineru, field_name), int) or getattr(settings.mineru, field_name) < 0:
+            errors.append(f"mineru.{field_name}: 不能为负数")
+
     # 校验 LLM 配置
     if not settings.llm.provider:
         errors.append("llm.provider")
@@ -443,7 +347,8 @@ def validate_settings(settings: Settings) -> None:
         errors.append("observability.logging.log_file")
 
     if errors:
-        error_msg = "缺失必填字段: " + ", ".join(errors)
+        prefix = "缺失必填字段" if all(": " not in error for error in errors) else "配置校验失败"
+        error_msg = prefix + ": " + ", ".join(errors)
         raise ValueError(error_msg)
 
 
@@ -472,11 +377,30 @@ def load_settings(path: Optional[str] = None) -> Settings:
         data = _load_yaml(path)
         local_path = Path(path).parent / "settings.local.yaml"
 
+    unknown_keys = sorted(set(data) - _ALLOWED_TOP_LEVEL_KEYS)
+    if unknown_keys:
+        raise ValueError("未知配置字段: " + ", ".join(unknown_keys))
+
     # 工作目录或显式配置目录中的敏感项覆盖内置/基础配置。
     if local_path.exists():
         local_data = _load_yaml(str(local_path))
+        unknown_local_keys = sorted(set(local_data) - _ALLOWED_TOP_LEVEL_KEYS)
+        if unknown_local_keys:
+            raise ValueError("未知配置字段: " + ", ".join(unknown_local_keys))
         data = _deep_merge(data, local_data)
 
     settings = _parse_config(data)
+    settings.vector_store.sqlite_path = resolve_runtime_path(
+        settings.vector_store.sqlite_path,
+        "data",
+    )
+    settings.vector_store.persist_path = resolve_runtime_path(
+        settings.vector_store.persist_path,
+        "data",
+    )
+    settings.observability.logging.log_file = resolve_runtime_path(
+        settings.observability.logging.log_file,
+        "logs",
+    )
     validate_settings(settings)
     return settings
