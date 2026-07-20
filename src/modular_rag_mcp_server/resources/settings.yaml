@@ -53,7 +53,7 @@ vector_store:
   collection_name: "cslearning"
   # backend=sqlite 时生效
   sqlite_path: "./data/db/rag.sqlite"
-  embedding_dim: 1536  # 与 embedding 模型一致，运行 scripts/embedding_dim.py 可查询
+  embedding_dim: 1536  # 必须与 embedding 模型输出维度一致
   # backend=qdrant 时生效
   qdrant_url: ""
   qdrant_api_key: ""  # 云服务时从 ${QDRANT_API_KEY} 读取

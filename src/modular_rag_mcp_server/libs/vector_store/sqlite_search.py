@@ -169,7 +169,9 @@ class SQLiteSearchService:
         collection_name: str,
         top_k: int,
     ) -> List[QueryResult]:
-        from modular_rag_mcp_server.ingestion.storage.fts5_bm25_indexer import _escape_fts5_term
+        from modular_rag_mcp_server.libs.vector_store.fts5_bm25_indexer import (
+            _escape_fts5_term,
+        )
 
         safe_terms = [_escape_fts5_term(term) for term in terms if term and str(term).strip()]
         if not safe_terms:

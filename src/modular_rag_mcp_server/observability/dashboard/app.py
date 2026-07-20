@@ -2,7 +2,7 @@
 Trace Dashboard (Streamlit)
 
 读取 logs/traces.jsonl，展示 trace 列表与单条详情。
-启动方式：python scripts/start_dashboard.py
+启动方式：modular-rag-mcp-server dashboard
 """
 from __future__ import annotations
 
@@ -374,7 +374,7 @@ def main() -> None:
         st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
         st.warning(f"No trace data found in `{log_file}` or matching the current filters.")
         st.info("Run a retrieval or ingestion pipeline to generate traces.\n\n"
-                "```bash\npython scripts/retrieve.py -q \"Your query\"\n```")
+                "```bash\nmodular-rag-mcp-server retrieve -q \"Your query\"\n```")
         return
 
     # ── KPI 概览 ──

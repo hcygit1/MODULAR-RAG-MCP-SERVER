@@ -2,16 +2,24 @@
 from __future__ import annotations
 
 import logging
-import threading
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Mapping, Protocol, cast
+from typing import Any, Callable, Dict, Mapping, Protocol, cast
 
+from modular_rag_mcp_server.mcp_server.services.ingestion_cleanup import cleanup_pipeline
+from modular_rag_mcp_server.mcp_server.services.ingestion_lock import (
+    INGESTION_LOCKS,
+    KeyedLockRegistry,
+)
 from modular_rag_mcp_server.mcp_server.tools.error_utils import ErrorType, build_error_response
 from modular_rag_mcp_server.mcp_server.tools.ingest_utils import parse_force
 
 logger = logging.getLogger(__name__)
+
+# Private aliases retained for integrations and tests that observed the old
+# module-local registry before the locking implementation was extracted.
+_LOCK_REGISTRY = INGESTION_LOCKS
+_KeyedLockRegistry = KeyedLockRegistry
 
 Parser = Callable[[str, Any], "ParsedIngestion"]
 
@@ -74,43 +82,6 @@ class IngestionResponseError(Exception):
         super().__init__(message)
         self.error_type = error_type
         self.message = message
-
-
-@dataclass
-class _LockEntry:
-    lock: threading.Lock = field(default_factory=threading.Lock)
-    references: int = 0
-
-
-class _KeyedLockRegistry:
-    def __init__(self) -> None:
-        self._guard = threading.Lock()
-        self._entries: dict[tuple[str, str, str], _LockEntry] = {}
-
-    @contextmanager
-    def hold(self, key: tuple[str, str, str]) -> Iterator[None]:
-        with self._guard:
-            entry = self._entries.get(key)
-            if entry is None:
-                entry = _LockEntry()
-                self._entries[key] = entry
-            entry.references += 1
-
-        try:
-            with entry.lock:
-                yield
-        finally:
-            with self._guard:
-                entry.references -= 1
-                if entry.references == 0 and self._entries.get(key) is entry:
-                    del self._entries[key]
-
-    def size(self) -> int:
-        with self._guard:
-            return len(self._entries)
-
-
-_LOCK_REGISTRY = _KeyedLockRegistry()
 
 
 def _default_pipeline_factory(settings: Any, checker: Any) -> Any:
@@ -275,9 +246,10 @@ class IngestionService:
                     primary_error = exc
                     primary_traceback = exc.__traceback__
 
-                cleanup_error = self._cleanup_pipeline(
+                cleanup_error = cleanup_pipeline(
                     pipeline,
                     trace,
+                    self._trace_collector_factory,
                     tool_name=spec.tool_name,
                     file_path=file_path,
                     collection_name=collection_name,
@@ -323,44 +295,6 @@ class IngestionService:
                 "INTERNAL_ERROR",
                 f"{spec.generic_error_prefix}: {exc}",
             )
-
-    def _cleanup_pipeline(
-        self,
-        pipeline: Any,
-        trace: Any | None,
-        *,
-        tool_name: str,
-        file_path: str,
-        collection_name: str,
-    ) -> BaseException | None:
-        first_error: BaseException | None = None
-        if trace is not None:
-            try:
-                self._trace_collector_factory().collect(trace)
-            except BaseException as exc:
-                logger.error(
-                    "%s trace collection failed: path=%s collection=%s error=%s",
-                    tool_name,
-                    file_path,
-                    collection_name,
-                    exc,
-                    exc_info=(type(exc), exc, exc.__traceback__),
-                )
-                first_error = exc
-        try:
-            pipeline.close()
-        except BaseException as exc:
-            logger.error(
-                "%s pipeline close failed: path=%s collection=%s error=%s",
-                tool_name,
-                file_path,
-                collection_name,
-                exc,
-                exc_info=(type(exc), exc, exc.__traceback__),
-            )
-            if first_error is None:
-                first_error = exc
-        return first_error
 
     @staticmethod
     def _error(

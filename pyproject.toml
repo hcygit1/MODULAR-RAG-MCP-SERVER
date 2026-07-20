@@ -74,6 +74,7 @@ include = ["modular_rag_mcp_server", "modular_rag_mcp_server.*"]
 modular_rag_mcp_server = [
     "resources/*.yaml",
     "resources/prompts/*.txt",
+    "resources/fixtures/*.json",
 ]
 
 [tool.pytest.ini_options]

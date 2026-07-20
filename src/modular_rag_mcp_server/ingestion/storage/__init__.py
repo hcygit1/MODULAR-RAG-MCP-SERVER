@@ -1,7 +1,8 @@
-"""
-Storage 模块
+"""Ingestion-side storage orchestration.
 
-提供向量存储和索引功能。
+Concrete SQLite/Chroma/Qdrant adapters live in ``libs.vector_store``.  The
+classes exported here coordinate ingestion writes and keep the old image
+storage API available for callers that still use it.
 """
 from modular_rag_mcp_server.ingestion.storage.image_storage import ImageStorage
 from modular_rag_mcp_server.ingestion.storage.vector_upserter import VectorUpserter

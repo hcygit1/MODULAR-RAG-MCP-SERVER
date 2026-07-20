@@ -19,6 +19,7 @@ EXPECTED_PACKAGE_FILES = {
     "modular_rag_mcp_server/resources/prompts/chunk_refinement.txt",
     "modular_rag_mcp_server/resources/prompts/image_captioning.txt",
     "modular_rag_mcp_server/resources/prompts/rerank.txt",
+    "modular_rag_mcp_server/resources/fixtures/golden_test_set.json",
 }
 
 

@@ -24,11 +24,12 @@ Modular RAG MCP Server 面向文档问答、知识库检索和智能助手集成
 ├── main.py                  # 兼容启动入口
 ├── config/
 │   └── settings.local.yaml.example  # 本地配置覆盖示例
-├── scripts/                 # 入库、检索、评估、Dashboard 等脚本
+├── scripts/                 # 兼容包装和开发/评估辅助脚本
 ├── src/
 │   └── modular_rag_mcp_server/
+│       ├── cli_commands/     # wheel 内置运维命令
 │       ├── core/            # 配置、查询引擎、Trace、响应模型
-│       ├── ingestion/       # 文档解析、切分、Embedding、存储流程
+│       ├── ingestion/       # 文档解析、完整性、切分、Embedding、入库流程
 │       ├── libs/            # Loader、Embedding、Reranker、VectorStore、LLM 等组件
 │       ├── mcp_server/      # MCP Server 与工具定义
 │       ├── observability/   # 日志、Dashboard、评估辅助
@@ -124,9 +125,19 @@ modular-rag-mcp-server --check-config
 
 `python main.py` 仍作为仓库内兼容入口。服务默认使用 Stdio 传输，适合接入支持 MCP 的客户端。
 
+正式 CLI 也提供随 wheel 安装的常用运维命令：
+
+```bash
+modular-rag-mcp-server ingest --collection my_collection --path /path/to/document.pdf
+modular-rag-mcp-server ingest-mineru --collection my_collection /path/to/document.pdf
+modular-rag-mcp-server retrieve --query "检索问题" --collection my_collection --top-k 5
+modular-rag-mcp-server evaluate --golden-set tests/fixtures/golden_test_set.json
+modular-rag-mcp-server dashboard --port 8501
+```
+
 ## 常用脚本
 
-文档入库：
+以下仓库脚本作为兼容包装保留，推荐新调用使用正式 CLI。文档入库：
 
 ```bash
 python scripts/ingest.py --collection my_collection --path /path/to/document.pdf
@@ -155,6 +166,8 @@ python scripts/evaluate.py --golden-set tests/fixtures/golden_test_set.json --co
 ```bash
 python scripts/start_dashboard.py --port 8501
 ```
+
+`scripts/build_*`、`scripts/enrich_*`、`scripts/inspect_*` 等仅用于开发、数据集构建或诊断，不属于发布包的正式 CLI。
 
 ## 测试
 

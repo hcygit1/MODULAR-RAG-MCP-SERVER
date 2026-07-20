@@ -131,7 +131,9 @@ class SparseRetriever:
         trace: Optional[Any],
     ) -> List[QueryResult]:
         """通过 FTS5BM25Indexer 检索。"""
-        from modular_rag_mcp_server.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
+        from modular_rag_mcp_server.libs.vector_store.fts5_bm25_indexer import (
+            FTS5BM25Indexer,
+        )
 
         if collection_name not in self._fts5_indexers:
             idx = FTS5BM25Indexer(sqlite_path=str(self._sqlite_path))
@@ -187,7 +189,9 @@ class SparseRetriever:
             sparse_store = cast(_SparseIndexProtocol, self._vector_store)
             return sparse_store.sparse_index_exists(collection_name)
         if self._sqlite_path:
-            from modular_rag_mcp_server.ingestion.storage.fts5_bm25_indexer import FTS5BM25Indexer
+            from modular_rag_mcp_server.libs.vector_store.fts5_bm25_indexer import (
+                FTS5BM25Indexer,
+            )
 
             idx = FTS5BM25Indexer(sqlite_path=str(self._sqlite_path))
             try:

@@ -80,3 +80,17 @@ def test_cli_reports_malformed_yaml_as_configuration_error(
     assert exit_code == 1
     assert "配置校验失败" in caplog.text
     assert "启动失败" not in caplog.text
+
+
+def test_cli_dispatches_packaged_ingest_command(monkeypatch) -> None:
+    cli = importlib.import_module("modular_rag_mcp_server.cli")
+    command = importlib.import_module("modular_rag_mcp_server.cli_commands.ingest")
+    command_main = MagicMock()
+    monkeypatch.setattr(command, "main", command_main)
+
+    exit_code = cli.main(["ingest", "--collection", "docs", "--path", "sample.pdf"])
+
+    assert exit_code == 0
+    command_main.assert_called_once_with(
+        ["--collection", "docs", "--path", "sample.pdf"]
+    )

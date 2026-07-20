@@ -14,11 +14,23 @@ from modular_rag_mcp_server.mcp_server.tools.config_utils import (
 
 logger = logging.getLogger(__name__)
 
+_COMMAND_NAMES = {
+    "ingest",
+    "ingest-mineru",
+    "retrieve",
+    "evaluate",
+    "dashboard",
+}
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="modular-rag-mcp-server",
         description="Run the Modular RAG MCP server over stdio.",
+        epilog=(
+            "Commands: ingest, ingest-mineru, retrieve, evaluate, dashboard. "
+            "Run a command with --help for its options."
+        ),
     )
     parser.add_argument(
         "--config",
@@ -61,9 +73,38 @@ def run_server() -> None:
     _run_server()
 
 
+def _run_command(argv: Sequence[str]) -> int | None:
+    """Dispatch packaged operational commands without importing them at startup."""
+    if not argv or argv[0] not in _COMMAND_NAMES:
+        return None
+
+    command = argv[0]
+    if command == "ingest":
+        from modular_rag_mcp_server.cli_commands.ingest import main as command_main
+    elif command == "ingest-mineru":
+        from modular_rag_mcp_server.cli_commands.ingest_mineru import main as command_main
+    elif command == "retrieve":
+        from modular_rag_mcp_server.cli_commands.retrieve import main as command_main
+    elif command == "evaluate":
+        from modular_rag_mcp_server.cli_commands.evaluate import main as command_main
+    else:
+        from modular_rag_mcp_server.cli_commands.dashboard import main as command_main
+
+    try:
+        command_main(argv[1:])
+    except SystemExit as exc:
+        return int(exc.code or 0)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Validate configuration and optionally start the stdio MCP server."""
-    args = _build_parser().parse_args(argv)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    command_exit_code = _run_command(raw_argv)
+    if command_exit_code is not None:
+        return command_exit_code
+
+    args = _build_parser().parse_args(raw_argv)
     _configure_logging()
     if args.config:
         set_config_path(args.config)

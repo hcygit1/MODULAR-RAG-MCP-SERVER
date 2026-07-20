@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult
 
-from modular_rag_mcp_server.libs.loader.file_integrity import (
+from modular_rag_mcp_server.ingestion.integrity import (
     FileIntegrityChecker,
     build_processing_profile,
 )
