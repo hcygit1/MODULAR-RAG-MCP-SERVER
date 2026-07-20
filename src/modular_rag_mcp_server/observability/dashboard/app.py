@@ -1,13 +1,10 @@
-"""
-Trace Dashboard (Streamlit)
+"""RAG trace explorer and observability dashboard."""
 
-读取 logs/traces.jsonl，展示 trace 列表与单条详情。
-启动方式：modular-rag-mcp-server dashboard
-"""
 from __future__ import annotations
 
+import html
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import altair as alt  # type: ignore[import-not-found]
@@ -15,461 +12,351 @@ import pandas as pd  # type: ignore[import-untyped]
 import streamlit as st  # type: ignore[import-not-found]
 
 from modular_rag_mcp_server.core.runtime_paths import get_runtime_paths
-from modular_rag_mcp_server.observability.dashboard.metrics import summarize_trace_status
+from modular_rag_mcp_server.observability.dashboard.metrics import (
+    summarize_overview,
+    summarize_rag_metrics,
+)
+from modular_rag_mcp_server.observability.dashboard.trace_repository import (
+    TraceQuery,
+    filter_traces,
+    trace_status,
+)
+from modular_rag_mcp_server.observability.dashboard.trace_repository import (
+    load_traces as load_trace_file,
+)
 
 DEFAULT_LOG_FILE = str(get_runtime_paths().log_path)
-
+DEFAULT_TRACE_LIMIT = 1000
 STAGE_COLORS = {
-    "query_processing": "#6366f1", # Indigo
-    "dense_retrieval": "#3b82f6",  # Blue
-    "sparse_retrieval": "#06b6d4", # Cyan
-    "rrf_fusion": "#8b5cf6",       # Violet
-    "rerank": "#ec4899",           # Pink
-    "integrity_check": "#64748b",  # Slate
-    "load": "#f59e0b",             # Amber
-    "split": "#10b981",            # Emerald
-    "image_save": "#f97316",       # Orange
-    "transform": "#14b8a6",        # Teal
-    "encode": "#a855f7",           # Purple
-    "store": "#ef4444",            # Red
-}
-
-OP_ICONS = {
-    "retrieval": "🔍",
-    "ingestion": "📥",
+    "retrieval": "#2563eb",
+    "dense": "#2563eb",
+    "sparse": "#0891b2",
+    "fusion": "#7c3aed",
+    "rerank": "#c026d3",
+    "llm": "#d97706",
+    "encode": "#059669",
+    "store": "#dc2626",
 }
 
 
-def load_traces(log_file: str) -> list[dict]:
-    path = Path(log_file)
-    if not path.exists():
-        return []
-    traces = []
-    for line in path.read_text(encoding="utf-8").strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            traces.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    # 按照 timestamp 降序排序，最新的在最前
-    traces.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-    return traces
+def load_traces(log_file: str, limit: int = DEFAULT_TRACE_LIMIT) -> list[dict]:
+    """Compatibility wrapper for callers that used the old app helper."""
+    return load_trace_file(log_file, limit=limit)
 
 
-
-
-def format_timestamp(ts: float | None) -> str:
-    if ts is None:
+def format_timestamp(timestamp: float | None) -> str:
+    if timestamp is None:
         return "-"
     try:
-        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
-    except (OSError, ValueError):
-        return str(ts)
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+    except (OSError, ValueError, OverflowError):
+        return str(timestamp)
 
 
 def inject_css() -> None:
-    st.markdown("""
-    <style>
-    /* 全局字体与样式调整 */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .metric-card {
-        background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-        border-radius: 16px;
-        padding: 24px 20px;
-        text-align: center;
-        border: 1px solid #334155;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border-color: #475569;
-    }
-    .metric-card .value {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #f8fafc;
-        font-family: 'JetBrains Mono', monospace;
-        line-height: 1.2;
-    }
-    .metric-card .label {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #94a3b8;
-        margin-top: 8px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .metric-card .sub-value {
-        font-size: 0.75rem;
-        color: #64748b;
-        margin-top: 4px;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .section-divider {
-        border: none;
-        border-top: 1px solid #334155;
-        margin: 2rem 0;
-    }
-    .stage-pill {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #ffffff;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .trace-header {
-        background: #1e293b;
-        padding: 1rem 1.5rem;
-        border-radius: 12px;
-        border: 1px solid #334155;
-        margin-bottom: 1rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .trace-title {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #f1f5f9;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .trace-id-badge {
-        background: #0f172a;
-        color: #94a3b8;
-        padding: 0.2rem 0.6rem;
-        border-radius: 6px;
-        font-size: 0.85rem;
-        font-family: 'JetBrains Mono', monospace;
-        border: 1px solid #334155;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    """Keep the dashboard dense, neutral and readable for repeated investigation."""
+    st.markdown(
+        """
+        <style>
+        :root {
+          --surface: #ffffff;
+          --surface-muted: #f8fafc;
+          --border: #dbe3ec;
+          --text: #172033;
+          --muted: #5b687a;
+          --danger: #b42318;
+          --success: #067647;
+        }
+        .block-container { max-width: 1500px; padding-top: 2rem; }
+        .eyebrow { color: var(--muted); font-size: .82rem; letter-spacing: .04em; }
+        .trace-header {
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: 8px; padding: 16px 18px; margin: 8px 0 16px;
+        }
+        .trace-title { color: var(--text); font-size: 1.15rem; font-weight: 650; }
+        .trace-id { color: var(--muted); font-family: monospace; font-size: .82rem; margin-top: 5px; }
+        .status-ok { color: var(--success); font-weight: 650; }
+        .status-error { color: var(--danger); font-weight: 650; }
+        [data-testid="stMetric"] { background: var(--surface); border: 1px solid var(--border); padding: 12px 14px; border-radius: 8px; }
+        @media (max-width: 800px) {
+          .block-container { padding: 1rem .75rem; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def metric_card(label: str, value: str, sub_value: str = "") -> str:
-    sub_html = f'<div class="sub-value">{sub_value}</div>' if sub_value else ""
-    return f"""
-    <div class="metric-card">
-        <div class="value">{value}</div>
-        <div class="label">{label}</div>
-        {sub_html}
-    </div>
-    """
+def maybe_auto_refresh(enabled: bool, seconds: int) -> None:
+    if not enabled:
+        return
+    try:
+        from streamlit_autorefresh import st_autorefresh  # type: ignore[import-not-found]
+    except ImportError:
+        st.caption("自动刷新需要安装 dashboard extra 的刷新依赖。")
+        return
+    st_autorefresh(interval=seconds * 1000, key="trace-auto-refresh")
 
 
 def render_overview_kpis(traces: list[dict]) -> None:
     if not traces:
         return
-    
-    total = len(traces)
-    avg_dur = sum(t.get("total_duration_ms", 0) for t in traces) / total
-    
-    durations = sorted(t.get("total_duration_ms", 0) for t in traces)
-    p95_dur = durations[int(len(durations) * 0.95)] if durations else 0
-    p50_dur = durations[int(len(durations) * 0.50)] if durations else 0
-    
-    status = summarize_trace_status(traces)
-    
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(metric_card("Total Traces", f"{total:,}", "Current filters"), unsafe_allow_html=True)
-    with c2:
-        st.markdown(metric_card("Avg Latency", f"{avg_dur:.1f} ms", f"Median: {p50_dur:.1f} ms"), unsafe_allow_html=True)
-    with c3:
-        st.markdown(metric_card("P95 Latency", f"{p95_dur:.1f} ms", "95th percentile"), unsafe_allow_html=True)
-    with c4:
-        st.markdown(metric_card("Success Rate", f"{status['success_rate']:.1f}%", f"{status['failed']} failed"), unsafe_allow_html=True)
+    summary = summarize_overview(traces)
+    columns = st.columns(5)
+    with columns[0]:
+        st.metric("Requests", f"{summary['total']:,}")
+    with columns[1]:
+        st.metric("Error rate", f"{summary['error_rate']:.1f}%")
+    with columns[2]:
+        st.metric("P50", f"{summary['p50_ms']:.1f} ms")
+    with columns[3]:
+        st.metric("P95", f"{summary['p95_ms']:.1f} ms")
+    with columns[4]:
+        st.metric("Slowest stage", str(summary["slowest_stage"]))
 
 
 def render_latency_chart(traces: list[dict]) -> None:
     if not traces:
         return
-        
-    df = pd.DataFrame([{
-        "time": datetime.fromtimestamp(t["timestamp"]) if t.get("timestamp") else datetime.now(),
-        "duration": t.get("total_duration_ms", 0),
-        "operation": t.get("operation", "unknown"),
-        "trace_id": t.get("trace_id", "")
-    } for t in traces])
-    
-    # 时序散点图
-    scatter = alt.Chart(df).mark_circle(size=80, opacity=0.8).encode(
-        x=alt.X('time:T', title='Time', axis=alt.Axis(grid=False)),
-        y=alt.Y('duration:Q', title='Latency (ms)', scale=alt.Scale(zero=False)),
-        color=alt.Color('operation:N', title='Operation', legend=alt.Legend(orient="top")),
-        tooltip=['trace_id', 'operation', alt.Tooltip('duration:Q', format='.2f'), alt.Tooltip('time:T', format='%Y-%m-%d %H:%M:%S')]
-    ).properties(
-        height=300
-    ).interactive()
-    
-    # 耗时直方图
-    hist = alt.Chart(df).mark_bar(opacity=0.8).encode(
-        x=alt.X('duration:Q', bin=alt.Bin(maxbins=30), title='Latency (ms)'),
-        y=alt.Y('count()', title='Count'),
-        color='operation:N'
-    ).properties(
-        height=300
+    frame = pd.DataFrame(
+        [
+            {
+                "time": datetime.fromtimestamp(trace["timestamp"]),
+                "duration": trace.get("total_duration_ms", 0),
+                "operation": trace.get("operation", "unknown"),
+                "status": trace_status(trace),
+                "trace_id": trace.get("trace_id", ""),
+            }
+            for trace in traces
+            if trace.get("timestamp")
+        ]
     )
-    
-    st.altair_chart(scatter | hist, use_container_width=True)
+    if frame.empty:
+        st.info("当前 trace 没有可绘制的时间戳。")
+        return
+    chart = (
+        alt.Chart(frame)
+        .mark_circle(size=70)
+        .encode(
+            x=alt.X("time:T", title="Time"),
+            y=alt.Y("duration:Q", title="Latency (ms)", scale=alt.Scale(zero=False)),
+            color=alt.Color("status:N", title="Status"),
+            tooltip=["trace_id", "operation", "status", "duration"],
+        )
+        .properties(height=280)
+        .interactive()
+    )
+    st.altair_chart(chart, use_container_width=True)
 
 
 def render_gantt_chart(stages: list[dict]) -> None:
-    """渲染阶段的甘特图 (Waterfall)"""
-    if not stages:
+    """Render the trace critical path and stage durations."""
+    valid = [stage for stage in stages if "start_ms" in stage and "end_ms" in stage]
+    if not valid:
+        st.info("该 trace 没有完整的阶段时间数据。")
         return
-
-    # 过滤掉没有完整时间的数据
-    valid_stages = [s for s in stages if "start_ms" in s and "end_ms" in s]
-    if not valid_stages:
-        st.warning("阶段数据缺失 start_ms 或 end_ms，无法绘制甘特图。")
-        return
-        
-    # 找到整个 trace 的极小起点，做相对偏移
-    min_start = min(s["start_ms"] for s in valid_stages)
-    
-    df_data = []
-    for i, s in enumerate(valid_stages):
-        name = s.get("name", f"stage_{i}")
-        # 为了防重名，名称带上索引
-        unique_name = f"{i:02d}. {name}"
-        rel_start = s["start_ms"] - min_start
-        rel_end = s["end_ms"] - min_start
-        dur = s.get("duration_ms", 0)
-        df_data.append({
-            "stage_id": unique_name,
-            "name": name,
-            "start": rel_start,
-            "end": rel_end,
-            "duration": dur
-        })
-        
-    df = pd.DataFrame(df_data)
-    
-    # 颜色映射
-    domain = list(STAGE_COLORS.keys())
-    range_ = list(STAGE_COLORS.values())
-    
-    chart = alt.Chart(df).mark_bar(cornerRadius=4, size=20).encode(
-        x=alt.X('start:Q', title='Timeline (ms)'),
-        x2='end:Q',
-        y=alt.Y('stage_id:N', sort=alt.EncodingSortField(field="start", op="min", order="ascending"), title='', axis=alt.Axis(labelLimit=200)),
-        color=alt.Color('name:N', scale=alt.Scale(domain=domain, range=range_, scheme='category20'), legend=None),
-        tooltip=['name:N', alt.Tooltip('duration:Q', format='.2f', title='Duration (ms)'), alt.Tooltip('start:Q', format='.2f', title='Start (ms)'), alt.Tooltip('end:Q', format='.2f', title='End (ms)')]
-    ).properties(
-        height=max(200, len(valid_stages) * 40)
-    ).interactive()
-    
+    min_start = min(stage["start_ms"] for stage in valid)
+    rows = []
+    for index, stage in enumerate(valid):
+        name = str(stage.get("name", f"stage_{index}"))
+        rows.append(
+            {
+                "stage": f"{index + 1:02d}. {name}",
+                "name": name,
+                "start": stage["start_ms"] - min_start,
+                "end": stage["end_ms"] - min_start,
+                "duration": stage.get("duration_ms", 0),
+            }
+        )
+    frame = pd.DataFrame(rows)
+    chart = (
+        alt.Chart(frame)
+        .mark_bar(size=22, cornerRadius=3)
+        .encode(
+            x=alt.X("start:Q", title="Timeline (ms)"),
+            x2="end:Q",
+            y=alt.Y("stage:N", sort=alt.EncodingSortField(field="start", order="ascending"), title=""),
+            color=alt.Color("name:N", title="Stage", legend=None),
+            tooltip=["name", "duration", "start", "end"],
+        )
+        .properties(height=max(220, len(rows) * 38))
+    )
     st.altair_chart(chart, use_container_width=True)
 
 
 def render_stages_table(stages: list[dict]) -> None:
-    """渲染阶段详情表"""
     if not stages:
         st.info("该 trace 无阶段记录。")
         return
-
     rows = []
-    for s in stages:
-        name = s.get("name", "")
-        meta = s.get("metadata", {})
-        meta_str = ", ".join(f"{k}={v}" for k, v in meta.items()) if meta else "-"
-        rows.append({
-            "Stage": name,
-            "Duration (ms)": round(s.get("duration_ms", 0), 3),
-            "Start (ms)": round(s.get("start_ms", 0), 3),
-            "End (ms)": round(s.get("end_ms", 0), 3),
-            "Metadata": meta_str,
-        })
+    for stage in stages:
+        metadata = stage.get("metadata", {})
+        rows.append(
+            {
+                "Stage": stage.get("name", "unknown"),
+                "Status": "error" if metadata.get("error") else "ok",
+                "Duration (ms)": round(float(stage.get("duration_ms", 0) or 0), 3),
+                "Metadata": json.dumps(metadata, ensure_ascii=False),
+            }
+        )
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    df = pd.DataFrame(rows)
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Duration (ms)": st.column_config.NumberColumn(format="%.3f"),
-            "Start (ms)": st.column_config.NumberColumn(format="%.3f"),
-            "End (ms)": st.column_config.NumberColumn(format="%.3f"),
-        },
+
+def render_rag_metrics(trace: dict) -> None:
+    metrics = summarize_rag_metrics(trace)
+    columns = st.columns(len(metrics))
+    labels = {
+        "retrieval_ms": "Retrieval",
+        "rerank_ms": "Rerank",
+        "final_results": "Final results",
+        "tokens": "Tokens",
+        "cost_usd": "Cost (USD)",
+    }
+    for column, (key, value) in zip(columns, metrics.items()):
+        with column:
+            label = labels.get(key, key)
+            display = f"{value:.1f} ms" if isinstance(value, float) and key.endswith("_ms") else str(value)
+            st.metric(label, display)
+
+
+def render_trace_detail(trace: dict) -> None:
+    status = trace_status(trace)
+    operation = html.escape(str(trace.get("operation", "unknown")))
+    trace_id = html.escape(str(trace.get("trace_id", "unknown")))
+    status_class = "status-error" if status == "error" else "status-ok"
+    st.markdown(
+        f"""
+        <div class="trace-header">
+          <div class="trace-title">{operation} <span class="{status_class}">{status}</span></div>
+          <div class="trace-id">Trace ID: {trace_id}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+    columns = st.columns(4)
+    with columns[0]:
+        st.metric("Duration", f"{float(trace.get('total_duration_ms', 0) or 0):.1f} ms")
+    with columns[1]:
+        st.metric("Stages", len(trace.get("stages", [])))
+    with columns[2]:
+        st.metric("Environment", str(trace.get("environment", "-")))
+    with columns[3]:
+        st.metric("Timestamp", format_timestamp(trace.get("timestamp")))
+
+    st.markdown("#### Waterfall")
+    render_gantt_chart(trace.get("stages", []))
+    stages = trace.get("stages", [])
+    if stages:
+        stage_names = [str(stage.get("name", "unknown")) for stage in stages]
+        selected_stage = st.selectbox("Inspect stage", options=range(len(stages)), format_func=lambda i: stage_names[i])
+        st.json(stages[selected_stage].get("metadata", {}))
+
+    tab_stages, tab_rag, tab_raw = st.tabs(["Stages", "RAG metrics", "Raw JSON"])
+    with tab_stages:
+        render_stages_table(stages)
+    with tab_rag:
+        render_rag_metrics(trace)
+    with tab_raw:
+        st.download_button(
+            "Download trace JSON",
+            data=json.dumps(trace, ensure_ascii=False, indent=2),
+            file_name=f"trace-{trace_id}.json",
+            mime="application/json",
+        )
+        st.json(trace)
 
 
-def render_metrics(metrics: dict) -> None:
-    """以卡片形式展示 metrics"""
-    if not metrics:
-        return
-
-    cols = st.columns(min(len(metrics), 4))
-    for i, (k, v) in enumerate(metrics.items()):
-        with cols[i % len(cols)]:
-            display_val = str(v)
-            if isinstance(v, float):
-                display_val = f"{v:.3f}"
-            elif isinstance(v, bool):
-                display_val = "✅" if v else "❌"
-            st.markdown(metric_card(k, display_val), unsafe_allow_html=True)
+def _trace_option(trace: dict) -> str:
+    status = trace_status(trace).upper()
+    operation = str(trace.get("operation", "unknown"))
+    duration = float(trace.get("total_duration_ms", 0) or 0)
+    trace_id = str(trace.get("trace_id", ""))[:12]
+    return f"{status:<5}  {operation:<16}  {duration:>8.1f} ms  {trace_id}"
 
 
 def main() -> None:
-    st.set_page_config(
-        page_title="RAG Observability Dashboard",
-        page_icon="✨",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+    st.set_page_config(page_title="RAG Observability", layout="wide", initial_sidebar_state="expanded")
     inject_css()
+    st.title("RAG Observability")
+    st.caption("Trace Explorer / Retrieval, rerank and generation diagnostics")
 
-    # ── 侧边栏过滤与配置 ──
     with st.sidebar:
-        st.markdown("## ⚙️ Settings")
-        log_file = st.text_input("Trace File Path", value=DEFAULT_LOG_FILE)
-        traces = load_traces(log_file)
+        st.subheader("Data source")
+        log_file = st.text_input("Trace file", value=DEFAULT_LOG_FILE)
+        trace_limit = int(st.number_input("Recent traces", min_value=100, max_value=10000, value=DEFAULT_TRACE_LIMIT, step=100))
+        auto_refresh = st.checkbox("Auto refresh", value=False)
+        refresh_seconds = int(st.selectbox("Refresh interval", options=[10, 30, 60], index=1))
+        st.caption(f"Last loaded: {datetime.now().strftime('%H:%M:%S')}")
+        maybe_auto_refresh(auto_refresh, refresh_seconds)
 
-        if traces:
-            st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-            st.markdown("### 🔍 Filters")
-            
-            # 操作类型过滤
-            operations = sorted(set(t.get("operation", "") for t in traces))
-            selected_op = st.selectbox("Operation Type", options=["All"] + operations)
-            if selected_op != "All":
-                traces = [t for t in traces if t.get("operation") == selected_op]
-            
-            # 时间范围过滤
-            min_ts = min(t.get("timestamp", 0) for t in traces)
-            max_ts = max(t.get("timestamp", 0) for t in traces)
-            
-            if min_ts and max_ts and min_ts != max_ts:
-                min_dt = datetime.fromtimestamp(min_ts)
-                max_dt = datetime.fromtimestamp(max_ts)
-                
-                date_range = st.date_input(
-                    "Date Range",
-                    value=(min_dt.date(), max_dt.date()),
-                    min_value=min_dt.date(),
-                    max_value=max_dt.date()
-                )
-                
-                if isinstance(date_range, tuple) and len(date_range) == 2:
-                    start_date, end_date = date_range
-                    traces = [
-                        t for t in traces 
-                        if start_date <= datetime.fromtimestamp(t.get("timestamp", 0)).date() <= end_date
-                    ]
-
-    # ── 主标题 ──
-    st.title("✨ RAG Observability Dashboard")
-    st.markdown("Monitor, debug, and optimize your Retrieval-Augmented Generation pipelines.")
-
-    if not traces:
-        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        st.warning(f"No trace data found in `{log_file}` or matching the current filters.")
-        st.info("Run a retrieval or ingestion pipeline to generate traces.\n\n"
-                "```bash\nmodular-rag-mcp-server retrieve -q \"Your query\"\n```")
+    all_traces = load_traces(log_file, limit=trace_limit)
+    if not all_traces:
+        st.info(f"No trace data found in {Path(log_file)}.")
         return
 
-    # ── KPI 概览 ──
-    st.markdown("### 📈 System Overview")
+    st.subheader("Trace Explorer")
+    operations = sorted({str(trace.get("operation", "unknown")) for trace in all_traces})
+    dates = [datetime.fromtimestamp(float(trace["timestamp"])).date() for trace in all_traces if trace.get("timestamp")]
+    query_columns = st.columns([2.2, 1.1, 1.1, 1.0])
+    with query_columns[0]:
+        text_query = st.text_input("Search trace, error or attribute", placeholder="trace id, timeout, collection...")
+    with query_columns[1]:
+        operation = st.selectbox("Operation", options=["All", *operations])
+    with query_columns[2]:
+        status = st.selectbox("Status", options=["All", "ok", "error"])
+    with query_columns[3]:
+        min_duration = st.number_input("Min ms", min_value=0.0, value=0.0, step=100.0)
+
+    date_columns = st.columns([1, 1, 2])
+    with date_columns[0]:
+        start_date = st.date_input("From", value=min(dates) if dates else date.today())
+    with date_columns[1]:
+        end_date = st.date_input("To", value=max(dates) if dates else date.today())
+    with date_columns[2]:
+        st.caption("Filters apply to the bounded trace set loaded from the JSONL file.")
+
+    query = TraceQuery(
+        operation=None if operation == "All" else operation,
+        status=None if status == "All" else status,
+        text=text_query or None,
+        min_duration_ms=min_duration or None,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    traces = filter_traces(all_traces, query)
+    st.caption(f"Showing {len(traces):,} of {len(all_traces):,} loaded traces")
+    if not traces:
+        st.warning("No traces match the current filters.")
+        return
+
     render_overview_kpis(traces)
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.expander("📊 Latency Distribution & Trends", expanded=False):
+    with st.expander("Latency trend", expanded=False):
         render_latency_chart(traces)
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # ── 左右分栏布局：左侧 Trace 列表，右侧 Trace 详情 ──
-    col_list, col_detail = st.columns([1, 1.8], gap="large")
-    
-    with col_list:
-        st.markdown(f"### 🗂️ Recent Traces ({len(traces)})")
-        
-        # 使用 selectbox 进行选择，兼容性最好
-        trace_options = [
-            f"{OP_ICONS.get(t.get('operation', ''), '⚡')} {t.get('trace_id', '')[:8]}... ({format_timestamp(t.get('timestamp'))[11:]})"
-            for t in traces
-        ]
-        selected_idx = st.selectbox(
-            "Select Trace to View",
+    list_column, detail_column = st.columns([0.95, 1.8], gap="large")
+    with list_column:
+        st.markdown("#### Trace list")
+        selected_index = st.selectbox(
+            "Select trace",
             options=range(len(traces)),
-            format_func=lambda i: trace_options[i],
-            label_visibility="collapsed"
+            format_func=lambda index: _trace_option(traces[index]),
+            label_visibility="collapsed",
         )
-        
-        # 下方额外展示一个只读表格概览
-        overview_rows = []
-        for t in traces:
-            op = t.get("operation", "unknown")
-            icon = OP_ICONS.get(op, "⚡")
-            overview_rows.append({
-                "Op": icon,
-                "Trace ID": t.get("trace_id", "")[:8] + "...",
-                "Time": format_timestamp(t.get("timestamp"))[11:],
-                "Duration": f"{t.get('total_duration_ms', 0):.1f}ms",
-            })
-            
-        st.dataframe(
-            pd.DataFrame(overview_rows),
-            use_container_width=True,
-            hide_index=True,
+        overview = pd.DataFrame(
+            [
+                {
+                    "Status": trace_status(trace),
+                    "Operation": trace.get("operation", "unknown"),
+                    "Duration": f"{float(trace.get('total_duration_ms', 0) or 0):.1f} ms",
+                    "Trace": str(trace.get("trace_id", ""))[:12],
+                }
+                for trace in traces
+            ]
         )
-        
-    with col_detail:
-        st.markdown("### 🔬 Trace Details")
-        selected = traces[selected_idx]
-        op = selected.get("operation", "unknown")
-        icon = OP_ICONS.get(op, "⚡")
-        
-        st.markdown(f"""
-        <div class="trace-header">
-            <div class="trace-title">{icon} {op.capitalize()} Pipeline</div>
-            <div class="trace-id-badge">ID: {selected.get('trace_id', 'unknown')}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        total_ms = selected.get("total_duration_ms", 0)
-        stages = selected.get("stages", [])
-        metrics = selected.get("metrics", {})
-        
-        # 核心摘要指标
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Total Duration", f"{total_ms:.2f} ms")
-        with c2:
-            st.metric("Stages Count", len(stages))
-        with c3:
-            st.metric("Timestamp", format_timestamp(selected.get("timestamp")))
-            
-        st.markdown("#### ⏱️ Execution Waterfall")
-        render_gantt_chart(stages)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        tab_stages, tab_metrics, tab_raw = st.tabs(["📋 Stages Data", "📊 Custom Metrics", "🔧 Raw JSON"])
-        
-        with tab_stages:
-            render_stages_table(stages)
-            
-        with tab_metrics:
-            if metrics:
-                render_metrics(metrics)
-            else:
-                st.info("No custom metrics recorded for this trace.")
-                
-        with tab_raw:
-            st.json(selected)
+        st.dataframe(overview, use_container_width=True, hide_index=True)
+    with detail_column:
+        st.markdown("#### Trace details")
+        render_trace_detail(traces[selected_index])
 
 
 if __name__ == "__main__":

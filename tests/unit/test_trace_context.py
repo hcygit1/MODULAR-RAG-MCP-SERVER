@@ -23,6 +23,29 @@ class TestTraceContextBasic:
         trace = TraceContext(operation="ingest", trace_id="abc123")
         assert trace.trace_id == "abc123"
 
+    def test_standard_trace_dimensions_are_serialized(self) -> None:
+        trace = TraceContext(
+            operation="retrieval",
+            trace_id="dim-test",
+            service_name="rag-api",
+            environment="test",
+            service_version="1.2.3",
+        )
+        trace.set_attribute("collection", "docs")
+        result = trace.finish()
+
+        assert result["service_name"] == "rag-api"
+        assert result["environment"] == "test"
+        assert result["service_version"] == "1.2.3"
+        assert result["attributes"] == {"collection": "docs"}
+        assert result["status"] == "ok"
+
+    def test_stage_error_marks_trace_as_error(self) -> None:
+        trace = TraceContext(operation="retrieval")
+        trace.record_stage("rerank", duration_ms=10, error="timeout")
+
+        assert trace.finish()["status"] == "error"
+
     def test_initial_state_empty(self) -> None:
         trace = TraceContext()
         assert trace.stages == []

@@ -50,6 +50,7 @@ dev = [
 ]
 dashboard = [
     "streamlit>=1.30.0",  # F4: Observability Dashboard
+    "streamlit-autorefresh>=1.0.1",
     "altair>=5.0.0",
     "pandas>=2.0.0",
 ]

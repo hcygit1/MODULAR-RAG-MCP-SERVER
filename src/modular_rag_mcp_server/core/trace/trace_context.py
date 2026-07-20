@@ -58,13 +58,24 @@ class TraceContext:
         self,
         operation: str = "unknown",
         trace_id: Optional[str] = None,
+        service_name: str = "modular-rag-mcp-server",
+        environment: Optional[str] = None,
+        service_version: Optional[str] = None,
+        parent_span_id: Optional[str] = None,
     ) -> None:
         self.trace_id: str = trace_id or uuid.uuid4().hex[:16]
         self.operation: str = operation
+        self.service_name = service_name
+        self.environment = environment
+        self.service_version = service_version
+        self.parent_span_id = parent_span_id
         self._created_at: float = time.monotonic()
         self._created_ts: float = time.time()
         self._stages: List[StageRecord] = []
         self._metrics: Dict[str, Any] = {}
+        self._attributes: Dict[str, Any] = {}
+        self._status = "ok"
+        self._error_type: Optional[str] = None
         self._finished: bool = False
 
     @property
@@ -129,6 +140,18 @@ class TraceContext:
         """设置顶层指标（如 total_results、query 等）"""
         self._metrics[key] = value
 
+    def set_attribute(self, key: str, value: Any) -> None:
+        """设置可用于筛选和分组的标准 trace 属性。"""
+        self._attributes[key] = value
+
+    def set_status(self, status: str, error_type: Optional[str] = None) -> None:
+        """设置 trace 状态，兼容 ``ok`` 和 ``error`` 两种状态。"""
+        normalized = status.lower().strip()
+        if normalized not in {"ok", "error"}:
+            raise ValueError("trace status 必须为 ok 或 error")
+        self._status = normalized
+        self._error_type = error_type
+
     def finish(self) -> Dict[str, Any]:
         """
         结束追踪，返回可 JSON 序列化的完整 trace 字典。
@@ -138,15 +161,29 @@ class TraceContext:
         if not self._finished:
             self._finished = True
             self._finish_offset = (time.monotonic() - self._created_at) * 1000.0
+            if any(stage.metadata.get("error") for stage in self._stages):
+                self._status = "error"
 
-        return {
+        result: Dict[str, Any] = {
             "trace_id": self.trace_id,
             "operation": self.operation,
+            "service_name": self.service_name,
+            "status": self._status,
             "timestamp": self._created_ts,
             "total_duration_ms": round(self._finish_offset, 3),
             "stages": [s.to_dict() for s in self._stages],
             "metrics": self._metrics,
+            "attributes": self._attributes,
         }
+        if self.environment is not None:
+            result["environment"] = self.environment
+        if self.service_version is not None:
+            result["service_version"] = self.service_version
+        if self.parent_span_id is not None:
+            result["parent_span_id"] = self.parent_span_id
+        if self._error_type is not None:
+            result["error_type"] = self._error_type
+        return result
 
 
 class _StageTimer:
