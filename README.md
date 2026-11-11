@@ -97,8 +97,8 @@ export MODULAR_RAG_CONFIG_PATH=/path/to/settings.yaml
 
 未指定外部配置时，可创建本地覆盖文件保存密钥、模型提供商和存储路径：
 
-```text
-config/settings.local.yaml
+```bash
+cp config/settings.local.yaml.example config/settings.local.yaml
 ```
 
 常见配置项包括：
