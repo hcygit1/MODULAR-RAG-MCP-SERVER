@@ -75,13 +75,13 @@ def dict_to_call_tool_result(d: Dict[str, Any]) -> CallToolResult:
                 ImageContent(
                     type="image",
                     data=c.get("data", ""),
-                    mimeType=c.get("mimeType", "image/png"),
+                    mime_type=c.get("mimeType", "image/png"),
                 )
             )
         else:
             content_blocks.append(TextContent(type="text", text=c.get("text", "")))
     return CallToolResult(
         content=content_blocks,
-        structuredContent=d.get("structuredContent") or {},
-        isError=d.get("isError", False),
+        structured_content=d.get("structuredContent") or {},
+        is_error=d.get("isError", False),
     )
