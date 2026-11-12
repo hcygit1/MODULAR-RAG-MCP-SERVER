@@ -250,7 +250,7 @@ def test_fastmcp_public_tool_offloads_blocking_executor(
         finally:
             release.set()
         result = await task
-        assert result.isError is False
+        assert result.is_error is False
 
     try:
         asyncio.run(scenario())
@@ -329,7 +329,7 @@ def test_sync_and_async_query_share_the_same_worker_thread(monkeypatch) -> None:
     async_result = asyncio.run(module.query_knowledge_hub("async"))
 
     assert sync_result["isError"] is False
-    assert async_result.isError is False
+    assert async_result.is_error is False
     assert len(thread_ids) == 2
     assert len(set(thread_ids)) == 1
     assert thread_ids[0] != threading.get_ident()
