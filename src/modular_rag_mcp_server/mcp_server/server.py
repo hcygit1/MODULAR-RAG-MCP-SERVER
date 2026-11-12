@@ -1,9 +1,10 @@
 """
-MCP Server 入口 (FastMCP + Stdio Transport)
+MCP Server 入口 (MCPServer + Stdio Transport)
 
-使用官方 MCP SDK (FastMCP)，遵循协议约束：stdout 仅输出 MCP 消息，日志输出到 stderr。
+使用官方 MCP SDK，遵循协议约束：stdout 仅输出 MCP 消息，日志输出到 stderr。
+注：mcp 2.0 起 FastMCP 更名为 MCPServer（mcp.server.mcpserver）。
 """
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from modular_rag_mcp_server.mcp_server.tools.ingest_document_docling import ingest_document_docling
 from modular_rag_mcp_server.mcp_server.tools.ingest_document_mineru import ingest_document_mineru
@@ -11,7 +12,7 @@ from modular_rag_mcp_server.mcp_server.tools.ingest_document_normal import inges
 from modular_rag_mcp_server.mcp_server.tools.list_collections import list_collections
 from modular_rag_mcp_server.mcp_server.tools.query_knowledge_hub import query_knowledge_hub
 
-mcp = FastMCP("modular-rag-mcp-server")
+mcp = MCPServer("modular-rag-mcp-server")
 
 # 工具描述需明确「何时调用」，便于 Cursor/Agent 识别用户意图并决策
 mcp.tool(description=(
